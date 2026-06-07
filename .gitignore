@@ -1,0 +1,21 @@
+# Large sequencing files
+*.fastq
+*.fastq.gz
+*.bam
+*.bai
+*.vcf.gz
+*.tbi
+*.sra
+
+# Reference genome files
+*.fna
+*.fna.*
+*.dict
+
+# Temporary files
+/tmp/
+*.tmp
+
+# Python
+__pycache__/
+*.pyc
