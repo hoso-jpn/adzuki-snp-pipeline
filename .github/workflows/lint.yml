@@ -1,0 +1,15 @@
+name: Lint
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check README exists
+        run: test -f README.md
+      - name: Check docs exist
+        run: test -d docs
