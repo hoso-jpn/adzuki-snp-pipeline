@@ -184,7 +184,7 @@ Founder, [Florigen AI](https://florigen.ai)
 Plant Genetics × Bioinformatics × Physical AI
 
 - GitHub: [@hoso-jpn](https://github.com/hoso-jpn)
-- Researchmap: [hosokawa-yusuke](https://researchmap.jp/hosokawa-yusuke)
+- Researchmap: [Link](https://researchmap.jp/hosokawa-yusuke)
 
 ---
 
