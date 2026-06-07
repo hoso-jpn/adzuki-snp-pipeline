@@ -1,8 +1,9 @@
 # adzuki-snp-pipeline
 
-Reproducible SNP calling pipeline for adzuki bean (*Vigna angularis*) using public WGS datasets.
 
-This repository originated from adzuki bean genomics research and was designed to provide a reproducible SNP discovery workflow using publicly available datasets.
+This repository provides a reproducible SNP calling workflow for adzuki bean (*Vigna angularis*) using publicly available whole-genome sequencing datasets.
+
+The project originated from research activities in plant genetics and genomic prediction, and is maintained as part of the broader Florigen AI research ecosystem.
 
 ---
 
