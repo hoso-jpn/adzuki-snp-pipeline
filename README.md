@@ -64,7 +64,7 @@ conda activate bioinfo
 
 ## Author
 
-**Yusuke Hosokawa (細川 優介)**
+**Hoso**
 
 Founder, [Florigen AI](https://florigen.ai)
 Plant Genetics × Bioinformatics × Physical AI
