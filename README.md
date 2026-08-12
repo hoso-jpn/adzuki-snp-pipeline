@@ -20,6 +20,7 @@ This work represents plant-genetics and bioinformatics research that informs the
 | Trimming and integrated QC report | Not implemented | fastp and MultiQC are planned |
 | Pipeline-level tests | Not implemented | nf-test and a synthetic test dataset are planned |
 | Functional CI | Not implemented | Current CI checks repository structure only |
+| Base quality score recalibration (BQSR) | Intentionally excluded | No validated known-sites resource is available; see [Design Decisions](#design-decisions) |
 | Production use | Not supported | This is an experimental plant-research repository |
 
 The figures and variant counts in this README are historical results from the single-sample pilot. They are not yet backed by an automated clean-environment reproduction test.
@@ -187,12 +188,6 @@ gatk GenotypeGVCFs \
 
 This command was used only for the single-sample pilot. The planned multi-sample pipeline will use HaplotypeCaller GVCFs followed by GenomicsDBImport and GenotypeGVCFs for Joint Genotyping. Joint Genotyping will be the default for a multi-sample cohort rather than being conditional on a 30-sample threshold.
 
-### BQSR policy
-
-BQSR is intentionally excluded from the current procedure and from the planned default pipeline. GATK BaseRecalibrator uses a known-sites VCF to distinguish known polymorphisms from mismatches used to model sequencing errors. This repository has not identified or validated an appropriate known-sites resource for the Longxiaodou 4 reference bundle.
-
-Bootstrapped BQSR is also outside the current scope because its known-sites construction and effect on the resulting calls have not been validated here. This is a deliberate design decision rather than an omitted implementation step. See the [GATK BaseRecalibrator documentation](https://gatk.broadinstitute.org/hc/en-us/articles/360036898312-BaseRecalibrator).
-
 ### 9. Select and filter SNPs
 
 ```bash
@@ -222,6 +217,16 @@ gatk SelectVariants \
 ```
 
 The hard-filter thresholds above document the historical pilot. Their suitability across references, accessions, and cohort sizes has not yet been validated.
+
+---
+
+## Design Decisions
+
+### Base quality score recalibration (BQSR)
+
+BQSR is intentionally excluded from the current procedure and from the planned default pipeline. GATK BaseRecalibrator uses a known-sites VCF to distinguish known polymorphisms from mismatches used to model sequencing errors. This repository has not identified or validated an appropriate known-sites resource for the Longxiaodou 4 reference bundle.
+
+Bootstrapped BQSR is also outside the current scope because its known-sites construction and effect on the resulting calls have not been validated here. This is a deliberate design decision rather than an omitted implementation step. See the [GATK BaseRecalibrator documentation](https://gatk.broadinstitute.org/hc/en-us/articles/360036898312-BaseRecalibrator).
 
 ---
 
