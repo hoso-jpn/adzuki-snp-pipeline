@@ -1,30 +1,74 @@
 # adzuki-snp-pipeline
 
+Research and development repository for building a reproducible SNP-calling pipeline for adzuki bean (*Vigna angularis*) from publicly available whole-genome sequencing data.
 
-This repository provides a reproducible SNP calling workflow for adzuki bean (*Vigna angularis*) using publicly available whole-genome sequencing datasets.
+The repository currently documents a manually executed, single-sample pilot analysis. It does **not yet contain an executable workflow or a fully reproducible production pipeline**. A Nextflow DSL2 implementation, automated tests, and multi-sample cohort validation are planned in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
 
-The project originated from research activities in plant genetics and genomic prediction, and is maintained as part of the broader Florigen AI research ecosystem.
+This work represents plant-genetics and bioinformatics research that informs the longer-term agricultural AI activities of Florigen AI. It does not imply a direct genomic-prediction-to-Physical-AI development path.
 
 ---
 
-## Data Source
+## Current Maturity
+
+| Capability | Status | Evidence or limitation |
+| --- | --- | --- |
+| Manual single-sample SNP-calling pilot | Verified | SRR29909135 was processed through mapping, duplicate removal, GVCF calling, genotyping, and hard filtering |
+| Documented command sequence | Available | Commands are recorded below, but software versions and execution parameters are not yet fully locked |
+| Automated workflow | Not implemented | Nextflow DSL2 implementation is planned |
+| Configurable reference bundle | Not implemented | The current instructions use GCF_016808095.1 |
+| Multi-sample Joint Genotyping | Not validated | GenomicsDBImport-based cohort processing is planned |
+| Trimming and integrated QC report | Not implemented | fastp and MultiQC are planned |
+| Pipeline-level tests | Not implemented | nf-test and a synthetic test dataset are planned |
+| Functional CI | Not implemented | Current CI checks repository structure only |
+| Production or clinical use | Not supported | This is an experimental plant-research repository |
+
+The figures and variant counts in this README are historical results from the single-sample pilot. They are not yet backed by an automated clean-environment reproduction test.
+
+---
+
+## Data and Reference Sources
+
+### Sequencing data
 
 | Item | Detail |
-|---|---|
+| --- | --- |
 | BioProject | [PRJNA1138464](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA1138464) |
-| Publication | Chien et al. 2025, *Science* 388: eads2871 |
-| Data type | WGS resequencing (327 accessions) + DArT-seq (357 accessions) |
-| Reference genome | *Vigna angularis* GCF_016808095.1 (ASM1680809v1) |
+| Demonstration accession | SRR29909135 |
+| Associated publication | [Chien et al. 2025, *Science* 388: eads2871](https://doi.org/10.1126/science.ads2871) |
+| Public data described by the study | WGS resequencing of 327 accessions and DArT-seq data from 357 accessions |
+| Scope validated in this repository | One WGS accession only |
+
+DArT-seq is listed as part of the associated study's public data. This repository has not established that RAD-seq or DArT-seq is categorically unsuitable for adzuki bean, and it does not make that claim.
+
+### Reference genome
+
+The manual pilot used the following independent reference assembly:
+
+| Item | Detail |
+| --- | --- |
+| Accession | [GCF_016808095.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_016808095.1/) |
+| Assembly | ASM1680809v1 |
+| Cultivar | Longxiaodou 4 |
+| Assembly span | 447.8 Mb |
+| Publication | [Li et al. 2024, *Scientific Data* 11:1074](https://doi.org/10.1038/s41597-024-03911-y) |
+
+The approximately 540 Mb value reported in earlier adzuki-bean literature is an estimated genome size for the cultivar Shumari. It is distinct from the 447.8 Mb assembled length of the Longxiaodou 4 reference used here.
+
+The sequencing data and reference assembly originate from different studies and genetic backgrounds. Future pipeline versions will treat the reference genome as an explicit, configurable analysis input rather than assuming that results are interchangeable across references.
 
 ---
 
-## Pipeline Workflow
+## Pilot Workflow
 
-![Workflow](docs/workflow.png)
+![Manual pilot workflow](docs/workflow.png)
+
+The following commands document the historical single-sample pilot. They are retained as technical evidence and as input to the planned Nextflow implementation.
+
+They are **not yet a clean-environment reproduction procedure** because dependency versions, checksums, resource requirements, and all intermediate validation steps have not been fixed.
 
 ---
 
-## Environment
+## Historical Environment Setup
 
 ```bash
 conda create -n bioinfo -c conda-forge -c bioconda \
@@ -34,91 +78,114 @@ conda activate bioinfo
 
 ---
 
-## Usage
+## Historical Single-Sample Procedure
 
-### 1. Download reference genome
+### 1. Download the reference genome
 
 ```bash
 datasets download genome accession GCF_016808095.1 \
-  --include genome --filename adzuki_reference.zip
+  --include genome \
+  --filename adzuki_reference.zip
+
 unzip adzuki_reference.zip -d adzuki_reference
+
 REF=adzuki_reference/ncbi_dataset/data/GCF_016808095.1/GCF_016808095.1_ASM1680809v1_genomic.fna
 ```
 
-### 2. Index reference genome
+### 2. Index the reference genome
 
 ```bash
-bwa index $REF
-gatk CreateSequenceDictionary -R $REF
-samtools faidx $REF
+bwa index "$REF"
+gatk CreateSequenceDictionary -R "$REF"
+samtools faidx "$REF"
 ```
 
-### 3. Download WGS data
+### 3. Download the demonstration WGS data
 
 ```bash
 prefetch SRR29909135 --output-directory ./raw_data
+
 fasterq-dump ./raw_data/SRR29909135/SRR29909135.sra \
-  --outdir ./raw_data --threads 4 --progress
+  --outdir ./raw_data \
+  --threads 4 \
+  --progress
 ```
 
-### 4. Quality control
+### 4. Perform initial quality control
 
 ```bash
-fastqc ./raw_data/SRR29909135_1.fastq \
-       ./raw_data/SRR29909135_2.fastq \
-       --outdir ./fastqc_results --threads 4
+mkdir -p fastqc_results
+
+fastqc \
+  ./raw_data/SRR29909135_1.fastq \
+  ./raw_data/SRR29909135_2.fastq \
+  --outdir ./fastqc_results \
+  --threads 4
 ```
 
-### 5. Read mapping
+This historical procedure performs inspection with FastQC but does not perform read trimming. fastp-based trimming and reporting are planned for the executable pipeline.
+
+### 5. Map reads
 
 ```bash
 bwa mem -t 4 \
   -R "@RG\tID:SRR29909135\tSM:SRR29909135\tPL:ILLUMINA" \
-  $REF \
+  "$REF" \
   ./raw_data/SRR29909135_1.fastq \
   ./raw_data/SRR29909135_2.fastq \
   | samtools sort -@ 4 -o SRR29909135.bam
+
 samtools index SRR29909135.bam
 ```
 
-### 6. Duplicate marking
+### 6. Mark duplicates
 
-> **Note:** For patterned flow cells (HiSeq X, NovaSeq), use `-d 2500` for optical duplicate handling.
+The historical pilot used `-d 2500`, corresponding to patterned-flow-cell optical duplicate handling.
 
 ```bash
-samtools sort -n -@ 4 SRR29909135.bam -o SRR29909135.namesort.bam
-samtools fixmate -m SRR29909135.namesort.bam SRR29909135.fixmate.bam
-samtools sort -@ 4 SRR29909135.fixmate.bam -o SRR29909135.fixmate.sort.bam
+samtools sort -n -@ 4 \
+  SRR29909135.bam \
+  -o SRR29909135.namesort.bam
+
+samtools fixmate -m \
+  SRR29909135.namesort.bam \
+  SRR29909135.fixmate.bam
+
+samtools sort -@ 4 \
+  SRR29909135.fixmate.bam \
+  -o SRR29909135.fixmate.sort.bam
+
 samtools markdup -r -d 2500 -@ 4 \
   SRR29909135.fixmate.sort.bam \
   SRR29909135.markdup.bam
+
 samtools index SRR29909135.markdup.bam
 ```
 
-### 7. SNP calling (GVCF mode)
+### 7. Call variants in GVCF mode
 
 ```bash
 gatk HaplotypeCaller \
-  -R $REF \
+  -R "$REF" \
   -I SRR29909135.markdup.bam \
   -O SRR29909135.g.vcf.gz \
   -ERC GVCF \
   --tmp-dir /tmp \
-  -native-pair-hmm-threads 4
+  --native-pair-hmm-threads 4
 ```
 
-### 8. Genotyping
+### 8. Genotype the demonstration sample
 
 ```bash
 gatk GenotypeGVCFs \
-  -R $REF \
+  -R "$REF" \
   -V SRR29909135.g.vcf.gz \
   -O SRR29909135.vcf.gz
 ```
 
-> **Note for multi-sample analysis:** Use `GenomicsDBImport` + `GenotypeGVCFs` (Joint Genotyping) for 30+ accessions.
+This command was used only for the single-sample pilot. The planned multi-sample pipeline will use HaplotypeCaller GVCFs followed by GenomicsDBImport and GenotypeGVCFs for Joint Genotyping. Joint Genotyping will be the default for a multi-sample cohort rather than being conditional on a 30-sample threshold.
 
-### 9. Variant filtration
+### 9. Select and filter SNPs
 
 ```bash
 gatk SelectVariants \
@@ -128,11 +195,16 @@ gatk SelectVariants \
 
 gatk VariantFiltration \
   -V SRR29909135.snp.vcf.gz \
-  --filter-expression "QD < 2.0"    --filter-name "QD2" \
-  --filter-expression "FS > 60.0"   --filter-name "FS60" \
-  --filter-expression "MQ < 40.0"   --filter-name "MQ40" \
-  --filter-expression "MQRankSum < -12.5" --filter-name "MQRankSum-12.5" \
-  --filter-expression "ReadPosRankSum < -8.0" --filter-name "ReadPosRankSum-8" \
+  --filter-expression "QD < 2.0" \
+  --filter-name "QD2" \
+  --filter-expression "FS > 60.0" \
+  --filter-name "FS60" \
+  --filter-expression "MQ < 40.0" \
+  --filter-name "MQ40" \
+  --filter-expression "MQRankSum < -12.5" \
+  --filter-name "MQRankSum-12.5" \
+  --filter-expression "ReadPosRankSum < -8.0" \
+  --filter-name "ReadPosRankSum-8" \
   -O SRR29909135.snp.filtered.vcf.gz
 
 gatk SelectVariants \
@@ -141,53 +213,105 @@ gatk SelectVariants \
   -O SRR29909135.snp.pass.vcf.gz
 ```
 
+The hard-filter thresholds above document the historical pilot. Their suitability across references, accessions, and cohort sizes has not yet been validated.
+
 ---
 
-## Example Results
+## Single-Sample Pilot Results
 
-![Mapping Stats](docs/mapping_stats.png)
+![Mapping statistics from the single-sample pilot](docs/mapping_stats.png)
 
 | Step | Count | Note |
-|---|---|---|
+| --- | ---: | --- |
 | Total reads | 57,597,756 | Paired-end, 150 bp |
-| Mapping rate | **99.35%** | BWA-MEM to GCF_016808095.1 |
-| Properly paired | 93.59% | |
-| Duplicate rate | ~10% | HiSeq X patterned flow cell |
-| Total variants | 783,836 | SNP + indel |
+| Mapping rate | 99.35% | BWA-MEM against GCF_016808095.1 |
+| Properly paired | 93.59% | Single-sample pilot |
+| Duplicate rate | ~10% | Historical run |
+| Total variants | 783,836 | SNPs and indels |
 | SNPs extracted | 678,212 | After SelectVariants |
-| High-quality SNPs | **610,790** | After hard filtering (PASS) |
+| PASS SNPs | 610,790 | After the documented hard filters |
 
-![Variant Counts](docs/variant_counts.png)
+![Variant counts from the single-sample pilot](docs/variant_counts.png)
+
+![SNP summary from the single-sample pilot](docs/snp_summary.png)
+
+These values describe one historical execution for SRR29909135. They are not estimates for the complete 327-accession cohort and do not demonstrate SNP-calling accuracy or superiority over another workflow.
 
 ---
 
-## Notes on Adzuki Bean Genomics
+## Planned Pipeline
 
-- **RAD-seq is not recommended** for adzuki bean. The genome (~540 Mb) contains abundant repetitive sequences. Low-coverage WGS is strongly preferred.
-- For multi-sample GS panel construction, Joint Genotyping across all accessions is strongly recommended.
-- The reference genome GCF_016808095.1 is a chromosome-level assembly suitable for population-scale SNP calling.
+The implementation roadmap is tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
+
+The intended pipeline includes:
+
+- Nextflow DSL2 with strict-syntax-compatible code
+- samplesheet and schema validation
+- configurable reference bundles
+- fastp, FastQC, and MultiQC
+- BWA-MEM2 mapping and duplicate marking
+- GATK HaplotypeCaller GVCF generation
+- multi-sample Joint Genotyping
+- variant and cohort QC
+- documented GS-panel output contracts
+- nf-test coverage and a synthetic CI dataset
+- software-version, parameter, and checksum manifests
+
+These capabilities remain planned until their corresponding issues are implemented and validated.
+
+---
+
+## Data Handling Policy
+
+This public repository is limited to:
+
+- workflow and pipeline source code
+- commands and configuration required for reproducibility
+- analyses based on publicly available datasets
+- synthetic or redistributable test data
+- technical validation records that contain no confidential information
+
+The following are not included:
+
+- former-employer or other non-public research data
+- customer data
+- proprietary SNP panels or marker selections
+- confidential business logic
+- credentials, access tokens, or private infrastructure details
+- material intended to remain protected as future intellectual property
+
+Raw WGS data and full reference bundles are not committed to this repository. They must be obtained from their authoritative public sources.
 
 ---
 
 ## Related Repositories
 
-- [adzuki-gwas-analysis](https://github.com/hoso-jpn/adzuki-gwas-analysis) — GWAS for water absorption traits and FT gene exploration *(in progress)*
-- [genomic-prediction-benchmark](https://github.com/hoso-jpn/genomic-prediction-benchmark) — GS model benchmarking with SoyNAM *(in progress)*
-- [genomic-prediction-resnet-hybrid](https://github.com/hoso-jpn/genomic-prediction-resnet-hybrid) — ResNet + linear hybrid GS model
+The following repositories represent distinct stages of a longer-term research stack. They are not yet connected by an automated end-to-end workflow.
+
+- [adzuki-snp-pipeline](https://github.com/hoso-jpn/adzuki-snp-pipeline) — public WGS data to cohort variants and SNP matrices; currently under reconstruction
+- [adzuki-gwas-analysis](https://github.com/hoso-jpn/adzuki-gwas-analysis) — analysis of publicly available GWAS summary statistics
+- [genomic-prediction-resnet-hybrid](https://github.com/hoso-jpn/genomic-prediction-resnet-hybrid) — auditable comparison of GBLUP and neural genomic-prediction models using compatible individual-level data
+
+The public Dryad dataset currently used by `adzuki-gwas-analysis` does not contain individual-level genotypes and phenotypes. Therefore, these three repositories should not be read as an already-operational SNP-to-GWAS-to-genomic-prediction service.
 
 ---
 
 ## Author
 
-**Hoso**
-Founder, [Florigen AI](https://florigen.ai)
-Plant Genetics × Bioinformatics × Physical AI
+**Yusuke Hosokawa**<br>
+Independent researcher and AI engineer<br>
+Building [Florigen AI](https://florigen.ai), a long-term agricultural AI initiative
 
-- GitHub: [@hoso-jpn](https://github.com/hoso-jpn)
-- Researchmap: [Link](https://researchmap.jp/hosokawa-yusuke)
+Plant Genetics × Edge AI × Physical AI
+
+- [GitHub](https://github.com/hoso-jpn)
+- [researchmap](https://researchmap.jp/hosokawa-yusuke)
+- [Breeding Science publication](https://doi.org/10.1270/jsbbs.24058)
+
+The genomics work in this repository documents plant-domain and bioinformatics expertise that informs longer-term agricultural AI and robotics research.
 
 ---
 
 ## License
 
-MIT License
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
