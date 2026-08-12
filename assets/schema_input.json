@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/hoso-jpn/adzuki-snp-pipeline/main/assets/schema_input.json",
+  "title": "adzuki-snp-pipeline samplesheet",
+  "description": "Paired-end WGS samplesheet contract",
+  "type": "array",
+  "uniqueEntries": [
+    "read_group_id"
+  ],
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "sample_id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+        "meta": [
+          "id",
+          "sample_id"
+        ],
+        "errorMessage": "sample_id must contain only letters, numbers, dots, underscores, or hyphens"
+      },
+      "read_group_id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+        "meta": [
+          "read_group_id"
+        ],
+        "errorMessage": "read_group_id must be unique and contain no whitespace"
+      },
+      "fastq_1": {
+        "type": "string",
+        "format": "file-path",
+        "exists": true,
+        "pattern": "^\\S+\\.f(ast)?q\\.gz$",
+        "errorMessage": "fastq_1 must exist and end in .fq.gz or .fastq.gz"
+      },
+      "fastq_2": {
+        "type": "string",
+        "format": "file-path",
+        "exists": true,
+        "pattern": "^\\S+\\.f(ast)?q\\.gz$",
+        "errorMessage": "fastq_2 must exist and end in .fq.gz or .fastq.gz"
+      },
+      "library_id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+        "meta": [
+          "library_id"
+        ]
+      },
+      "platform": {
+        "type": "string",
+        "enum": [
+          "ILLUMINA"
+        ],
+        "meta": [
+          "platform"
+        ]
+      },
+      "platform_unit": {
+        "type": "string",
+        "default": "",
+        "meta": [
+          "platform_unit"
+        ]
+      }
+    },
+    "required": [
+      "sample_id",
+      "read_group_id",
+      "fastq_1",
+      "fastq_2",
+      "library_id",
+      "platform"
+    ]
+  }
+}

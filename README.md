@@ -2,7 +2,7 @@
 
 Research and development repository for building a reproducible SNP-calling pipeline for adzuki bean (*Vigna angularis*) from publicly available whole-genome sequencing data.
 
-The repository currently documents a manually executed, single-sample pilot analysis. It does **not yet contain an executable workflow or a fully reproducible production pipeline**. A Nextflow DSL2 implementation, automated tests, and multi-sample cohort validation are planned in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
+The repository contains a Nextflow DSL2 input-validation scaffold and a historical, manually executed single-sample pilot analysis. The scaffold validates samplesheets and configurable reference metadata, but it **does not yet execute QC, mapping, duplicate marking, variant calling, or genotyping processes**. Those implementations, automated tests, and cohort validation are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
 
 This work represents plant-genetics and bioinformatics research that informs the longer-term agricultural AI activities of Florigen AI. It does not imply a direct genomic-prediction-to-Physical-AI development path.
 
@@ -14,11 +14,12 @@ This work represents plant-genetics and bioinformatics research that informs the
 | --- | --- | --- |
 | Manual single-sample SNP-calling pilot | Executed once | SRR29909135 was processed manually; the result has not yet been reproduced by an automated test |
 | Documented command sequence | Available | Commands are recorded below, but software versions and execution parameters are not yet fully locked |
-| Automated workflow | Not implemented | Nextflow DSL2 implementation is planned |
-| Configurable reference bundle | Not implemented | The current instructions use GCF_016808095.1 |
+| Nextflow DSL2 scaffold | Implemented | Strict-syntax-compatible input validation and a synthetic test profile are available |
+| Analysis processes | Not implemented | QC, mapping, duplicate marking, variant calling, and genotyping remain planned |
+| Configurable reference bundle | Interface implemented | Reference metadata and FASTA can be replaced without changing pipeline code; index generation is not yet implemented |
 | Multi-sample Joint Genotyping | Not validated | GenomicsDBImport-based cohort processing is planned |
 | Trimming and integrated QC report | Not implemented | fastp and MultiQC are planned |
-| Pipeline-level tests | Not implemented | nf-test and a synthetic test dataset are planned |
+| Pipeline-level tests | Not implemented | A synthetic manual smoke profile exists; nf-test automation remains planned |
 | Functional CI | Not implemented | Current CI checks repository structure only |
 | Base quality score recalibration (BQSR) | Intentionally excluded | No validated known-sites resource is available; see [Design Decisions](#design-decisions) |
 | Production use | Not supported | This is an experimental plant-research repository |
@@ -56,6 +57,111 @@ The manual pilot used the following independent reference assembly:
 The approximately 540 Mb figure often cited for adzuki bean is a k-mer-based genome-size estimate for the cultivar Shumari ([Sakai et al. 2015, *Scientific Reports* 5:16780](https://doi.org/10.1038/srep16780)). For Longxiaodou 4, Li et al. estimated a genome size of 464.9 Mb by 21-mer analysis; the 447.8 Mb assembly represents 96.32% of that estimate. These values differ by cultivar and estimation method and should not be treated as interchangeable.
 
 The sequencing data and reference assembly originate from different studies and genetic backgrounds. Future pipeline versions will treat the reference genome as an explicit, configurable analysis input rather than assuming that results are interchangeable across references.
+
+---
+
+## Nextflow Validation Scaffold
+
+Issue [#4](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/4) introduces the initial Nextflow DSL2 scaffold. It establishes input contracts for paired-end WGS data and configurable reference bundles before bioinformatics processes are added.
+
+The current scaffold performs the following actions:
+
+- validates pipeline parameters with `nf-schema` 2.8.0
+- validates samplesheet structure, required values, paths, and read-group uniqueness
+- rejects rows in which `fastq_1` and `fastq_2` reference the same file
+- rejects FASTQ files reused across different read groups
+- permits multiple read groups for the same biological sample
+- creates channels containing sample/read-group metadata and reference metadata
+- provides a synthetic `test` profile that does not download biological data
+
+It does **not** run FastQC, fastp, BWA-MEM2, duplicate marking, GATK, or MultiQC.
+
+### Requirements
+
+- Bash 3.2 or later
+- Java 17 or later
+- Nextflow 26.04.6
+
+Nextflow 26.04 and later use the strict syntax parser by default. The tested version can be selected without changing the globally installed launcher:
+
+```bash
+NXF_VER=26.04.6 nextflow -version
+```
+
+The first run may download the pinned `nf-schema` plugin. The synthetic FASTQ and reference fixtures themselves are stored in this repository.
+
+### Validate and run the scaffold
+
+```bash
+NXF_VER=26.04.6 nextflow lint .
+
+NXF_VER=26.04.6 \
+  nextflow run . \
+  -profile test
+```
+
+A successful test run validates three read groups across two biological samples and one synthetic reference. It does not create scientific analysis results.
+
+### Samplesheet contract
+
+The input must be a CSV file.
+
+| Column | Required | Description |
+| --- | --- | --- |
+| `sample_id` | Yes | Biological sample identifier; repeated values are allowed for multiple read groups |
+| `read_group_id` | Yes | Identifier that must be unique across the samplesheet |
+| `fastq_1` | Yes | Existing read 1 file ending in `.fq.gz` or `.fastq.gz` |
+| `fastq_2` | Yes | Existing read 2 file ending in `.fq.gz` or `.fastq.gz` |
+| `library_id` | Yes | Sequencing library identifier |
+| `platform` | Yes | Sequencing platform; the initial contract accepts `ILLUMINA` |
+| `platform_unit` | No | Flowcell, lane, and sample-barcode identifier |
+
+When supplied, `platform_unit` should distinguish read groups using a value such as `FLOWCELL.LANE.SAMPLE_BARCODE`. It should not be reused across distinct read groups.
+
+Example:
+
+```csv
+sample_id,read_group_id,fastq_1,fastq_2,library_id,platform,platform_unit
+sample_a,sample_a_L001,reads/a_L001_R1.fastq.gz,reads/a_L001_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L001.ATCACG
+sample_a,sample_a_L002,reads/a_L002_R1.fastq.gz,reads/a_L002_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L002.ATCACG
+```
+
+Unexpected columns, duplicate `read_group_id` values, missing files, identical read 1/read 2 paths, and FASTQ files reused across read groups are rejected before analysis processes start.
+
+### Reference bundle contract
+
+The following parameters define the reference bundle.
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `reference_id` | Yes | Stable identifier for the reference bundle |
+| `reference_name` | Yes | Human-readable assembly name |
+| `reference_fasta` | Yes | Existing reference FASTA |
+| `reference_accession` | No | Public database accession |
+| `reference_species` | No | Species represented by the reference |
+| `reference_cultivar` | No | Cultivar represented by the reference |
+| `reference_fai` | No | Existing FASTA index |
+| `reference_dict` | No | Existing sequence dictionary |
+| `bwa_index_prefix` | No | Existing BWA index prefix |
+
+The synthetic test settings are defined in `conf/test.config`. An example for Longxiaodou 4 is provided in `conf/references/longxiaodou4.config.example`.
+
+Reference index generation is deferred to the mapping implementation. Until that is implemented, optional index parameters are metadata-only inputs.
+
+### Scaffold layout
+
+```text
+main.nf
+nextflow.config
+nextflow_schema.json
+assets/schema_input.json
+conf/test.config
+conf/references/
+workflows/
+subworkflows/local/
+modules/local/
+tests/data/
+```
 
 ---
 
@@ -228,6 +334,10 @@ BQSR is intentionally excluded from the current procedure and from the planned d
 
 Bootstrapped BQSR is also outside the current scope because its known-sites construction and effect on the resulting calls have not been validated here. This is a deliberate design decision rather than an omitted implementation step. See the [GATK BaseRecalibrator documentation](https://gatk.broadinstitute.org/hc/en-us/articles/360036898312-BaseRecalibrator).
 
+### Reference bundle policy
+
+The reference assembly is an explicit pipeline input. Results generated against different cultivars or assemblies must not be treated as directly interchangeable without separate validation. Longxiaodou 4 is retained as a documented real-data example, while the test profile uses a small synthetic reference that is safe to redistribute.
+
 ---
 
 ## Single-Sample Pilot Results
@@ -252,25 +362,29 @@ These values describe one historical execution for SRR29909135. They are not est
 
 ---
 
-## Planned Pipeline
+## Implementation Roadmap
 
 The implementation roadmap is tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
 
-The intended pipeline includes:
+The following foundation is implemented:
 
-- Nextflow DSL2 with strict-syntax-compatible code
-- samplesheet and schema validation
-- configurable reference bundles
+- Nextflow DSL2 scaffold compatible with the strict syntax parser
+- parameter and samplesheet validation
+- configurable reference-bundle interface
+- redistributable synthetic input fixtures and a manual smoke-test profile
+
+The following analysis and reproducibility capabilities remain planned:
+
 - fastp, FastQC, and MultiQC
 - BWA-MEM2 mapping and duplicate marking without removing duplicate records
 - GATK HaplotypeCaller GVCF generation
 - multi-sample Joint Genotyping
 - variant and cohort QC
 - documented GS-panel output contracts
-- nf-test coverage and a synthetic CI dataset
+- nf-test coverage and functional CI
 - software-version, parameter, and checksum manifests
 
-These capabilities remain planned until their corresponding issues are implemented and validated.
+A capability is considered implemented only after its corresponding code and validation are present in this repository.
 
 ---
 

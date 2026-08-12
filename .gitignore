@@ -19,3 +19,12 @@
 # Python
 __pycache__/
 *.pyc
+
+# Nextflow
+.nextflow/
+.nextflow.log*
+work/
+results/
+
+# Synthetic test fixtures
+!tests/data/reads/*.fastq.gz

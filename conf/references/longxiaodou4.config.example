@@ -1,0 +1,11 @@
+params {
+    reference_id        = 'GCF_016808095.1'
+    reference_name      = 'ASM1680809v1'
+    reference_fasta     = '/absolute/path/to/GCF_016808095.1_ASM1680809v1_genomic.fna'
+    reference_accession = 'GCF_016808095.1'
+    reference_species   = 'Vigna angularis'
+    reference_cultivar  = 'Longxiaodou 4'
+    reference_fai       = null
+    reference_dict      = null
+    bwa_index_prefix    = null
+}

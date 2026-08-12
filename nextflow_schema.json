@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/hoso-jpn/adzuki-snp-pipeline/main/nextflow_schema.json",
+  "title": "adzuki-snp-pipeline parameters",
+  "description": "Parameter contract for the adzuki SNP-calling pipeline",
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "string",
+      "format": "file-path",
+      "exists": true,
+      "schema": "assets/schema_input.json",
+      "pattern": "^\\S+\\.csv$",
+      "description": "CSV samplesheet containing paired-end WGS inputs"
+    },
+    "outdir": {
+      "type": "string",
+      "format": "directory-path",
+      "description": "Directory for pipeline outputs"
+    },
+    "reference_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier for the reference bundle"
+    },
+    "reference_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable reference assembly name"
+    },
+    "reference_fasta": {
+      "type": "string",
+      "format": "file-path",
+      "exists": true,
+      "pattern": "^\\S+\\.(fa|fasta|fna)(\\.gz)?$",
+      "description": "Reference genome FASTA"
+    },
+    "reference_accession": {
+      "type": "string",
+      "description": "Public reference accession, when available"
+    },
+    "reference_species": {
+      "type": "string",
+      "description": "Reference species"
+    },
+    "reference_cultivar": {
+      "type": "string",
+      "description": "Reference cultivar"
+    },
+    "reference_fai": {
+      "type": "string",
+      "format": "file-path",
+      "description": "Optional FASTA index"
+    },
+    "reference_dict": {
+      "type": "string",
+      "format": "file-path",
+      "description": "Optional sequence dictionary"
+    },
+    "bwa_index_prefix": {
+      "type": "string",
+      "description": "Optional BWA index prefix"
+    }
+  },
+  "required": [
+    "input",
+    "reference_id",
+    "reference_name",
+    "reference_fasta"
+  ]
+}
