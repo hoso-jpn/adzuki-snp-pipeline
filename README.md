@@ -2,7 +2,7 @@
 
 Research and development repository for building a reproducible SNP-calling pipeline for adzuki bean (*Vigna angularis*) from publicly available whole-genome sequencing data.
 
-The repository contains a Nextflow DSL2 input-validation scaffold and a historical, manually executed single-sample pilot analysis. The scaffold validates samplesheets and configurable reference metadata, but it **does not yet execute QC, mapping, duplicate marking, variant calling, or genotyping processes**. Those implementations, automated tests, and cohort validation are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
+The repository contains an executable Nextflow DSL2 workflow for paired-end WGS preprocessing through duplicate-marked BAM QC, together with a historical, manually executed single-sample SNP-calling pilot. Variant calling, joint genotyping, automated pipeline tests, and cohort validation remain under development and are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
 
 This work represents plant-genetics and bioinformatics research that informs the longer-term agricultural AI activities of Florigen AI. It does not imply a direct genomic-prediction-to-Physical-AI development path.
 
@@ -14,12 +14,12 @@ This work represents plant-genetics and bioinformatics research that informs the
 | --- | --- | --- |
 | Manual single-sample SNP-calling pilot | Executed once | SRR29909135 was processed manually; the result has not yet been reproduced by an automated test |
 | Documented command sequence | Available | Commands are recorded below, but software versions and execution parameters are not yet fully locked |
-| Nextflow DSL2 scaffold | Implemented | Strict-syntax-compatible input validation and a synthetic test profile are available |
-| Analysis processes | Not implemented | QC, mapping, duplicate marking, variant calling, and genotyping remain planned |
-| Configurable reference bundle | Interface implemented | Reference metadata and FASTA can be replaced without changing pipeline code; index generation is not yet implemented |
+| Nextflow DSL2 workflow | Implemented through duplicate marking | Strict-syntax-compatible preprocessing, mapping, duplicate marking, and BAM QC processes are available |
+| Variant calling and genotyping | Not implemented | HaplotypeCaller, joint genotyping, and variant filtering remain planned |
+| Configurable reference bundle | Implemented | The workflow accepts compatible prebuilt indexes or generates FASTA, sequence-dictionary, and BWA-MEM2 indexes |
 | Multi-sample Joint Genotyping | Not validated | GenomicsDBImport-based cohort processing is planned |
-| Trimming and integrated QC report | Not implemented | fastp and MultiQC are planned |
-| Pipeline-level tests | Not implemented | A synthetic manual smoke profile exists; nf-test automation remains planned |
+| Read preprocessing and QC | Implemented without MultiQC | Raw and trimmed FastQC, paired-end fastp, mapping logs, duplicate metrics, and SAMtools QC are produced |
+| Pipeline-level tests | Partially implemented | A functional synthetic Docker smoke test is available; nf-test automation remains planned |
 | Functional CI | Not implemented | Current CI checks repository structure only |
 | Base quality score recalibration (BQSR) | Intentionally excluded | No validated known-sites resource is available; see [Design Decisions](#design-decisions) |
 | Production use | Not supported | This is an experimental plant-research repository |
@@ -56,31 +56,36 @@ The manual pilot used the following independent reference assembly:
 
 The approximately 540 Mb figure often cited for adzuki bean is a k-mer-based genome-size estimate for the cultivar Shumari ([Sakai et al. 2015, *Scientific Reports* 5:16780](https://doi.org/10.1038/srep16780)). For Longxiaodou 4, Li et al. estimated a genome size of 464.9 Mb by 21-mer analysis; the 447.8 Mb assembly represents 96.32% of that estimate. These values differ by cultivar and estimation method and should not be treated as interchangeable.
 
-The sequencing data and reference assembly originate from different studies and genetic backgrounds. Future pipeline versions will treat the reference genome as an explicit, configurable analysis input rather than assuming that results are interchangeable across references.
+The sequencing data and reference assembly originate from different studies and genetic backgrounds. The executable workflow treats the reference genome as an explicit, configurable analysis input; results produced against different references must not be assumed to be interchangeable.
 
 ---
 
-## Nextflow Validation Scaffold
+## Nextflow QC and Alignment Workflow
 
-Issue [#4](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/4) introduces the initial Nextflow DSL2 scaffold. It establishes input contracts for paired-end WGS data and configurable reference bundles before bioinformatics processes are added.
+Issues [#4](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/4) and [#6](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/6) establish the input contracts and executable preprocessing workflow for paired-end WGS data.
 
-The current scaffold performs the following actions:
+The current workflow performs the following actions:
 
 - validates pipeline parameters with `nf-schema` 2.8.0
 - validates samplesheet structure, required values, paths, and read-group uniqueness
-- rejects rows in which `fastq_1` and `fastq_2` reference the same file
-- rejects FASTQ files reused across different read groups
-- permits multiple read groups for the same biological sample
-- creates channels containing sample/read-group metadata and reference metadata
-- provides a synthetic `test` profile that does not download biological data
+- rejects identical read 1/read 2 paths and FASTQ files reused across read groups
+- permits multiple read groups and sequencing lanes for one biological sample
+- runs FastQC before and after paired-end fastp trimming
+- generates or accepts compatible FASTA, sequence-dictionary, and BWA-MEM2 indexes
+- maps each read group independently with BWA-MEM2 and preserves `ID`, `SM`, `LB`, `PL`, and optional `PU` metadata
+- coordinate-sorts each read group and merges read groups by biological sample
+- marks library-aware duplicates with GATK MarkDuplicates without removing duplicate records
+- creates BAM indexes and SAMtools flagstat, stats, and idxstats reports
+- provides a redistributable synthetic functional-test dataset
 
-It does **not** run FastQC, fastp, BWA-MEM2, duplicate marking, GATK, or MultiQC.
+It does **not** yet run HaplotypeCaller, joint genotyping, variant filtering, MultiQC, or genomic-selection panel generation.
 
 ### Requirements
 
 - Bash 3.2 or later
 - Java 17 or later
 - Nextflow 26.04.6
+- Docker for containerized process execution
 
 Nextflow 26.04 and later use the strict syntax parser by default. The tested version can be selected without changing the globally installed launcher:
 
@@ -90,17 +95,37 @@ NXF_VER=26.04.6 nextflow -version
 
 The first run may download the pinned `nf-schema` plugin. The synthetic FASTQ and reference fixtures themselves are stored in this repository.
 
-### Validate and run the scaffold
+Process containers are pinned by both image tag and manifest digest in the local modules. The BioConda BWA-MEM2 image is tagged as version 2.3, while its bundled executable reports version 2.2.1 because the upstream 2.3 release retained the earlier internal version string. See the [BioConda recipe](https://github.com/bioconda/bioconda-recipes/blob/master/recipes/bwa-mem2/meta.yaml) and [upstream issue #283](https://github.com/bwa-mem2/bwa-mem2/issues/283).
+
+### Validate and run the workflow
+
+The pinned containers currently target Linux AMD64. Use `docker` on native Linux AMD64 or `docker_amd64` for functional testing through Docker emulation on Apple Silicon. The emulated profile is not intended for performance benchmarking.
 
 ```bash
 NXF_VER=26.04.6 nextflow lint .
 
 NXF_VER=26.04.6 \
   nextflow run . \
-  -profile test
+  -profile test,docker
 ```
 
-A successful test run validates three read groups across two biological samples and one synthetic reference. It does not create scientific analysis results.
+On Apple Silicon:
+
+```bash
+NXF_VER=26.04.6 \
+  nextflow run . \
+  -profile test,docker_amd64
+```
+
+The synthetic dataset contains two 5 kb contigs, two biological samples, and three read groups. The two `sample_a` read groups share `library_id=lib_a` and contain intentional cross-lane duplicate fragments. A successful run retains all 16 `sample_a` reads while marking four reads as duplicates; the eight `sample_b` reads contain no intended duplicates.
+
+These fixtures test workflow behavior and read-group-aware duplicate marking. They do not constitute biological or production validation.
+
+The deterministic fixtures can be regenerated with:
+
+```bash
+python tests/scripts/generate_synthetic_data.py
+```
 
 ### Samplesheet contract
 
@@ -136,19 +161,19 @@ The following parameters define the reference bundle.
 | --- | --- | --- |
 | `reference_id` | Yes | Stable identifier for the reference bundle |
 | `reference_name` | Yes | Human-readable assembly name |
-| `reference_fasta` | Yes | Existing reference FASTA |
+| `reference_fasta` | Yes | Existing uncompressed reference FASTA |
 | `reference_accession` | No | Public database accession |
 | `reference_species` | No | Species represented by the reference |
 | `reference_cultivar` | No | Cultivar represented by the reference |
-| `reference_fai` | No | Existing FASTA index |
-| `reference_dict` | No | Existing sequence dictionary |
-| `bwa_index_prefix` | No | Existing BWA index prefix |
+| `reference_fai` | No | Compatible prebuilt FASTA index named `<reference_fasta>.fai` |
+| `reference_dict` | No | Compatible prebuilt sequence dictionary named `<reference_basename>.dict` |
+| `bwa_index_prefix` | No | Compatible prebuilt BWA-MEM2 index prefix whose basename matches `reference_fasta` |
 
 The synthetic test settings are defined in `conf/test.config`. An example for Longxiaodou 4 is provided in `conf/references/longxiaodou4.config.example`.
 
-Reference index generation is deferred to the mapping implementation. Until that is implemented, optional index parameters are metadata-only inputs.
+When an optional index parameter is omitted, the workflow generates the corresponding index with SAMtools, GATK, or BWA-MEM2. When supplied, index paths and expected filenames are validated before process execution.
 
-### Scaffold layout
+### Workflow layout
 
 ```text
 main.nf
@@ -232,7 +257,7 @@ fastqc \
   --threads 4
 ```
 
-This historical procedure performs inspection with FastQC but does not perform read trimming. fastp-based trimming and reporting are planned for the executable pipeline.
+This historical procedure performs inspection with FastQC but does not perform read trimming. The executable Nextflow workflow now performs paired-end fastp trimming and FastQC before and after trimming.
 
 ### 5. Map reads
 
@@ -249,7 +274,7 @@ samtools index SRR29909135.bam
 
 ### 6. Remove duplicates in the historical pilot
 
-The historical command used `samtools markdup -r -d 2500`. The `-r` option removed duplicate reads rather than only setting the duplicate flag. This irreversible behavior is retained here solely as a record of the pilot procedure. The planned pipeline will omit `-r`, preserve duplicate records with the DUP flag, and allow downstream tools to exclude them.
+The historical command used `samtools markdup -r -d 2500`. The `-r` option removed duplicate reads rather than only setting the duplicate flag. This irreversible behavior is retained here solely as a record of the pilot procedure. The executable Nextflow workflow instead uses GATK MarkDuplicates with `REMOVE_DUPLICATES=false`, preserving duplicate records with the DUP flag so downstream tools can exclude them without destroying the original evidence.
 
 ```bash
 samtools sort -n -@ 4 \
@@ -330,7 +355,7 @@ The hard-filter thresholds above document the historical pilot. Their suitabilit
 
 ### Base quality score recalibration (BQSR)
 
-BQSR is intentionally excluded from the current procedure and from the planned default pipeline. GATK BaseRecalibrator uses a known-sites VCF to distinguish known polymorphisms from mismatches used to model sequencing errors. This repository has not identified or validated an appropriate known-sites resource for the Longxiaodou 4 reference bundle.
+BQSR is intentionally excluded from both the documented historical procedure and the executable workflow. GATK BaseRecalibrator uses a known-sites VCF to distinguish known polymorphisms from mismatches used to model sequencing errors. This repository has not identified or validated an appropriate known-sites resource for the Longxiaodou 4 reference bundle.
 
 Bootstrapped BQSR is also outside the current scope because its known-sites construction and effect on the resulting calls have not been validated here. This is a deliberate design decision rather than an omitted implementation step. See the [GATK BaseRecalibrator documentation](https://gatk.broadinstitute.org/hc/en-us/articles/360036898312-BaseRecalibrator).
 
@@ -366,17 +391,21 @@ These values describe one historical execution for SRR29909135. They are not est
 
 The implementation roadmap is tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
 
-The following foundation is implemented:
+The following foundation and preprocessing capabilities are implemented:
 
-- Nextflow DSL2 scaffold compatible with the strict syntax parser
+- Nextflow DSL2 workflow compatible with the strict syntax parser
 - parameter and samplesheet validation
-- configurable reference-bundle interface
-- redistributable synthetic input fixtures and a manual smoke-test profile
+- configurable reference bundles with index generation or reuse
+- raw and trimmed FastQC plus paired-end fastp trimming
+- read-group-aware BWA-MEM2 mapping and coordinate sorting
+- sample-level read-group merging
+- library-aware GATK duplicate marking without removing duplicate records
+- BAM indexing and SAMtools flagstat, stats, and idxstats reports
+- redistributable deterministic fixtures and a functional Docker smoke-test profile
 
 The following analysis and reproducibility capabilities remain planned:
 
-- fastp, FastQC, and MultiQC
-- BWA-MEM2 mapping and duplicate marking without removing duplicate records
+- MultiQC report aggregation
 - GATK HaplotypeCaller GVCF generation
 - multi-sample Joint Genotyping
 - variant and cohort QC
