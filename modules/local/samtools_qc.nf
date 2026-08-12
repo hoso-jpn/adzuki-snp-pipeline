@@ -20,15 +20,15 @@ process SAMTOOLS_QC {
 
     script:
     """
-    samtools quickcheck --verbose ${bam}
+    samtools quickcheck -v ${bam}
 
     samtools flagstat \
-        --threads ${task.cpus} \
+        -@ ${task.cpus} \
         ${bam} \
         > ${meta.id}.flagstat.txt
 
     samtools stats \
-        --threads ${task.cpus} \
+        -@ ${task.cpus} \
         ${bam} \
         > ${meta.id}.stats.txt
 

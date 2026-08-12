@@ -7,7 +7,7 @@ process BWA_MEM2_INDEX {
     publishDir(
         "${params.outdir}/reference",
         mode: 'copy',
-        pattern: "${fasta.name}.*"
+        pattern: '*.{0123,amb,ann,bwt.2bit.64,pac}'
     )
 
     input:

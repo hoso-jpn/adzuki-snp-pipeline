@@ -55,10 +55,75 @@ workflow {
         cultivar : params.reference_cultivar
     ]
 
+    reference_fasta = file(
+        params.reference_fasta,
+        checkIfExists: true
+    )
+
+    if (params.reference_fai) {
+        reference_fai = file(
+            params.reference_fai,
+            checkIfExists: true
+        )
+        expected_fai_name = "${reference_fasta.name}.fai"
+
+        if (reference_fai.name != expected_fai_name) {
+            error(
+                "reference_fai must be named ${expected_fai_name}; " +
+                "found ${reference_fai.name}"
+            )
+        }
+    }
+
+    if (params.reference_dict) {
+        reference_dict = file(
+            params.reference_dict,
+            checkIfExists: true
+        )
+        expected_dict_name = "${reference_fasta.baseName}.dict"
+
+        if (reference_dict.name != expected_dict_name) {
+            error(
+                "reference_dict must be named ${expected_dict_name}; " +
+                "found ${reference_dict.name}"
+            )
+        }
+    }
+
+    if (params.bwa_index_prefix) {
+        bwa_index_prefix = file(
+            params.bwa_index_prefix,
+            checkIfExists: false
+        )
+
+        if (bwa_index_prefix.name != reference_fasta.name) {
+            error(
+                'bwa_index_prefix basename must match reference_fasta; ' +
+                "expected ${reference_fasta.name}, " +
+                "found ${bwa_index_prefix.name}"
+            )
+        }
+
+        bwa_index_suffixes = [
+            '.0123',
+            '.amb',
+            '.ann',
+            '.bwt.2bit.64',
+            '.pac'
+        ]
+
+        bwa_index_suffixes.each { suffix ->
+            file(
+                "${params.bwa_index_prefix}${suffix}",
+                checkIfExists: true
+            )
+        }
+    }
+
     reference_ch = channel.value(
         tuple(
             reference_meta,
-            file(params.reference_fasta, checkIfExists: true)
+            reference_fasta
         )
     )
 

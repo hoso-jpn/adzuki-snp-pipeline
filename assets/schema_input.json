@@ -63,7 +63,9 @@
         "default": "",
         "meta": [
           "platform_unit"
-        ]
+        ],
+        "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9._-]*$",
+        "errorMessage": "platform_unit must be empty or contain only letters, numbers, dots, underscores, or hyphens"
       }
     },
     "required": [

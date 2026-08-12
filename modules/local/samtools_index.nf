@@ -24,7 +24,7 @@ process SAMTOOLS_INDEX {
     script:
     """
     samtools index \
-        --threads ${task.cpus} \
+        -@ ${task.cpus} \
         ${bam}
     """
 }

@@ -21,8 +21,8 @@ process FASTP {
     output:
     tuple(
         val(meta),
-        path("${meta.read_group_id}_R1.fastq.gz"),
-        path("${meta.read_group_id}_R2.fastq.gz"),
+        path("${meta.read_group_id}.trimmed_R1.fastq.gz"),
+        path("${meta.read_group_id}.trimmed_R2.fastq.gz"),
         emit: reads
     )
     tuple(
@@ -37,8 +37,8 @@ process FASTP {
     fastp \
         --in1 ${read1} \
         --in2 ${read2} \
-        --out1 ${meta.read_group_id}_R1.fastq.gz \
-        --out2 ${meta.read_group_id}_R2.fastq.gz \
+        --out1 ${meta.read_group_id}.trimmed_R1.fastq.gz \
+        --out2 ${meta.read_group_id}.trimmed_R2.fastq.gz \
         --json ${meta.read_group_id}.fastp.json \
         --html ${meta.read_group_id}.fastp.html \
         --detect_adapter_for_pe \

@@ -13,8 +13,8 @@ process SAMTOOLS_MERGE {
     script:
     """
     samtools merge \
-        --threads ${task.cpus} \
-        --force \
+        -@ ${task.cpus} \
+        -f \
         ${meta.id}.merged.bam \
         ${bams}
     """

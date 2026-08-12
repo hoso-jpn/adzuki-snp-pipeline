@@ -32,8 +32,8 @@
       "type": "string",
       "format": "file-path",
       "exists": true,
-      "pattern": "^\\S+\\.(fa|fasta|fna)(\\.gz)?$",
-      "description": "Reference genome FASTA"
+      "pattern": "^\\S+\\.(fa|fasta|fna)$",
+      "description": "Uncompressed reference genome FASTA"
     },
     "reference_accession": {
       "type": "string",
@@ -50,16 +50,19 @@
     "reference_fai": {
       "type": "string",
       "format": "file-path",
-      "description": "Optional FASTA index"
+      "description": "Optional FASTA index",
+      "exists": true
     },
     "reference_dict": {
       "type": "string",
       "format": "file-path",
-      "description": "Optional sequence dictionary"
+      "description": "Optional sequence dictionary",
+      "exists": true
     },
     "bwa_index_prefix": {
       "type": "string",
-      "description": "Optional BWA index prefix"
+      "description": "Optional BWA-MEM2 index prefix; basename must match reference_fasta",
+      "minLength": 1
     }
   },
   "required": [

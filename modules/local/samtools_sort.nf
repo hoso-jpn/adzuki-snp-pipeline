@@ -17,8 +17,8 @@ process SAMTOOLS_SORT {
     script:
     """
     samtools sort \
-        --threads ${task.cpus} \
-        --output ${meta.read_group_id}.sorted.bam \
+        -@ ${task.cpus} \
+        -o ${meta.read_group_id}.sorted.bam \
         ${sam}
     """
 }
