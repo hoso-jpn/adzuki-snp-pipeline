@@ -12,7 +12,7 @@ This work represents plant-genetics and bioinformatics research that informs the
 
 | Capability | Status | Evidence or limitation |
 | --- | --- | --- |
-| Manual single-sample SNP-calling pilot | Verified | SRR29909135 was processed through mapping, duplicate removal, GVCF calling, genotyping, and hard filtering |
+| Manual single-sample SNP-calling pilot | Executed once | SRR29909135 was processed manually; the result has not yet been reproduced by an automated test |
 | Documented command sequence | Available | Commands are recorded below, but software versions and execution parameters are not yet fully locked |
 | Automated workflow | Not implemented | Nextflow DSL2 implementation is planned |
 | Configurable reference bundle | Not implemented | The current instructions use GCF_016808095.1 |
@@ -20,7 +20,7 @@ This work represents plant-genetics and bioinformatics research that informs the
 | Trimming and integrated QC report | Not implemented | fastp and MultiQC are planned |
 | Pipeline-level tests | Not implemented | nf-test and a synthetic test dataset are planned |
 | Functional CI | Not implemented | Current CI checks repository structure only |
-| Production or clinical use | Not supported | This is an experimental plant-research repository |
+| Production use | Not supported | This is an experimental plant-research repository |
 
 The figures and variant counts in this README are historical results from the single-sample pilot. They are not yet backed by an automated clean-environment reproduction test.
 
@@ -38,7 +38,7 @@ The figures and variant counts in this README are historical results from the si
 | Public data described by the study | WGS resequencing of 327 accessions and DArT-seq data from 357 accessions |
 | Scope validated in this repository | One WGS accession only |
 
-DArT-seq is listed as part of the associated study's public data. This repository has not established that RAD-seq or DArT-seq is categorically unsuitable for adzuki bean, and it does not make that claim.
+The associated study also reports DArT-seq data from 357 accessions. The current and planned variant-calling scope of this repository is WGS; no RAD-seq or DArT-seq workflow is implemented or evaluated here.
 
 ### Reference genome
 
@@ -52,7 +52,7 @@ The manual pilot used the following independent reference assembly:
 | Assembly span | 447.8 Mb |
 | Publication | [Li et al. 2024, *Scientific Data* 11:1074](https://doi.org/10.1038/s41597-024-03911-y) |
 
-The approximately 540 Mb value reported in earlier adzuki-bean literature is an estimated genome size for the cultivar Shumari. It is distinct from the 447.8 Mb assembled length of the Longxiaodou 4 reference used here.
+The approximately 540 Mb figure often cited for adzuki bean is a k-mer-based genome-size estimate for the cultivar Shumari ([Sakai et al. 2015, *Scientific Reports* 5:16780](https://doi.org/10.1038/srep16780)). For Longxiaodou 4, Li et al. estimated a genome size of 464.9 Mb by 21-mer analysis; the 447.8 Mb assembly represents 96.32% of that estimate. These values differ by cultivar and estimation method and should not be treated as interchangeable.
 
 The sequencing data and reference assembly originate from different studies and genetic backgrounds. Future pipeline versions will treat the reference genome as an explicit, configurable analysis input rather than assuming that results are interchangeable across references.
 
@@ -65,6 +65,10 @@ The sequencing data and reference assembly originate from different studies and 
 The following commands document the historical single-sample pilot. They are retained as technical evidence and as input to the planned Nextflow implementation.
 
 They are **not yet a clean-environment reproduction procedure** because dependency versions, checksums, resource requirements, and all intermediate validation steps have not been fixed.
+
+For readability and shell correctness, the recorded commands have been lightly edited to add output-directory creation, quote the reference path, and correct the long-option spelling for `--native-pair-hmm-threads`. These edits do not indicate that the complete procedure was rerun for this documentation update.
+
+For readability and shell correctness, the recorded commands have been lightly edited to add output-directory creation, quote the reference path, and correct the long-option spelling for `--native-pair-hmm-threads`. These edits do not indicate that the complete procedure was rerun for this documentation update.
 
 ---
 
@@ -138,9 +142,9 @@ bwa mem -t 4 \
 samtools index SRR29909135.bam
 ```
 
-### 6. Mark duplicates
+### 6. Remove duplicates in the historical pilot
 
-The historical pilot used `-d 2500`, corresponding to patterned-flow-cell optical duplicate handling.
+The historical command used `samtools markdup -r -d 2500`. The `-r` option removed duplicate reads rather than only setting the duplicate flag. This irreversible behavior is retained here solely as a record of the pilot procedure. The planned pipeline will omit `-r`, preserve duplicate records with the DUP flag, and allow downstream tools to exclude them.
 
 ```bash
 samtools sort -n -@ 4 \
@@ -184,6 +188,12 @@ gatk GenotypeGVCFs \
 ```
 
 This command was used only for the single-sample pilot. The planned multi-sample pipeline will use HaplotypeCaller GVCFs followed by GenomicsDBImport and GenotypeGVCFs for Joint Genotyping. Joint Genotyping will be the default for a multi-sample cohort rather than being conditional on a 30-sample threshold.
+
+### BQSR policy
+
+BQSR is intentionally excluded from the current procedure and from the planned default pipeline. GATK BaseRecalibrator uses a known-sites VCF to distinguish known polymorphisms from mismatches used to model sequencing errors. This repository has not identified or validated an appropriate known-sites resource for the Longxiaodou 4 reference bundle.
+
+Bootstrapped BQSR is also outside the current scope because its known-sites construction and effect on the resulting calls have not been validated here. This is a deliberate design decision rather than an omitted implementation step. See the [GATK BaseRecalibrator documentation](https://gatk.broadinstitute.org/hc/en-us/articles/360036898312-BaseRecalibrator).
 
 ### 9. Select and filter SNPs
 
@@ -249,7 +259,7 @@ The intended pipeline includes:
 - samplesheet and schema validation
 - configurable reference bundles
 - fastp, FastQC, and MultiQC
-- BWA-MEM2 mapping and duplicate marking
+- BWA-MEM2 mapping and duplicate marking without removing duplicate records
 - GATK HaplotypeCaller GVCF generation
 - multi-sample Joint Genotyping
 - variant and cohort QC
@@ -306,7 +316,7 @@ Plant Genetics × Edge AI × Physical AI
 
 - [GitHub](https://github.com/hoso-jpn)
 - [researchmap](https://researchmap.jp/hosokawa-yusuke)
-- [Breeding Science publication](https://doi.org/10.1270/jsbbs.24058)
+- [Breeding Science (2025) — QTL mapping in rice chromosome segment substitution lines](https://doi.org/10.1270/jsbbs.24058)
 
 The genomics work in this repository documents plant-domain and bioinformatics expertise that informs longer-term agricultural AI and robotics research.
 
