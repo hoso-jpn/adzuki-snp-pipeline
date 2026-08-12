@@ -1,2 +1,2 @@
 sample_id,read_group_id,fastq_1,fastq_2,library_id,platform,platform_unit,unexpected
-sample_a,sample_a_unknown,tests/data/reads/sample_a_L001_R1.fastq.gz,tests/data/reads/sample_a_L001_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L001,value
+sample_a,sample_a_unknown,tests/data/reads/sample_a_L001_R1.fastq.gz,tests/data/reads/sample_a_L001_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L001.ATCACG,value

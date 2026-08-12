@@ -16,7 +16,6 @@
     "outdir": {
       "type": "string",
       "format": "directory-path",
-      "default": "results",
       "description": "Directory for pipeline outputs"
     },
     "reference_id": {
@@ -38,17 +37,14 @@
     },
     "reference_accession": {
       "type": "string",
-      "default": "",
       "description": "Public reference accession, when available"
     },
     "reference_species": {
       "type": "string",
-      "default": "",
       "description": "Reference species"
     },
     "reference_cultivar": {
       "type": "string",
-      "default": "",
       "description": "Reference cultivar"
     },
     "reference_fai": {

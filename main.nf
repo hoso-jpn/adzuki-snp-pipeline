@@ -1,7 +1,5 @@
 #!/usr/bin/env nextflow
 
-nextflow.enable.dsl = 2
-
 include {
     validateParameters
     paramsSummaryLog
@@ -11,18 +9,6 @@ include {
 include {
     ADZUKI_SNP_PIPELINE
 } from './workflows/adzuki_snp_pipeline'
-
-params.input               = null
-params.outdir              = 'results'
-params.reference_id        = null
-params.reference_name      = null
-params.reference_fasta     = null
-params.reference_accession = ''
-params.reference_species   = ''
-params.reference_cultivar  = ''
-params.reference_fai       = null
-params.reference_dict      = null
-params.bwa_index_prefix    = null
 
 workflow {
     validateParameters()
@@ -41,6 +27,21 @@ workflow {
         error(
             'fastq_1 and fastq_2 must reference different files for ' +
             "read groups: ${invalid_read_pairs.join(', ')}"
+        )
+    }
+
+    reused_fastqs = sample_rows
+        .collectMany { row -> [row[1], row[2]] }
+        .countBy { fastq -> fastq }
+        .findAll { _fastq, count -> count > 1 }
+        .keySet()
+        .collect { fastq -> fastq.toString() }
+        .sort()
+
+    if (!reused_fastqs.isEmpty()) {
+        error(
+            'the same FASTQ file is referenced by multiple read groups: ' +
+            reused_fastqs.join(', ')
         )
     }
 

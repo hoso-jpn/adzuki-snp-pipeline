@@ -69,6 +69,7 @@ The current scaffold performs the following actions:
 - validates pipeline parameters with `nf-schema` 2.8.0
 - validates samplesheet structure, required values, paths, and read-group uniqueness
 - rejects rows in which `fastq_1` and `fastq_2` reference the same file
+- rejects FASTQ files reused across different read groups
 - permits multiple read groups for the same biological sample
 - creates channels containing sample/read-group metadata and reference metadata
 - provides a synthetic `test` profile that does not download biological data
@@ -113,17 +114,19 @@ The input must be a CSV file.
 | `fastq_2` | Yes | Existing read 2 file ending in `.fq.gz` or `.fastq.gz` |
 | `library_id` | Yes | Sequencing library identifier |
 | `platform` | Yes | Sequencing platform; the initial contract accepts `ILLUMINA` |
-| `platform_unit` | No | Flowcell, lane, or other platform-unit identifier |
+| `platform_unit` | No | Flowcell, lane, and sample-barcode identifier |
+
+When supplied, `platform_unit` should distinguish read groups using a value such as `FLOWCELL.LANE.SAMPLE_BARCODE`. It should not be reused across distinct read groups.
 
 Example:
 
 ```csv
 sample_id,read_group_id,fastq_1,fastq_2,library_id,platform,platform_unit
-sample_a,sample_a_L001,reads/a_L001_R1.fastq.gz,reads/a_L001_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L001
-sample_a,sample_a_L002,reads/a_L002_R1.fastq.gz,reads/a_L002_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L002
+sample_a,sample_a_L001,reads/a_L001_R1.fastq.gz,reads/a_L001_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L001.ATCACG
+sample_a,sample_a_L002,reads/a_L002_R1.fastq.gz,reads/a_L002_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L002.ATCACG
 ```
 
-Unexpected columns, duplicate `read_group_id` values, missing files, and identical read 1/read 2 paths are rejected before analysis processes start.
+Unexpected columns, duplicate `read_group_id` values, missing files, identical read 1/read 2 paths, and FASTQ files reused across read groups are rejected before analysis processes start.
 
 ### Reference bundle contract
 

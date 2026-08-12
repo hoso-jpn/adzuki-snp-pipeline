@@ -1,4 +1,4 @@
 sample_id,read_group_id,fastq_1,fastq_2,library_id,platform,platform_unit
-sample_a,sample_a_L001,tests/data/reads/sample_a_L001_R1.fastq.gz,tests/data/reads/sample_a_L001_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L001
-sample_a,sample_a_L002,tests/data/reads/sample_a_L002_R1.fastq.gz,tests/data/reads/sample_a_L002_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L002
-sample_b,sample_b_L001,tests/data/reads/sample_b_L001_R1.fastq.gz,tests/data/reads/sample_b_L001_R2.fastq.gz,lib_b,ILLUMINA,flowcell1.L001
+sample_a,sample_a_L001,tests/data/reads/sample_a_L001_R1.fastq.gz,tests/data/reads/sample_a_L001_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L001.ATCACG
+sample_a,sample_a_L002,tests/data/reads/sample_a_L002_R1.fastq.gz,tests/data/reads/sample_a_L002_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L002.ATCACG
+sample_b,sample_b_L001,tests/data/reads/sample_b_L001_R1.fastq.gz,tests/data/reads/sample_b_L001_R2.fastq.gz,lib_b,ILLUMINA,flowcell1.L001.CGATGT
