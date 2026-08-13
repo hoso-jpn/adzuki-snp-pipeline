@@ -141,7 +141,7 @@ python3 tests/scripts/generate_synthetic_data.py
 
 ### Automated pipeline-level testing
 
-A pipeline-level [nf-test](https://www.nf-test.com/) reads `tests/data/variants/expected_variants.tsv` directly and asserts the genotype and annotation contract above end to end: gVCF and raw-cohort-VCF existence, exactly two raw SNP records with no unexpected variants, sample-column order, and an exact match (not a lower bound) on `GT`, `REF`/`ALT`, `AC`, `AN`, `AF`, and per-sample and site `DP` at both loci, plus the PR #14 filtering/QC regression guards (default `SNP_SOR_HIGH` filtering, an empty default PASS SNP VCF, and an empty indel VCF). Reading the contract file directly, rather than duplicating its values as literals in the test, keeps the fixture and its test from drifting apart.
+A pipeline-level [nf-test](https://www.nf-test.com/) reads `tests/data/variants/expected_variants.tsv` directly and asserts the genotype and annotation contract above end to end: gVCF and raw-cohort-VCF existence, exactly two raw SNP records with no unexpected variants, sample-column order, and an exact match (not a lower bound) on `GT`, `REF`/`ALT`, `AC`, `AN`, `AF`, and per-sample and site `DP` at both loci, plus the PR #14 filtering/QC regression guards (default `SNP_SOR_HIGH` filtering, an empty default PASS SNP VCF, and an empty indel VCF). It also asserts the variant-QC output contract (28 `qc/variants` artifacts, cohort missingness metrics for the raw cohort, and `NA` per-sample missingness where a stage has zero records). Reading the contract file directly, rather than duplicating its values as literals in the test, keeps the fixture and its test from drifting apart.
 
 ```bash
 curl -fsSL https://code.askimed.com/install/nf-test | bash
@@ -157,7 +157,21 @@ NXF_VER=26.04.6 \
   --profile "test,docker_amd64"
 ```
 
-GitHub Actions runs the same nf-test suite with the native `docker` profile on every push and pull request against `main` (`.github/workflows/test.yml`); `.github/workflows/lint.yml` separately checks repository structure only. This nf-test suite is scoped to the Joint Genotyping fixture contract validated for Issue #12; broader nf-test coverage of every module and a functional-CI overhaul remain tracked in Issue #1's #G.
+GitHub Actions runs the same nf-test suite, plus the variant QC summarizer's own unit tests below, with the native `docker` profile on every push and pull request against `main` (`.github/workflows/test.yml`); `.github/workflows/lint.yml` separately checks repository structure only. This nf-test suite is scoped to the Joint Genotyping fixture contract validated for Issue #12 and the variant QC output contract validated for Issue #16; broader nf-test coverage of every module and a functional-CI overhaul remain tracked in Issue #1's #G.
+
+### Variant QC summarizer
+
+`bin/summarize_variant_qc.py` turns one `bcftools stats` report into the `variant_qc.tsv`, `sample_qc.tsv`, and `summary.txt` files described below. It replaced an embedded, roughly 230-line AWK script inside `modules/local/bcftools_stats.nf` (Issue #16) so the aggregation logic can be unit tested independently of Nextflow, Groovy, and shell escaping.
+
+The pinned `bcftools:1.24` container has no Python interpreter, and reusing the GATK container's bundled `bcftools` would have silently downgraded the pinned bcftools version from 1.24 to the 1.13 it ships. Rather than accept either, variant QC now runs as two Nextflow processes: `BCFTOOLS_STATS` (unchanged, runs `bcftools stats` only) followed by `SUMMARIZE_VARIANT_QC` (runs `bin/summarize_variant_qc.py` in a dedicated, digest-pinned `python:3.12` container). The seven stage/type combinations and 28 published QC artifacts are unchanged, but this QC step now accounts for 14 task executions in the Nextflow trace rather than 7. The full (non-`-slim`) Python image is used because Nextflow shells out to `ps` inside the task container to collect resource-usage metrics whenever a run is traced, as nf-test and `-with-trace` both do; `python:3.12-slim` does not include it.
+
+Run the summarizer's unit tests with the standard library only, no extra dependencies required:
+
+```bash
+python3 -m unittest discover -s tests/bin -v
+```
+
+The refactor's output was verified against the previous AWK implementation by running a clean synthetic Docker smoke test before and after the change and diffing every file under `qc/variants/`: all 28 artifacts across all seven stage/type combinations were byte-identical.
 
 ### Variant outputs
 
@@ -259,12 +273,14 @@ nf-test.config
 assets/schema_input.json
 conf/test.config
 conf/references/
+bin/
 workflows/
 subworkflows/local/
 modules/local/
 tests/data/
 tests/scripts/
 tests/pipeline/
+tests/bin/
 tests/nextflow.config
 ```
 
