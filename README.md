@@ -2,7 +2,7 @@
 
 Research and development repository for building a reproducible SNP-calling pipeline for adzuki bean (*Vigna angularis*) from publicly available whole-genome sequencing data.
 
-The repository contains an executable Nextflow DSL2 workflow for paired-end WGS preprocessing, sample-level GVCF generation, multi-sample Joint Genotyping, configurable hard filtering, PASS extraction, and variant QC, together with a historical, manually executed single-sample SNP-calling pilot. MultiQC aggregation, automated pipeline tests, and real-data cohort validation remain under development and are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
+The repository contains an executable Nextflow DSL2 workflow for paired-end WGS preprocessing, sample-level GVCF generation, multi-sample Joint Genotyping, configurable hard filtering, PASS extraction, and variant QC, together with a historical, manually executed single-sample SNP-calling pilot. A pipeline-level nf-test suite covers the Joint Genotyping fixture contract; MultiQC aggregation, comprehensive automated pipeline-test coverage, and real-data cohort validation remain under development and are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
 
 This work represents plant-genetics and bioinformatics research that informs the longer-term agricultural AI activities of Florigen AI. It does not imply a direct genomic-prediction-to-Physical-AI development path.
 
@@ -20,8 +20,8 @@ This work represents plant-genetics and bioinformatics research that informs the
 | Configurable reference bundle | Implemented | The workflow accepts compatible prebuilt indexes or generates FASTA, sequence-dictionary, and BWA-MEM2 indexes |
 | Multi-sample Joint Genotyping | Functionally validated with synthetic data | Two samples and two contigs complete GenomicsDBImport-based Joint Genotyping; both samples cover both contigs, so each deterministic SNP locus resolves to a non-missing `1/1`/`0/0` pair (`AC=2;AN=4;AF=0.5`) rather than a missing genotype; real-data cohorts remain unvalidated |
 | Read preprocessing and QC | Implemented without MultiQC | Raw and trimmed FastQC, paired-end fastp, mapping logs, duplicate metrics, and SAMtools QC are produced |
-| Pipeline-level tests | Partially implemented | A clean synthetic Docker smoke test validates three read groups, two sample GVCFs, two expected raw SNPs, hard-filter annotations, indexed PASS outputs, seven variant-QC tasks, and 28 QC artifacts; nf-test automation remains planned |
-| Functional CI | Not implemented | Current CI checks repository structure only |
+| Pipeline-level tests | Partially implemented | A clean synthetic Docker smoke test validates three read groups, two sample GVCFs, two expected raw SNPs with confident `1/1`/`0/0` genotypes at both loci, hard-filter annotations, indexed PASS outputs, seven variant-QC tasks, and 28 QC artifacts; an [nf-test](https://www.nf-test.com/) pipeline-level test automates this genotype/annotation contract (`tests/pipeline/adzuki_snp_pipeline.nf.test`); broader nf-test coverage of every module remains planned (Issue #1 #G) |
+| Functional CI | Implemented for the synthetic fixture path | `.github/workflows/test.yml` runs `nextflow lint .` and the pipeline-level nf-test suite (`-profile test,docker`) on every push and pull request against `main`; `.github/workflows/lint.yml` separately checks repository structure only; real-data cohort CI remains out of scope |
 | Base quality score recalibration (BQSR) | Intentionally excluded | No validated known-sites resource is available; see [Design Decisions](#design-decisions) |
 | Production use | Not supported | This is an experimental plant-research repository |
 
@@ -139,6 +139,26 @@ The deterministic fixtures can be regenerated with:
 python3 tests/scripts/generate_synthetic_data.py
 ```
 
+### Automated pipeline-level testing
+
+A pipeline-level [nf-test](https://www.nf-test.com/) asserts the genotype and annotation contract above end to end: gVCF and raw-cohort-VCF existence, exactly two raw SNP records with no unexpected variants, sample-column order, `GT`/`AC`/`AN`/`AF` at both loci, per-sample and site depth floors, and the PR #14 filtering/QC regression guards (default `SNP_SOR_HIGH` filtering, an empty default PASS SNP VCF, and an empty indel VCF).
+
+```bash
+curl -fsSL https://code.askimed.com/install/nf-test | bash
+
+NXF_VER=26.04.6 ./nf-test test tests/pipeline/adzuki_snp_pipeline.nf.test
+```
+
+On Apple Silicon, override the profile declared in `nf-test.config` to use Docker emulation:
+
+```bash
+NXF_VER=26.04.6 \
+  ./nf-test test tests/pipeline/adzuki_snp_pipeline.nf.test \
+  --profile "test,docker_amd64"
+```
+
+GitHub Actions runs the same nf-test suite with the native `docker` profile on every push and pull request against `main` (`.github/workflows/test.yml`); `.github/workflows/lint.yml` separately checks repository structure only. This nf-test suite is scoped to the Joint Genotyping fixture contract validated for Issue #12; broader nf-test coverage of every module and a functional-CI overhaul remain tracked in Issue #1's #G.
+
 ### Variant outputs
 
 | Output | Description |
@@ -235,6 +255,7 @@ The filtering defaults are configurable operational starting points. They extend
 main.nf
 nextflow.config
 nextflow_schema.json
+nf-test.config
 assets/schema_input.json
 conf/test.config
 conf/references/
@@ -242,6 +263,9 @@ workflows/
 subworkflows/local/
 modules/local/
 tests/data/
+tests/scripts/
+tests/pipeline/
+tests/nextflow.config
 ```
 
 ---
@@ -466,12 +490,14 @@ The following foundation, analysis, and QC capabilities are implemented:
 - machine-readable cohort and per-sample QC tables
 - human-readable variant-QC summaries
 - redistributable deterministic fixtures and a functional Docker smoke-test profile
+- a synthetic fixture where both samples cover both deterministic SNP loci, resolving to confident `1/1`/`0/0` genotypes instead of a missing call
+- an nf-test pipeline-level test asserting that genotype/annotation contract, run in GitHub Actions on every push and pull request against `main`
 
 The following analysis and reproducibility capabilities remain planned:
 
 - MultiQC report aggregation
 - documented GS-panel output contracts
-- nf-test coverage and functional CI
+- comprehensive nf-test coverage across every module, and a Python-testable variant-QC module (Issue #1 #G)
 - software-version, parameter, and checksum manifests
 
 A capability is considered implemented only after its corresponding code and validation are present in this repository.
