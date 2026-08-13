@@ -124,6 +124,40 @@ nextflow_pipeline {
                 .linesGzip
                 .findAll { line -> !line.startsWith("#") }
             assert indelData.size() == 0
+
+            // Issue #16: bin/summarize_variant_qc.py replaced the
+            // embedded AWK in BCFTOOLS_STATS. Assert its wiring
+            // end to end: 7 stage/type combinations x 4 files each,
+            // and the exact metric values the genotype contract above
+            // implies (0 missing genotypes for the raw cohort, "NA"
+            // missingness where 0 records exist).
+            def qcFiles = new File("$outputDir/qc/variants").listFiles()
+            assert qcFiles.size() == 28
+
+            def rawAllVariantQc = path("$outputDir/qc/variants/cohort.raw.all.variant_qc.tsv")
+                .readLines()
+                .collectEntries { line ->
+                    def fields = line.split("\t")
+                    [(fields[3]): fields[4]]
+                }
+            assert rawAllVariantQc["number_of_samples"] == "2"
+            assert rawAllVariantQc["cohort_missing_genotypes"] == "0"
+            assert rawAllVariantQc["cohort_total_genotypes"] == "4"
+            assert rawAllVariantQc["cohort_missingness_rate"] == "0.000000"
+            assert rawAllVariantQc["sample_names"] == "sample_a,sample_b"
+
+            def rawAllSampleQcLines = path("$outputDir/qc/variants/cohort.raw.all.sample_qc.tsv").readLines()
+            assert rawAllSampleQcLines.size() == 3
+            assert rawAllSampleQcLines[1].split("\t")[7] == "0"
+            assert rawAllSampleQcLines[1].split("\t")[8] == "0.000000"
+            assert rawAllSampleQcLines[2].split("\t")[7] == "0"
+            assert rawAllSampleQcLines[2].split("\t")[8] == "0.000000"
+
+            // default filtering excludes both SNPs (SNP_SOR_HIGH), so
+            // the pass/snp stage has 0 records and must report "NA"
+            // missingness rather than a division-by-zero crash or 0
+            def passSnpSampleQc = path("$outputDir/qc/variants/cohort.pass.snp.sample_qc.tsv").readLines()
+            assert passSnpSampleQc.drop(1).every { line -> line.split("\t")[8] == "NA" }
         }
     }
 }

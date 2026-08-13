@@ -10,6 +10,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run variant QC summarizer unit tests
+        run: python3 -m unittest discover -s tests/bin -v
+
       - name: Install Nextflow
         uses: nf-core/setup-nextflow@v2
         with:
