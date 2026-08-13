@@ -1,0 +1,28 @@
+name: Test
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  nf-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v2
+        with:
+          version: "26.04.6"
+          java-version: "21"
+
+      - name: Install nf-test
+        uses: nf-core/setup-nf-test@v1
+        with:
+          version: "0.9.5"
+
+      - name: Lint
+        run: nextflow lint .
+
+      - name: Run pipeline-level nf-test
+        run: nf-test test tests/pipeline/adzuki_snp_pipeline.nf.test --ci
