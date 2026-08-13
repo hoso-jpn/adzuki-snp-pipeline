@@ -78,6 +78,10 @@ include {
     BCFTOOLS_STATS
 } from '../modules/local/bcftools_stats'
 
+include {
+    SUMMARIZE_VARIANT_QC
+} from '../modules/local/summarize_variant_qc'
+
 workflow ADZUKI_SNP_PIPELINE {
     take:
     samples_ch
@@ -422,6 +426,7 @@ workflow ADZUKI_SNP_PIPELINE {
         .mix(pass_qc_inputs_ch)
 
     BCFTOOLS_STATS(variant_qc_inputs_ch)
+    SUMMARIZE_VARIANT_QC(BCFTOOLS_STATS.out.stats)
 
     emit:
     raw_fastqc_html = FASTQC_RAW.out.html
@@ -440,7 +445,8 @@ workflow ADZUKI_SNP_PIPELINE {
     variant_type_vcfs = GATK_SELECTVARIANTS.out.vcf
     filtered_vcfs = GATK_VARIANTFILTRATION.out.vcf
     pass_vcfs = GATK_SELECTPASSVARIANTS.out.vcf
-    variant_qc = BCFTOOLS_STATS.out.qc
+    bcftools_stats = BCFTOOLS_STATS.out.stats
+    variant_qc = SUMMARIZE_VARIANT_QC.out.qc
     flagstat = SAMTOOLS_QC.out.flagstat
     stats = SAMTOOLS_QC.out.stats
     idxstats = SAMTOOLS_QC.out.idxstats
