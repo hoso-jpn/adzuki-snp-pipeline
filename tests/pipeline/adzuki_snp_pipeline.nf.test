@@ -1,0 +1,129 @@
+nextflow_pipeline {
+
+    name "Joint Genotyping fixture: ref/alt genotype and annotation contract"
+    script "main.nf"
+
+    test("both samples resolve confident ref/alt genotypes at both deterministic SNP loci") {
+
+        when {
+            params {
+                // nf-test executes the pipeline outside the project
+                // root, so the samplesheet's paths (relative to the
+                // project root, as required for the documented
+                // `nextflow run .` invocation) do not resolve as-is.
+                // Rewrite them to absolute paths for this run only.
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            // one gVCF per biological sample (Issue #12)
+            assert path("$outputDir/variants/gvcf/sample_a.g.vcf.gz").exists()
+            assert path("$outputDir/variants/gvcf/sample_a.g.vcf.gz.tbi").exists()
+            assert path("$outputDir/variants/gvcf/sample_b.g.vcf.gz").exists()
+            assert path("$outputDir/variants/gvcf/sample_b.g.vcf.gz.tbi").exists()
+
+            // raw cohort VCF and index
+            def raw_vcf = path("$outputDir/variants/raw/cohort.raw.vcf.gz")
+            assert raw_vcf.exists()
+            assert path("$outputDir/variants/raw/cohort.raw.vcf.gz.tbi").exists()
+
+            def raw_lines = raw_vcf.linesGzip
+            def header = raw_lines.find { line -> line.startsWith("#CHROM") }
+            def data_lines = raw_lines.findAll { line -> !line.startsWith("#") }
+            def headerColumns = header.split("\t")
+
+            // sample-column order and "no unexpected variant records"
+            assert header == "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample_a\tsample_b"
+            assert data_lines.size() == 2
+
+            def parseInfo = { String infoField ->
+                infoField.split(";").collectEntries { entry ->
+                    def keyValue = entry.split("=", 2)
+                    [(keyValue[0]): (keyValue.size() > 1 ? keyValue[1] : "true")]
+                }
+            }
+            def parseSample = { String formatField, String sampleField ->
+                [formatField.split(":"), sampleField.split(":")]
+                    .transpose()
+                    .collectEntries { it }
+            }
+
+            // tests/data/variants/expected_variants.tsv is the single
+            // source of truth for the genotype/annotation contract:
+            // it is generated alongside the fixture, and read here
+            // directly rather than duplicated as literals, so the
+            // contract and this test cannot drift apart. Every field
+            // below -- including DP -- is asserted as an exact match
+            // against this pinned GATK container's real output, not
+            // a lower bound, so a depth regression (for example from
+            // a duplicate-marking or mapping change) fails the test.
+            def contractLines = file("${projectDir}/tests/data/variants/expected_variants.tsv")
+                .readLines()
+                .findAll { line -> !line.trim().isEmpty() }
+            def contractHeader = contractLines[0].split("\t")
+            def contract = contractLines.drop(1).collect { line ->
+                [contractHeader, line.split("\t")].transpose().collectEntries { it }
+            }
+            assert contract.size() == 2
+
+            contract.each { expected ->
+                def record = data_lines
+                    .find { line -> line.startsWith("${expected.contig}\t${expected.position}\t") }
+                    ?.split("\t")
+                assert record != null: "no raw VCF record found for ${expected.contig}:${expected.position}"
+
+                assert record[3] == expected.ref
+                assert record[4] == expected.alt
+
+                def info = parseInfo(record[7])
+                assert info["AC"] == expected.ac
+                assert info["AN"] == expected.an
+                assert info["AF"].toDouble() == expected.af.toDouble()
+                assert info["DP"] == expected.site_dp
+
+                def altColumn = headerColumns.findIndexOf { column -> column == expected.alt_sample_id }
+                def refColumn = headerColumns.findIndexOf { column -> column == expected.ref_sample_id }
+                def altSample = parseSample(record[8], record[altColumn])
+                def refSample = parseSample(record[8], record[refColumn])
+
+                assert altSample["GT"] == expected.alt_genotype
+                assert altSample["DP"] == expected.alt_sample_dp
+                assert refSample["GT"] == expected.ref_genotype
+                assert refSample["DP"] == expected.ref_sample_dp
+            }
+
+            // PR #14 filtering/QC regression guard: both synthetic
+            // SNPs still fail the default SOR threshold, and indels
+            // remain empty (this fixture does not encode any)
+            def filteredData = path("$outputDir/variants/filtered/cohort.snp.filtered.vcf.gz")
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert filteredData.size() == 2
+            assert filteredData.every { line -> line.split("\t")[6] == "SNP_SOR_HIGH" }
+
+            def passData = path("$outputDir/variants/pass/cohort.snp.pass.vcf.gz")
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert passData.size() == 0
+
+            def indelData = path("$outputDir/variants/by_type/cohort.indel.vcf.gz")
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert indelData.size() == 0
+        }
+    }
+}

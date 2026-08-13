@@ -26,5 +26,10 @@ __pycache__/
 work/
 results/
 
+# nf-test
+/nf-test
+.nf-test/
+.nf-test.log
+
 # Synthetic test fixtures
 !tests/data/reads/*.fastq.gz

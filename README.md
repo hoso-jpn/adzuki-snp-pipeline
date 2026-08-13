@@ -2,7 +2,7 @@
 
 Research and development repository for building a reproducible SNP-calling pipeline for adzuki bean (*Vigna angularis*) from publicly available whole-genome sequencing data.
 
-The repository contains an executable Nextflow DSL2 workflow for paired-end WGS preprocessing, sample-level GVCF generation, multi-sample Joint Genotyping, configurable hard filtering, PASS extraction, and variant QC, together with a historical, manually executed single-sample SNP-calling pilot. MultiQC aggregation, automated pipeline tests, and real-data cohort validation remain under development and are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
+The repository contains an executable Nextflow DSL2 workflow for paired-end WGS preprocessing, sample-level GVCF generation, multi-sample Joint Genotyping, configurable hard filtering, PASS extraction, and variant QC, together with a historical, manually executed single-sample SNP-calling pilot. A pipeline-level nf-test suite covers the Joint Genotyping fixture contract; MultiQC aggregation, comprehensive automated pipeline-test coverage, and real-data cohort validation remain under development and are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
 
 This work represents plant-genetics and bioinformatics research that informs the longer-term agricultural AI activities of Florigen AI. It does not imply a direct genomic-prediction-to-Physical-AI development path.
 
@@ -18,10 +18,10 @@ This work represents plant-genetics and bioinformatics research that informs the
 | Variant calling and genotyping | Functionally validated with synthetic data | HaplotypeCaller, contig-level GenomicsDBImport and GenotypeGVCFs, and reference-order GatherVcfs are connected |
 | Variant filtering and QC | Functionally validated with synthetic data | SNPs and indels are separated, configurable hard filters are applied, PASS records are extracted, and raw, filtered, and PASS QC artifacts are generated; threshold suitability remains unvalidated on real cohorts |
 | Configurable reference bundle | Implemented | The workflow accepts compatible prebuilt indexes or generates FASTA, sequence-dictionary, and BWA-MEM2 indexes |
-| Multi-sample Joint Genotyping | Functionally validated with synthetic data | Two samples and two contigs complete GenomicsDBImport-based Joint Genotyping; real-data cohorts remain unvalidated |
+| Multi-sample Joint Genotyping | Functionally validated with synthetic data | Two samples and two contigs complete GenomicsDBImport-based Joint Genotyping; both samples cover both contigs, so each deterministic SNP locus resolves to a non-missing `1/1`/`0/0` pair (`AC=2;AN=4;AF=0.5`) rather than a missing genotype; real-data cohorts remain unvalidated |
 | Read preprocessing and QC | Implemented without MultiQC | Raw and trimmed FastQC, paired-end fastp, mapping logs, duplicate metrics, and SAMtools QC are produced |
-| Pipeline-level tests | Partially implemented | A clean synthetic Docker smoke test validates three read groups, two sample GVCFs, two expected raw SNPs, hard-filter annotations, indexed PASS outputs, seven variant-QC tasks, and 28 QC artifacts; nf-test automation remains planned |
-| Functional CI | Not implemented | Current CI checks repository structure only |
+| Pipeline-level tests | Partially implemented | A clean synthetic Docker smoke test validates three read groups, two sample GVCFs, two expected raw SNPs with confident `1/1`/`0/0` genotypes at both loci, hard-filter annotations, indexed PASS outputs, seven variant-QC tasks, and 28 QC artifacts; an [nf-test](https://www.nf-test.com/) pipeline-level test automates this genotype/annotation contract (`tests/pipeline/adzuki_snp_pipeline.nf.test`); broader nf-test coverage of every module remains planned (Issue #1 #G) |
+| Functional CI | Implemented for the synthetic fixture path | `.github/workflows/test.yml` runs `nextflow lint .` and the pipeline-level nf-test suite (`-profile test,docker`) on every push and pull request against `main`; `.github/workflows/lint.yml` separately checks repository structure only; real-data cohort CI remains out of scope |
 | Base quality score recalibration (BQSR) | Intentionally excluded | No validated known-sites resource is available; see [Design Decisions](#design-decisions) |
 | Production use | Not supported | This is an experimental plant-research repository |
 
@@ -125,19 +125,39 @@ NXF_VER=26.04.6 \
   -profile test,docker_amd64
 ```
 
-The synthetic dataset contains two 5 kb contigs, two biological samples, and three read groups. The two `sample_a` read groups share `library_id=lib_a` and contain intentional cross-lane duplicate fragments. A successful run retains all 24 `sample_a` reads while marking four reads as duplicates; the 12 `sample_b` reads contain no intended duplicates.
+The synthetic dataset contains two 5 kb contigs, two biological samples, and three read groups. Both `sample_a` and `sample_b` carry reads on both contigs: each sample supplies the alternate allele at its own deterministic SNP locus and reference-supporting reads at the other sample's locus, so Joint Genotyping produces a non-reference call and a reference call at the same site instead of a missing genotype (see [Issue #12](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/12)). The two `sample_a` read groups share `library_id=lib_a` and contain intentional cross-lane duplicate fragments on `chrSynthetic1`. A successful run retains all 40 `sample_a` reads while marking four reads as duplicates; the 24 `sample_b` reads contain no intended duplicates.
 
-The fixtures also encode deterministic SNPs at `chrSynthetic1:1501 C>G` for `sample_a` and `chrSynthetic2:1601 A>C` for `sample_b`. The expected alleles are recorded in `tests/data/variants/expected_variants.tsv`. A clean Docker smoke run produces both raw SNPs with the expected sample columns and non-reference genotypes.
+The fixtures also encode deterministic SNPs at `chrSynthetic1:1501 C>G` for `sample_a` and `chrSynthetic2:1601 A>C` for `sample_b`. At each locus the carrier sample is called `1/1` and the other sample is called `0/0` (not `./.`), giving `AC=2;AN=4;AF=0.500` in the two-sample cohort. The expected ref/alt alleles, genotypes, exact per-sample and site depth, and `AC`/`AN`/`AF` are recorded in `tests/data/variants/expected_variants.tsv`, the canonical contract that the nf-test suite below reads and asserts exactly (not as a lower bound). A clean Docker smoke run produces exactly these two raw SNP records, in `sample_a`, `sample_b` sample-column order, and no unexpected variant records.
 
-With the default `snp_filter_sor_max=3.0`, both synthetic SNPs receive the `SNP_SOR_HIGH` filter because their SOR values are greater than 3.0. The resulting default PASS SNP VCF is therefore valid but empty. A separate permissive smoke run with `--snp_filter_sor_max 10.0` retains both SNPs as PASS. This behavior validates filter labeling, PASS extraction, and empty-VCF handling; it is not evidence that either threshold is biologically appropriate.
+With the default `snp_filter_sor_max=3.0`, both synthetic SNPs still receive the `SNP_SOR_HIGH` filter because their SOR values are greater than 3.0 (`SOR=4.407` at `chrSynthetic1:1501`, `SOR=3.912` at `chrSynthetic2:1601`). The resulting default PASS SNP VCF is therefore valid but empty, and a separate permissive smoke run with `--snp_filter_sor_max 10.0` retains both SNPs as PASS, exactly as before this fixture was strengthened. Adding reference-supporting reads for the other sample at each locus changed `AC`, `AN`, `AF`, and per-sample/site `DP` as expected, and dropped the raw-cohort genotype-missingness rate from `0.5` to `0.0`, but left `SOR`, `FS`, `MQ`, and `QD` numerically unchanged; these particular annotations appear to be computed from the alternate-carrying sample's own reads rather than the full cohort pileup, so adding a homozygous-reference sample at the same site did not shift them. This behavior validates filter labeling, PASS extraction, and empty-VCF handling; it is not evidence that either threshold is biologically appropriate, and the SOR/FS/MQ/QD invariance above is an empirical observation about this GATK version's annotation behavior, not a documented guarantee to rely on elsewhere.
 
-These fixtures test workflow behavior, read-group-aware duplicate marking, GVCF generation, Joint Genotyping, hard-filter mechanics, and variant-QC generation. They do not constitute biological or production validation. The current fixture also has one missing sample genotype at each variant locus; stronger reference-versus-alternate genotype coverage is tracked in [Issue #12](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/12).
+These fixtures test workflow behavior, read-group-aware duplicate marking, GVCF generation, Joint Genotyping, hard-filter mechanics, and variant-QC generation. They do not constitute biological or production validation. Both samples now receive a confident, non-missing genotype at both deterministic SNP loci, closing the reference-versus-alternate genotype gap previously tracked in [Issue #12](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/12).
 
 The deterministic fixtures can be regenerated with:
 
 ```bash
 python3 tests/scripts/generate_synthetic_data.py
 ```
+
+### Automated pipeline-level testing
+
+A pipeline-level [nf-test](https://www.nf-test.com/) reads `tests/data/variants/expected_variants.tsv` directly and asserts the genotype and annotation contract above end to end: gVCF and raw-cohort-VCF existence, exactly two raw SNP records with no unexpected variants, sample-column order, and an exact match (not a lower bound) on `GT`, `REF`/`ALT`, `AC`, `AN`, `AF`, and per-sample and site `DP` at both loci, plus the PR #14 filtering/QC regression guards (default `SNP_SOR_HIGH` filtering, an empty default PASS SNP VCF, and an empty indel VCF). Reading the contract file directly, rather than duplicating its values as literals in the test, keeps the fixture and its test from drifting apart.
+
+```bash
+curl -fsSL https://code.askimed.com/install/nf-test | bash
+
+NXF_VER=26.04.6 ./nf-test test tests/pipeline/adzuki_snp_pipeline.nf.test
+```
+
+On Apple Silicon, override the profile declared in `nf-test.config` to use Docker emulation:
+
+```bash
+NXF_VER=26.04.6 \
+  ./nf-test test tests/pipeline/adzuki_snp_pipeline.nf.test \
+  --profile "test,docker_amd64"
+```
+
+GitHub Actions runs the same nf-test suite with the native `docker` profile on every push and pull request against `main` (`.github/workflows/test.yml`); `.github/workflows/lint.yml` separately checks repository structure only. This nf-test suite is scoped to the Joint Genotyping fixture contract validated for Issue #12; broader nf-test coverage of every module and a functional-CI overhaul remain tracked in Issue #1's #G.
 
 ### Variant outputs
 
@@ -235,6 +255,7 @@ The filtering defaults are configurable operational starting points. They extend
 main.nf
 nextflow.config
 nextflow_schema.json
+nf-test.config
 assets/schema_input.json
 conf/test.config
 conf/references/
@@ -242,6 +263,9 @@ workflows/
 subworkflows/local/
 modules/local/
 tests/data/
+tests/scripts/
+tests/pipeline/
+tests/nextflow.config
 ```
 
 ---
@@ -466,12 +490,14 @@ The following foundation, analysis, and QC capabilities are implemented:
 - machine-readable cohort and per-sample QC tables
 - human-readable variant-QC summaries
 - redistributable deterministic fixtures and a functional Docker smoke-test profile
+- a synthetic fixture where both samples cover both deterministic SNP loci, resolving to confident `1/1`/`0/0` genotypes instead of a missing call
+- an nf-test pipeline-level test asserting that genotype/annotation contract, run in GitHub Actions on every push and pull request against `main`
 
 The following analysis and reproducibility capabilities remain planned:
 
 - MultiQC report aggregation
 - documented GS-panel output contracts
-- nf-test coverage and functional CI
+- comprehensive nf-test coverage across every module, and a Python-testable variant-QC module (Issue #1 #G)
 - software-version, parameter, and checksum manifests
 
 A capability is considered implemented only after its corresponding code and validation are present in this repository.
