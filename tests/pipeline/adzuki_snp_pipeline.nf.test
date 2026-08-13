@@ -44,6 +44,7 @@ nextflow_pipeline {
             def raw_lines = raw_vcf.linesGzip
             def header = raw_lines.find { line -> line.startsWith("#CHROM") }
             def data_lines = raw_lines.findAll { line -> !line.startsWith("#") }
+            def headerColumns = header.split("\t")
 
             // sample-column order and "no unexpected variant records"
             assert header == "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample_a\tsample_b"
@@ -61,46 +62,49 @@ nextflow_pipeline {
                     .collectEntries { it }
             }
 
-            def site1 = data_lines.find { line -> line.startsWith("chrSynthetic1\t1501\t") }?.split("\t")
-            def site2 = data_lines.find { line -> line.startsWith("chrSynthetic2\t1601\t") }?.split("\t")
-            assert site1 != null
-            assert site2 != null
+            // tests/data/variants/expected_variants.tsv is the single
+            // source of truth for the genotype/annotation contract:
+            // it is generated alongside the fixture, and read here
+            // directly rather than duplicated as literals, so the
+            // contract and this test cannot drift apart. Every field
+            // below -- including DP -- is asserted as an exact match
+            // against this pinned GATK container's real output, not
+            // a lower bound, so a depth regression (for example from
+            // a duplicate-marking or mapping change) fails the test.
+            def contractLines = file("${projectDir}/tests/data/variants/expected_variants.tsv")
+                .readLines()
+                .findAll { line -> !line.trim().isEmpty() }
+            def contractHeader = contractLines[0].split("\t")
+            def contract = contractLines.drop(1).collect { line ->
+                [contractHeader, line.split("\t")].transpose().collectEntries { it }
+            }
+            assert contract.size() == 2
 
-            // chrSynthetic1:1501 C>G -- sample_a carries the ALT,
-            // sample_b is reference-supporting at the same site
-            assert site1[3] == "C"
-            assert site1[4] == "G"
+            contract.each { expected ->
+                def record = data_lines
+                    .find { line -> line.startsWith("${expected.contig}\t${expected.position}\t") }
+                    ?.split("\t")
+                assert record != null: "no raw VCF record found for ${expected.contig}:${expected.position}"
 
-            def info1 = parseInfo(site1[7])
-            assert info1["AC"] == "2"
-            assert info1["AN"] == "4"
-            assert info1["AF"] == "0.500"
-            assert info1["DP"].toInteger() >= 13
+                assert record[3] == expected.ref
+                assert record[4] == expected.alt
 
-            def sampleA1 = parseSample(site1[8], site1[9])
-            def sampleB1 = parseSample(site1[8], site1[10])
-            assert sampleA1["GT"] == "1/1"
-            assert sampleA1["DP"].toInteger() >= 8
-            assert sampleB1["GT"] == "0/0"
-            assert sampleB1["DP"].toInteger() >= 5
+                def info = parseInfo(record[7])
+                assert info["AC"] == expected.ac
+                assert info["AN"] == expected.an
+                assert info["AF"].toDouble() == expected.af.toDouble()
+                assert info["DP"] == expected.site_dp
 
-            // chrSynthetic2:1601 A>C -- sample_b carries the ALT,
-            // sample_a is reference-supporting at the same site
-            assert site2[3] == "A"
-            assert site2[4] == "C"
+                def altColumn = headerColumns.findIndexOf { column -> column == expected.alt_sample_id }
+                def refColumn = headerColumns.findIndexOf { column -> column == expected.ref_sample_id }
+                def altSample = parseSample(record[8], record[altColumn])
+                def refSample = parseSample(record[8], record[refColumn])
 
-            def info2 = parseInfo(site2[7])
-            assert info2["AC"] == "2"
-            assert info2["AN"] == "4"
-            assert info2["AF"] == "0.500"
-            assert info2["DP"].toInteger() >= 14
-
-            def sampleA2 = parseSample(site2[8], site2[9])
-            def sampleB2 = parseSample(site2[8], site2[10])
-            assert sampleA2["GT"] == "0/0"
-            assert sampleA2["DP"].toInteger() >= 8
-            assert sampleB2["GT"] == "1/1"
-            assert sampleB2["DP"].toInteger() >= 6
+                assert altSample["GT"] == expected.alt_genotype
+                assert altSample["DP"] == expected.alt_sample_dp
+                assert refSample["GT"] == expected.ref_genotype
+                assert refSample["DP"] == expected.ref_sample_dp
+            }
 
             // PR #14 filtering/QC regression guard: both synthetic
             // SNPs still fail the default SOR threshold, and indels

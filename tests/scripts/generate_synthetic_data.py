@@ -188,15 +188,21 @@ def main() -> None:
         contigs,
     )
 
-    # alt_min_dp/ref_min_dp are the per-sample depths confirmed by
-    # actually running the pipeline end to end (generated- and
-    # prebuilt-reference-index paths produced bit-identical cohort
-    # VCFs): GATK's realized HaplotypeCaller/GenotypeGVCFs depth at a
-    # site can land one read below a naive count of fragments whose
-    # read1 spans the position, because it is derived from GATK's
-    # internal reference-confidence-band accounting rather than a
-    # plain alignment pileup. These are measured floors, not a
-    # fragment-count estimate.
+    # alt_dp/ref_dp are the exact per-sample depths this pinned GATK
+    # container (broadinstitute/gatk:4.6.2.0, digest-pinned) produces
+    # for this fixture, confirmed by actually running the pipeline
+    # end to end (generated- and prebuilt-reference-index paths
+    # produced bit-identical cohort VCFs): GATK's realized
+    # HaplotypeCaller/GenotypeGVCFs depth at a site can land one read
+    # below a naive count of fragments whose read1 spans the
+    # position, because it is derived from GATK's internal
+    # reference-confidence-band accounting rather than a plain
+    # alignment pileup. These are exact contract values, not a
+    # fragment-count estimate or a lower bound: expected_variants.tsv
+    # is the canonical source that tests/pipeline/*.nf.test reads
+    # directly, so a real depth regression (from, for example, a
+    # duplicate-marking or mapping change) must fail the test rather
+    # than silently pass a `>=` floor.
     variant_positions = {
         "sample_a": (
             "chrSynthetic1",
@@ -224,8 +230,8 @@ def main() -> None:
     for sample_id, (
         contig_name,
         position,
-        alt_min_dp,
-        ref_min_dp,
+        alt_dp,
+        ref_dp,
     ) in variant_positions.items():
         reference_base = contigs[contig_name][position]
         alternate = alternate_base(reference_base)
@@ -240,8 +246,8 @@ def main() -> None:
             "position": position,
             "ref": reference_base,
             "alt": alternate,
-            "alt_min_dp": alt_min_dp,
-            "ref_min_dp": ref_min_dp,
+            "alt_dp": alt_dp,
+            "ref_dp": ref_dp,
         }
 
     # Each read group lists (contig_name, fragment_starts) segments.
@@ -305,11 +311,11 @@ def main() -> None:
                 "alt",
                 "alt_sample_id",
                 "alt_genotype",
-                "alt_sample_min_dp",
+                "alt_sample_dp",
                 "ref_sample_id",
                 "ref_genotype",
-                "ref_sample_min_dp",
-                "site_min_dp",
+                "ref_sample_dp",
+                "site_dp",
                 "ac",
                 "an",
                 "af",
@@ -321,8 +327,8 @@ def main() -> None:
         site = variant_sites[alt_sample_id]
         contig_name = site["contig"]
         position = site["position"]
-        alt_min_dp = site["alt_min_dp"]
-        ref_min_dp = site["ref_min_dp"]
+        alt_dp = site["alt_dp"]
+        ref_dp = site["ref_dp"]
         ref_sample_id = next(
             sample_id
             for sample_id in sample_ids
@@ -338,11 +344,11 @@ def main() -> None:
                     site["alt"],
                     alt_sample_id,
                     "1/1",
-                    str(alt_min_dp),
+                    str(alt_dp),
                     ref_sample_id,
                     "0/0",
-                    str(ref_min_dp),
-                    str(alt_min_dp + ref_min_dp),
+                    str(ref_dp),
+                    str(alt_dp + ref_dp),
                     "2",
                     "4",
                     "0.5",
