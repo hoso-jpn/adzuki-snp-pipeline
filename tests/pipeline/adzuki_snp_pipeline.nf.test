@@ -1,0 +1,125 @@
+nextflow_pipeline {
+
+    name "Joint Genotyping fixture: ref/alt genotype and annotation contract"
+    script "main.nf"
+
+    test("both samples resolve confident ref/alt genotypes at both deterministic SNP loci") {
+
+        when {
+            params {
+                // nf-test executes the pipeline outside the project
+                // root, so the samplesheet's paths (relative to the
+                // project root, as required for the documented
+                // `nextflow run .` invocation) do not resolve as-is.
+                // Rewrite them to absolute paths for this run only.
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            // one gVCF per biological sample (Issue #12)
+            assert path("$outputDir/variants/gvcf/sample_a.g.vcf.gz").exists()
+            assert path("$outputDir/variants/gvcf/sample_a.g.vcf.gz.tbi").exists()
+            assert path("$outputDir/variants/gvcf/sample_b.g.vcf.gz").exists()
+            assert path("$outputDir/variants/gvcf/sample_b.g.vcf.gz.tbi").exists()
+
+            // raw cohort VCF and index
+            def raw_vcf = path("$outputDir/variants/raw/cohort.raw.vcf.gz")
+            assert raw_vcf.exists()
+            assert path("$outputDir/variants/raw/cohort.raw.vcf.gz.tbi").exists()
+
+            def raw_lines = raw_vcf.linesGzip
+            def header = raw_lines.find { line -> line.startsWith("#CHROM") }
+            def data_lines = raw_lines.findAll { line -> !line.startsWith("#") }
+
+            // sample-column order and "no unexpected variant records"
+            assert header == "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample_a\tsample_b"
+            assert data_lines.size() == 2
+
+            def parseInfo = { String infoField ->
+                infoField.split(";").collectEntries { entry ->
+                    def keyValue = entry.split("=", 2)
+                    [(keyValue[0]): (keyValue.size() > 1 ? keyValue[1] : "true")]
+                }
+            }
+            def parseSample = { String formatField, String sampleField ->
+                [formatField.split(":"), sampleField.split(":")]
+                    .transpose()
+                    .collectEntries { it }
+            }
+
+            def site1 = data_lines.find { line -> line.startsWith("chrSynthetic1\t1501\t") }?.split("\t")
+            def site2 = data_lines.find { line -> line.startsWith("chrSynthetic2\t1601\t") }?.split("\t")
+            assert site1 != null
+            assert site2 != null
+
+            // chrSynthetic1:1501 C>G -- sample_a carries the ALT,
+            // sample_b is reference-supporting at the same site
+            assert site1[3] == "C"
+            assert site1[4] == "G"
+
+            def info1 = parseInfo(site1[7])
+            assert info1["AC"] == "2"
+            assert info1["AN"] == "4"
+            assert info1["AF"] == "0.500"
+            assert info1["DP"].toInteger() >= 13
+
+            def sampleA1 = parseSample(site1[8], site1[9])
+            def sampleB1 = parseSample(site1[8], site1[10])
+            assert sampleA1["GT"] == "1/1"
+            assert sampleA1["DP"].toInteger() >= 8
+            assert sampleB1["GT"] == "0/0"
+            assert sampleB1["DP"].toInteger() >= 5
+
+            // chrSynthetic2:1601 A>C -- sample_b carries the ALT,
+            // sample_a is reference-supporting at the same site
+            assert site2[3] == "A"
+            assert site2[4] == "C"
+
+            def info2 = parseInfo(site2[7])
+            assert info2["AC"] == "2"
+            assert info2["AN"] == "4"
+            assert info2["AF"] == "0.500"
+            assert info2["DP"].toInteger() >= 14
+
+            def sampleA2 = parseSample(site2[8], site2[9])
+            def sampleB2 = parseSample(site2[8], site2[10])
+            assert sampleA2["GT"] == "0/0"
+            assert sampleA2["DP"].toInteger() >= 8
+            assert sampleB2["GT"] == "1/1"
+            assert sampleB2["DP"].toInteger() >= 6
+
+            // PR #14 filtering/QC regression guard: both synthetic
+            // SNPs still fail the default SOR threshold, and indels
+            // remain empty (this fixture does not encode any)
+            def filteredData = path("$outputDir/variants/filtered/cohort.snp.filtered.vcf.gz")
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert filteredData.size() == 2
+            assert filteredData.every { line -> line.split("\t")[6] == "SNP_SOR_HIGH" }
+
+            def passData = path("$outputDir/variants/pass/cohort.snp.pass.vcf.gz")
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert passData.size() == 0
+
+            def indelData = path("$outputDir/variants/by_type/cohort.indel.vcf.gz")
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert indelData.size() == 0
+        }
+    }
+}
