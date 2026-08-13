@@ -12,6 +12,16 @@ READ_LENGTH = 100
 FRAGMENT_LENGTH = 300
 
 
+def alternate_base(reference_base: str) -> str:
+    substitutions = {
+        "A": "C",
+        "C": "G",
+        "G": "T",
+        "T": "A",
+    }
+    return substitutions[reference_base]
+
+
 def make_sequence(
     random_generator: random.Random,
     length: int,
@@ -54,6 +64,7 @@ def build_fastq(
     read_group_id: str,
     contig_sequence: str,
     fragment_starts: list[int],
+    variants: dict[int, str],
 ) -> tuple[str, str]:
     read1_records: list[str] = []
     read2_records: list[str] = []
@@ -72,6 +83,15 @@ def build_fastq(
                 f"{read_group_id}, {start}"
             )
 
+        fragment_bases = list(fragment)
+
+        for position, alternate in variants.items():
+            relative_position = position - start
+
+            if 0 <= relative_position < FRAGMENT_LENGTH:
+                fragment_bases[relative_position] = alternate
+
+        fragment = "".join(fragment_bases)
         read1 = fragment[:READ_LENGTH]
         read2 = reverse_complement(
             fragment[-READ_LENGTH:]
@@ -129,12 +149,17 @@ def main() -> None:
         project_dir / "tests/data/reference"
     )
     reads_dir = project_dir / "tests/data/reads"
+    variants_dir = project_dir / "tests/data/variants"
 
     reference_dir.mkdir(
         parents=True,
         exist_ok=True,
     )
     reads_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    variants_dir.mkdir(
         parents=True,
         exist_ok=True,
     )
@@ -158,22 +183,71 @@ def main() -> None:
         contigs,
     )
 
+    variant_positions = {
+        "sample_a": (
+            "chrSynthetic1",
+            1500,
+        ),
+        "sample_b": (
+            "chrSynthetic2",
+            1600,
+        ),
+    }
+
+    sample_variants: dict[str, dict[int, str]] = {}
+    expected_variant_rows = [
+        "sample_id\tcontig\tposition\tref\talt"
+    ]
+
+    for sample_id, (
+        contig_name,
+        position,
+    ) in variant_positions.items():
+        reference_base = contigs[contig_name][position]
+        alternate = alternate_base(reference_base)
+
+        sample_variants[sample_id] = {
+            position: alternate,
+        }
+        expected_variant_rows.append(
+            "\t".join(
+                [
+                    sample_id,
+                    contig_name,
+                    str(position + 1),
+                    reference_base,
+                    alternate,
+                ]
+            )
+        )
+
+    (
+        variants_dir / "expected_variants.tsv"
+    ).write_text(
+        "\n".join(expected_variant_rows) + "\n",
+        encoding="utf-8",
+    )
+
     read_groups = {
         "sample_a_L001": (
+            "sample_a",
             "chrSynthetic1",
-            [400, 900, 1400, 1900],
+            [400, 900, 1430, 1450, 1470, 1490],
         ),
         "sample_a_L002": (
+            "sample_a",
             "chrSynthetic1",
-            [400, 900, 2500, 3000],
+            [400, 900, 1440, 1460, 1480, 1500],
         ),
         "sample_b_L001": (
+            "sample_b",
             "chrSynthetic2",
-            [500, 1200, 2200, 3200],
+            [1510, 1525, 1540, 1555, 1570, 1585],
         ),
     }
 
     for read_group_id, (
+        sample_id,
         contig_name,
         fragment_starts,
     ) in read_groups.items():
@@ -181,6 +255,7 @@ def main() -> None:
             read_group_id,
             contigs[contig_name],
             fragment_starts,
+            sample_variants[sample_id],
         )
 
         write_deterministic_gzip(
