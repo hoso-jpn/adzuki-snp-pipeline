@@ -68,6 +68,58 @@
       "type": "integer",
       "minimum": 1,
       "description": "Sample ploidy passed to GATK HaplotypeCaller"
+    },
+    "snp_filter_qd_min": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Minimum QD for SNPs"
+    },
+    "snp_filter_qual_min": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Minimum QUAL for SNPs"
+    },
+    "snp_filter_sor_max": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Maximum SOR for SNPs"
+    },
+    "snp_filter_fs_max": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Maximum FS for SNPs"
+    },
+    "snp_filter_mq_min": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Minimum MQ for SNPs"
+    },
+    "snp_filter_mq_rank_sum_min": {
+      "type": "number",
+      "description": "Minimum MQRankSum for SNPs"
+    },
+    "snp_filter_read_pos_rank_sum_min": {
+      "type": "number",
+      "description": "Minimum ReadPosRankSum for SNPs"
+    },
+    "indel_filter_qd_min": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Minimum QD for indels"
+    },
+    "indel_filter_qual_min": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Minimum QUAL for indels"
+    },
+    "indel_filter_fs_max": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Maximum FS for indels"
+    },
+    "indel_filter_read_pos_rank_sum_min": {
+      "type": "number",
+      "description": "Minimum ReadPosRankSum for indels"
     }
   },
   "required": [

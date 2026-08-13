@@ -2,7 +2,7 @@
 
 Research and development repository for building a reproducible SNP-calling pipeline for adzuki bean (*Vigna angularis*) from publicly available whole-genome sequencing data.
 
-The repository contains an executable Nextflow DSL2 workflow for paired-end WGS preprocessing through sample-level GVCF generation and multi-sample Joint Genotyping, together with a historical, manually executed single-sample SNP-calling pilot. Variant filtering, automated pipeline tests, and real-data cohort validation remain under development and are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
+The repository contains an executable Nextflow DSL2 workflow for paired-end WGS preprocessing, sample-level GVCF generation, multi-sample Joint Genotyping, configurable hard filtering, PASS extraction, and variant QC, together with a historical, manually executed single-sample SNP-calling pilot. MultiQC aggregation, automated pipeline tests, and real-data cohort validation remain under development and are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
 
 This work represents plant-genetics and bioinformatics research that informs the longer-term agricultural AI activities of Florigen AI. It does not imply a direct genomic-prediction-to-Physical-AI development path.
 
@@ -14,12 +14,13 @@ This work represents plant-genetics and bioinformatics research that informs the
 | --- | --- | --- |
 | Manual single-sample SNP-calling pilot | Executed once | SRR29909135 was processed manually; the result has not yet been reproduced by an automated test |
 | Documented command sequence | Available | Commands are recorded below, but software versions and execution parameters are not yet fully locked |
-| Nextflow DSL2 workflow | Implemented through raw cohort VCF | Strict-syntax-compatible preprocessing, mapping, duplicate marking, GVCF generation, and Joint Genotyping processes are available |
-| Variant calling and genotyping | Functionally validated with synthetic data | HaplotypeCaller, contig-level GenomicsDBImport and GenotypeGVCFs, and reference-order GatherVcfs are connected; variant filtering remains planned |
+| Nextflow DSL2 workflow | Implemented through filtered cohort VCFs and variant QC | Strict-syntax-compatible preprocessing, mapping, duplicate marking, GVCF generation, Joint Genotyping, hard filtering, PASS extraction, and QC processes are available |
+| Variant calling and genotyping | Functionally validated with synthetic data | HaplotypeCaller, contig-level GenomicsDBImport and GenotypeGVCFs, and reference-order GatherVcfs are connected |
+| Variant filtering and QC | Functionally validated with synthetic data | SNPs and indels are separated, configurable hard filters are applied, PASS records are extracted, and raw, filtered, and PASS QC artifacts are generated; threshold suitability remains unvalidated on real cohorts |
 | Configurable reference bundle | Implemented | The workflow accepts compatible prebuilt indexes or generates FASTA, sequence-dictionary, and BWA-MEM2 indexes |
 | Multi-sample Joint Genotyping | Functionally validated with synthetic data | Two samples and two contigs complete GenomicsDBImport-based Joint Genotyping; real-data cohorts remain unvalidated |
 | Read preprocessing and QC | Implemented without MultiQC | Raw and trimmed FastQC, paired-end fastp, mapping logs, duplicate metrics, and SAMtools QC are produced |
-| Pipeline-level tests | Partially implemented | A clean synthetic Docker smoke test validates three read groups, two sample GVCFs, two expected SNPs, and one indexed cohort VCF; nf-test automation remains planned |
+| Pipeline-level tests | Partially implemented | A clean synthetic Docker smoke test validates three read groups, two sample GVCFs, two expected raw SNPs, hard-filter annotations, indexed PASS outputs, seven variant-QC tasks, and 28 QC artifacts; nf-test automation remains planned |
 | Functional CI | Not implemented | Current CI checks repository structure only |
 | Base quality score recalibration (BQSR) | Intentionally excluded | No validated known-sites resource is available; see [Design Decisions](#design-decisions) |
 | Production use | Not supported | This is an experimental plant-research repository |
@@ -62,7 +63,7 @@ The sequencing data and reference assembly originate from different studies and 
 
 ## Nextflow WGS Variant-Calling Workflow
 
-Issues [#4](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/4), [#6](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/6), and [#9](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/9) establish the input contracts and executable workflow from paired-end WGS reads through a raw cohort VCF.
+Issues [#4](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/4), [#6](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/6), [#9](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/9), and [#13](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/13) establish the input contracts and executable workflow from paired-end WGS reads through filtered cohort VCFs and variant QC.
 
 The current workflow performs the following actions:
 
@@ -79,9 +80,13 @@ The current workflow performs the following actions:
 - generates one indexed GVCF per biological sample with GATK HaplotypeCaller
 - creates one GenomicsDB workspace per reference contig and jointly genotypes all sample GVCFs
 - gathers contig-level raw VCFs in reference-index order and creates an indexed raw cohort VCF
+- separates the cohort VCF into indexed SNP and indel VCFs
+- applies configurable SNP- and indel-specific hard filters with GATK VariantFiltration
+- extracts indexed PASS-only SNP and indel VCFs
+- runs `bcftools stats` for raw, filtered, and PASS stages and produces machine-readable cohort and per-sample QC tables plus human-readable summaries
 - provides a redistributable synthetic functional-test dataset with deterministic expected SNPs
 
-It does **not** yet run variant filtering, variant-level cohort QC, MultiQC, or genomic-selection panel generation.
+It does **not** yet run MultiQC, automated nf-test coverage, genomic-selection panel generation, or real-data cohort validation.
 
 ### Requirements
 
@@ -122,9 +127,11 @@ NXF_VER=26.04.6 \
 
 The synthetic dataset contains two 5 kb contigs, two biological samples, and three read groups. The two `sample_a` read groups share `library_id=lib_a` and contain intentional cross-lane duplicate fragments. A successful run retains all 24 `sample_a` reads while marking four reads as duplicates; the 12 `sample_b` reads contain no intended duplicates.
 
-The fixtures also encode deterministic SNPs at `chrSynthetic1:1501 C>G` for `sample_a` and `chrSynthetic2:1601 A>C` for `sample_b`. The expected alleles are recorded in `tests/data/variants/expected_variants.tsv`. A clean Docker smoke run produces both SNPs with the expected sample columns and non-reference genotypes.
+The fixtures also encode deterministic SNPs at `chrSynthetic1:1501 C>G` for `sample_a` and `chrSynthetic2:1601 A>C` for `sample_b`. The expected alleles are recorded in `tests/data/variants/expected_variants.tsv`. A clean Docker smoke run produces both raw SNPs with the expected sample columns and non-reference genotypes.
 
-These fixtures test workflow behavior, read-group-aware duplicate marking, GVCF generation, and Joint Genotyping. They do not constitute biological or production validation.
+With the default `snp_filter_sor_max=3.0`, both synthetic SNPs receive the `SNP_SOR_HIGH` filter because their SOR values are greater than 3.0. The resulting default PASS SNP VCF is therefore valid but empty. A separate permissive smoke run with `--snp_filter_sor_max 10.0` retains both SNPs as PASS. This behavior validates filter labeling, PASS extraction, and empty-VCF handling; it is not evidence that either threshold is biologically appropriate.
+
+These fixtures test workflow behavior, read-group-aware duplicate marking, GVCF generation, Joint Genotyping, hard-filter mechanics, and variant-QC generation. They do not constitute biological or production validation. The current fixture also has one missing sample genotype at each variant locus; stronger reference-versus-alternate genotype coverage is tracked in [Issue #12](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/12).
 
 The deterministic fixtures can be regenerated with:
 
@@ -140,8 +147,20 @@ python3 tests/scripts/generate_synthetic_data.py
 | `variants/gvcf/<sample_id>.g.vcf.gz.tbi` | Tabix index for the sample GVCF |
 | `variants/raw/cohort.raw.vcf.gz` | Unfiltered multi-sample cohort VCF gathered in reference-contig order |
 | `variants/raw/cohort.raw.vcf.gz.tbi` | Tabix index for the raw cohort VCF |
+| `variants/by_type/cohort.snp.vcf.gz` | Raw cohort records selected as SNPs |
+| `variants/by_type/cohort.indel.vcf.gz` | Raw cohort records selected as indels |
+| `variants/filtered/cohort.<snp-or-indel>.filtered.vcf.gz` | Variant-type VCF with hard-filter labels applied |
+| `variants/pass/cohort.<snp-or-indel>.pass.vcf.gz` | Records whose FILTER value passes all configured hard filters |
+| `qc/variants/cohort.<stage>.<type>.bcftools.stats.tsv` | Complete `bcftools stats` output |
+| `qc/variants/cohort.<stage>.<type>.variant_qc.tsv` | Machine-readable cohort and variant-level QC metrics |
+| `qc/variants/cohort.<stage>.<type>.sample_qc.tsv` | Machine-readable per-sample genotype and missingness metrics |
+| `qc/variants/cohort.<stage>.<type>.summary.txt` | Human-readable QC summary |
 
-The raw cohort VCF is an intermediate scientific result. It must not be treated as a filtered analysis-ready SNP panel.
+Every compressed VCF listed above is accompanied by a `.tbi` index. Variant QC is generated for seven stage/type combinations: `raw/all`, `raw/snp`, `raw/indel`, `filtered/snp`, `filtered/indel`, `pass/snp`, and `pass/indel`.
+
+The cohort QC table reports sample and record counts, variant-type counts, multiallelic-site counts, transitions, transversions, Ti/Tv, cohort missing-genotype counts and rates, and the sample list. The per-sample table reports reference-homozygous, non-reference-homozygous, heterozygous, and missing genotype counts, missingness rate, average depth, and singleton count.
+
+The raw, filtered, and PASS VCFs remain intermediate scientific results. The presence of a PASS label means only that a record passed the configured rules; it must not be interpreted as an analysis-ready SNP panel or as evidence that the thresholds are suitable for a biological cohort.
 
 ### Samplesheet contract
 
@@ -189,13 +208,26 @@ The synthetic test settings are defined in `conf/test.config`. An example for Lo
 
 When an optional index parameter is omitted, the workflow generates the corresponding index with SAMtools, GATK, or BWA-MEM2. When supplied, index paths and expected filenames are validated before process execution.
 
-### Variant-calling parameters
+### Variant-calling and filtering parameters
 
 | Parameter | Default | Description |
 | --- | ---: | --- |
 | `sample_ploidy` | `2` | Positive integer passed to HaplotypeCaller as the expected sample ploidy |
+| `snp_filter_qd_min` | `2.0` | Mark SNPs with `QD` below this value as `SNP_QD_LOW` |
+| `snp_filter_qual_min` | `30.0` | Mark SNPs with `QUAL` below this value as `SNP_QUAL_LOW` |
+| `snp_filter_sor_max` | `3.0` | Mark SNPs with `SOR` above this value as `SNP_SOR_HIGH` |
+| `snp_filter_fs_max` | `60.0` | Mark SNPs with `FS` above this value as `SNP_FS_HIGH` |
+| `snp_filter_mq_min` | `40.0` | Mark SNPs with `MQ` below this value as `SNP_MQ_LOW` |
+| `snp_filter_mq_rank_sum_min` | `-12.5` | Mark SNPs with `MQRankSum` below this value as `SNP_MQRANKSUM_LOW` |
+| `snp_filter_read_pos_rank_sum_min` | `-8.0` | Mark SNPs with `ReadPosRankSum` below this value as `SNP_READPOSRANKSUM_LOW` |
+| `indel_filter_qd_min` | `2.0` | Mark indels with `QD` below this value as `INDEL_QD_LOW` |
+| `indel_filter_qual_min` | `30.0` | Mark indels with `QUAL` below this value as `INDEL_QUAL_LOW` |
+| `indel_filter_fs_max` | `200.0` | Mark indels with `FS` above this value as `INDEL_FS_HIGH` |
+| `indel_filter_read_pos_rank_sum_min` | `-20.0` | Mark indels with `ReadPosRankSum` below this value as `INDEL_READPOSRANKSUM_LOW` |
 
 Ploidy is applied consistently to every biological sample in one pipeline run. Mixed-ploidy cohorts are not currently supported.
+
+The filtering defaults are configurable operational starting points. They extend the historical pilot rules with QUAL, SOR, and indel-specific filters, but their suitability across references, accessions, sequencing depths, and cohort sizes has not been validated. Changing a threshold changes the scientific output and should be recorded with the run parameters.
 
 ### Workflow layout
 
@@ -218,7 +250,7 @@ tests/data/
 
 ![Manual pilot workflow](docs/workflow.png)
 
-The following commands document the historical single-sample pilot. They are retained as technical evidence and as input to the planned Nextflow implementation.
+The following commands document the historical single-sample pilot. They are retained as technical evidence and historical context for the executable Nextflow implementation.
 
 They are **not yet a clean-environment reproduction procedure** because dependency versions, checksums, resource requirements, and all intermediate validation steps have not been fixed.
 
@@ -341,7 +373,7 @@ gatk GenotypeGVCFs \
   -O SRR29909135.vcf.gz
 ```
 
-This command was used only for the single-sample pilot. The planned multi-sample pipeline will use HaplotypeCaller GVCFs followed by GenomicsDBImport and GenotypeGVCFs for Joint Genotyping. Joint Genotyping will be the default for a multi-sample cohort rather than being conditional on a 30-sample threshold.
+This command was used only for the single-sample pilot. The executable multi-sample pipeline uses HaplotypeCaller GVCFs followed by GenomicsDBImport and GenotypeGVCFs for Joint Genotyping. Joint Genotyping is the default for a multi-sample cohort rather than being conditional on a 30-sample threshold.
 
 ### 9. Select and filter SNPs
 
@@ -415,7 +447,7 @@ These values describe one historical execution for SRR29909135. They are not est
 
 The implementation roadmap is tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
 
-The following foundation and preprocessing capabilities are implemented:
+The following foundation, analysis, and QC capabilities are implemented:
 
 - Nextflow DSL2 workflow compatible with the strict syntax parser
 - parameter and samplesheet validation
@@ -428,12 +460,16 @@ The following foundation and preprocessing capabilities are implemented:
 - sample-level GATK HaplotypeCaller GVCF generation
 - contig-level GenomicsDBImport and GenotypeGVCFs
 - reference-order gathering into an indexed raw cohort VCF
+- SNP and indel separation with indexed variant-type outputs
+- configurable GATK hard filtering and indexed PASS-only outputs
+- raw, filtered, and PASS `bcftools stats` QC
+- machine-readable cohort and per-sample QC tables
+- human-readable variant-QC summaries
 - redistributable deterministic fixtures and a functional Docker smoke-test profile
 
 The following analysis and reproducibility capabilities remain planned:
 
 - MultiQC report aggregation
-- variant filtering and cohort QC
 - documented GS-panel output contracts
 - nf-test coverage and functional CI
 - software-version, parameter, and checksum manifests
