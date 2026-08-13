@@ -62,6 +62,22 @@ include {
     GATK_GATHERVCFS
 } from '../modules/local/gatk_gathervcfs'
 
+include {
+    GATK_SELECTVARIANTS
+} from '../modules/local/gatk_selectvariants'
+
+include {
+    GATK_VARIANTFILTRATION
+} from '../modules/local/gatk_variantfiltration'
+
+include {
+    GATK_SELECTPASSVARIANTS
+} from '../modules/local/gatk_selectpassvariants'
+
+include {
+    BCFTOOLS_STATS
+} from '../modules/local/bcftools_stats'
+
 workflow ADZUKI_SNP_PIPELINE {
     take:
     samples_ch
@@ -275,6 +291,138 @@ workflow ADZUKI_SNP_PIPELINE {
 
     GATK_GATHERVCFS(cohort_vcfs_ch)
 
+    variant_types_ch = GATK_GATHERVCFS.out.vcf
+        .flatMap { meta, vcf, vcf_index ->
+            [
+                tuple(
+                    meta + [variant_type: 'snp'],
+                    vcf,
+                    vcf_index,
+                    'SNP',
+                ),
+                tuple(
+                    meta + [variant_type: 'indel'],
+                    vcf,
+                    vcf_index,
+                    'INDEL',
+                ),
+            ]
+        }
+
+    GATK_SELECTVARIANTS(variant_types_ch)
+
+    hard_filter_inputs_ch = GATK_SELECTVARIANTS.out.vcf
+        .map { meta, vcf, vcf_index ->
+            def filters
+
+            if (meta['variant_type'] == 'snp') {
+                filters = [
+                    [
+                        name: 'SNP_QD_LOW',
+                        expression: "QD < ${params.snp_filter_qd_min}",
+                    ],
+                    [
+                        name: 'SNP_QUAL_LOW',
+                        expression: "QUAL < ${params.snp_filter_qual_min}",
+                    ],
+                    [
+                        name: 'SNP_SOR_HIGH',
+                        expression: "SOR > ${params.snp_filter_sor_max}",
+                    ],
+                    [
+                        name: 'SNP_FS_HIGH',
+                        expression: "FS > ${params.snp_filter_fs_max}",
+                    ],
+                    [
+                        name: 'SNP_MQ_LOW',
+                        expression: "MQ < ${params.snp_filter_mq_min}",
+                    ],
+                    [
+                        name: 'SNP_MQRANKSUM_LOW',
+                        expression: "MQRankSum < ${params.snp_filter_mq_rank_sum_min}",
+                    ],
+                    [
+                        name: 'SNP_READPOSRANKSUM_LOW',
+                        expression: "ReadPosRankSum < ${params.snp_filter_read_pos_rank_sum_min}",
+                    ],
+                ]
+            } else if (meta['variant_type'] == 'indel') {
+                filters = [
+                    [
+                        name: 'INDEL_QD_LOW',
+                        expression: "QD < ${params.indel_filter_qd_min}",
+                    ],
+                    [
+                        name: 'INDEL_QUAL_LOW',
+                        expression: "QUAL < ${params.indel_filter_qual_min}",
+                    ],
+                    [
+                        name: 'INDEL_FS_HIGH',
+                        expression: "FS > ${params.indel_filter_fs_max}",
+                    ],
+                    [
+                        name: 'INDEL_READPOSRANKSUM_LOW',
+                        expression: "ReadPosRankSum < ${params.indel_filter_read_pos_rank_sum_min}",
+                    ],
+                ]
+            } else {
+                error(
+                    "unsupported variant type: ${meta['variant_type']}"
+                )
+            }
+
+            tuple(meta, vcf, vcf_index, filters)
+        }
+
+    GATK_VARIANTFILTRATION(hard_filter_inputs_ch)
+    GATK_SELECTPASSVARIANTS(GATK_VARIANTFILTRATION.out.vcf)
+
+    raw_all_qc_inputs_ch = GATK_GATHERVCFS.out.vcf
+        .map { meta, vcf, vcf_index ->
+            tuple(
+                meta + [
+                    qc_stage: 'raw',
+                    variant_type: 'all',
+                ],
+                vcf,
+                vcf_index,
+            )
+        }
+
+    raw_by_type_qc_inputs_ch = GATK_SELECTVARIANTS.out.vcf
+        .map { meta, vcf, vcf_index ->
+            tuple(
+                meta + [qc_stage: 'raw'],
+                vcf,
+                vcf_index,
+            )
+        }
+
+    filtered_qc_inputs_ch = GATK_VARIANTFILTRATION.out.vcf
+        .map { meta, vcf, vcf_index ->
+            tuple(
+                meta + [qc_stage: 'filtered'],
+                vcf,
+                vcf_index,
+            )
+        }
+
+    pass_qc_inputs_ch = GATK_SELECTPASSVARIANTS.out.vcf
+        .map { meta, vcf, vcf_index ->
+            tuple(
+                meta + [qc_stage: 'pass'],
+                vcf,
+                vcf_index,
+            )
+        }
+
+    variant_qc_inputs_ch = raw_all_qc_inputs_ch
+        .mix(raw_by_type_qc_inputs_ch)
+        .mix(filtered_qc_inputs_ch)
+        .mix(pass_qc_inputs_ch)
+
+    BCFTOOLS_STATS(variant_qc_inputs_ch)
+
     emit:
     raw_fastqc_html = FASTQC_RAW.out.html
     raw_fastqc_zip = FASTQC_RAW.out.zip
@@ -289,6 +437,10 @@ workflow ADZUKI_SNP_PIPELINE {
     genomicsdb = GATK_GENOMICSDBIMPORT.out.genomicsdb
     interval_vcfs = GATK_GENOTYPEGVCFS.out.vcf
     raw_vcf = GATK_GATHERVCFS.out.vcf
+    variant_type_vcfs = GATK_SELECTVARIANTS.out.vcf
+    filtered_vcfs = GATK_VARIANTFILTRATION.out.vcf
+    pass_vcfs = GATK_SELECTPASSVARIANTS.out.vcf
+    variant_qc = BCFTOOLS_STATS.out.qc
     flagstat = SAMTOOLS_QC.out.flagstat
     stats = SAMTOOLS_QC.out.stats
     idxstats = SAMTOOLS_QC.out.idxstats
