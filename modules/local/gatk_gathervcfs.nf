@@ -4,12 +4,6 @@ process GATK_GATHERVCFS {
 
     container 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
 
-    publishDir(
-        "${params.outdir}/variants/raw",
-        mode: 'copy',
-        pattern: "${meta.id}.raw.vcf.gz*"
-    )
-
     input:
     tuple(
         val(meta),
@@ -45,7 +39,9 @@ process GATK_GATHERVCFS {
     """
     gatk --java-options "-Xmx${memory_gb}g" GatherVcfs \
         ${input_arguments} \
-        --OUTPUT ${meta.id}.raw.vcf.gz \
-        --CREATE_INDEX true
+        --OUTPUT ${meta.id}.raw.vcf.gz
+
+    gatk --java-options "-Xmx${memory_gb}g" IndexFeatureFile \
+        --input ${meta.id}.raw.vcf.gz
     """
 }

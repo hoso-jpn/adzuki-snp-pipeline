@@ -2,7 +2,7 @@
 
 Research and development repository for building a reproducible SNP-calling pipeline for adzuki bean (*Vigna angularis*) from publicly available whole-genome sequencing data.
 
-The repository contains an executable Nextflow DSL2 workflow for paired-end WGS preprocessing through duplicate-marked BAM QC, together with a historical, manually executed single-sample SNP-calling pilot. Variant calling, joint genotyping, automated pipeline tests, and cohort validation remain under development and are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
+The repository contains an executable Nextflow DSL2 workflow for paired-end WGS preprocessing through sample-level GVCF generation and multi-sample Joint Genotyping, together with a historical, manually executed single-sample SNP-calling pilot. Variant filtering, automated pipeline tests, and real-data cohort validation remain under development and are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
 
 This work represents plant-genetics and bioinformatics research that informs the longer-term agricultural AI activities of Florigen AI. It does not imply a direct genomic-prediction-to-Physical-AI development path.
 
@@ -14,17 +14,17 @@ This work represents plant-genetics and bioinformatics research that informs the
 | --- | --- | --- |
 | Manual single-sample SNP-calling pilot | Executed once | SRR29909135 was processed manually; the result has not yet been reproduced by an automated test |
 | Documented command sequence | Available | Commands are recorded below, but software versions and execution parameters are not yet fully locked |
-| Nextflow DSL2 workflow | Implemented through duplicate marking | Strict-syntax-compatible preprocessing, mapping, duplicate marking, and BAM QC processes are available |
-| Variant calling and genotyping | Not implemented | HaplotypeCaller, joint genotyping, and variant filtering remain planned |
+| Nextflow DSL2 workflow | Implemented through raw cohort VCF | Strict-syntax-compatible preprocessing, mapping, duplicate marking, GVCF generation, and Joint Genotyping processes are available |
+| Variant calling and genotyping | Functionally validated with synthetic data | HaplotypeCaller, contig-level GenomicsDBImport and GenotypeGVCFs, and reference-order GatherVcfs are connected; variant filtering remains planned |
 | Configurable reference bundle | Implemented | The workflow accepts compatible prebuilt indexes or generates FASTA, sequence-dictionary, and BWA-MEM2 indexes |
-| Multi-sample Joint Genotyping | Not validated | GenomicsDBImport-based cohort processing is planned |
+| Multi-sample Joint Genotyping | Functionally validated with synthetic data | Two samples and two contigs complete GenomicsDBImport-based Joint Genotyping; real-data cohorts remain unvalidated |
 | Read preprocessing and QC | Implemented without MultiQC | Raw and trimmed FastQC, paired-end fastp, mapping logs, duplicate metrics, and SAMtools QC are produced |
-| Pipeline-level tests | Partially implemented | A functional synthetic Docker smoke test is available; nf-test automation remains planned |
+| Pipeline-level tests | Partially implemented | A clean synthetic Docker smoke test validates three read groups, two sample GVCFs, two expected SNPs, and one indexed cohort VCF; nf-test automation remains planned |
 | Functional CI | Not implemented | Current CI checks repository structure only |
 | Base quality score recalibration (BQSR) | Intentionally excluded | No validated known-sites resource is available; see [Design Decisions](#design-decisions) |
 | Production use | Not supported | This is an experimental plant-research repository |
 
-The figures and variant counts in this README are historical results from the single-sample pilot. They are not yet backed by an automated clean-environment reproduction test.
+The figures and large-scale variant counts in this README remain historical results from the single-sample pilot and have not been reproduced by the executable workflow. The synthetic workflow path has separately completed a clean Docker smoke test with deterministic expected variants.
 
 ---
 
@@ -60,9 +60,9 @@ The sequencing data and reference assembly originate from different studies and 
 
 ---
 
-## Nextflow QC and Alignment Workflow
+## Nextflow WGS Variant-Calling Workflow
 
-Issues [#4](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/4) and [#6](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/6) establish the input contracts and executable preprocessing workflow for paired-end WGS data.
+Issues [#4](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/4), [#6](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/6), and [#9](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/9) establish the input contracts and executable workflow from paired-end WGS reads through a raw cohort VCF.
 
 The current workflow performs the following actions:
 
@@ -76,9 +76,12 @@ The current workflow performs the following actions:
 - coordinate-sorts each read group and merges read groups by biological sample
 - marks library-aware duplicates with GATK MarkDuplicates without removing duplicate records
 - creates BAM indexes and SAMtools flagstat, stats, and idxstats reports
-- provides a redistributable synthetic functional-test dataset
+- generates one indexed GVCF per biological sample with GATK HaplotypeCaller
+- creates one GenomicsDB workspace per reference contig and jointly genotypes all sample GVCFs
+- gathers contig-level raw VCFs in reference-index order and creates an indexed raw cohort VCF
+- provides a redistributable synthetic functional-test dataset with deterministic expected SNPs
 
-It does **not** yet run HaplotypeCaller, joint genotyping, variant filtering, MultiQC, or genomic-selection panel generation.
+It does **not** yet run variant filtering, variant-level cohort QC, MultiQC, or genomic-selection panel generation.
 
 ### Requirements
 
@@ -117,15 +120,28 @@ NXF_VER=26.04.6 \
   -profile test,docker_amd64
 ```
 
-The synthetic dataset contains two 5 kb contigs, two biological samples, and three read groups. The two `sample_a` read groups share `library_id=lib_a` and contain intentional cross-lane duplicate fragments. A successful run retains all 16 `sample_a` reads while marking four reads as duplicates; the eight `sample_b` reads contain no intended duplicates.
+The synthetic dataset contains two 5 kb contigs, two biological samples, and three read groups. The two `sample_a` read groups share `library_id=lib_a` and contain intentional cross-lane duplicate fragments. A successful run retains all 24 `sample_a` reads while marking four reads as duplicates; the 12 `sample_b` reads contain no intended duplicates.
 
-These fixtures test workflow behavior and read-group-aware duplicate marking. They do not constitute biological or production validation.
+The fixtures also encode deterministic SNPs at `chrSynthetic1:1501 C>G` for `sample_a` and `chrSynthetic2:1601 A>C` for `sample_b`. The expected alleles are recorded in `tests/data/variants/expected_variants.tsv`. A clean Docker smoke run produces both SNPs with the expected sample columns and non-reference genotypes.
+
+These fixtures test workflow behavior, read-group-aware duplicate marking, GVCF generation, and Joint Genotyping. They do not constitute biological or production validation.
 
 The deterministic fixtures can be regenerated with:
 
 ```bash
-python tests/scripts/generate_synthetic_data.py
+python3 tests/scripts/generate_synthetic_data.py
 ```
+
+### Variant outputs
+
+| Output | Description |
+| --- | --- |
+| `variants/gvcf/<sample_id>.g.vcf.gz` | Sample-level GVCF generated by HaplotypeCaller |
+| `variants/gvcf/<sample_id>.g.vcf.gz.tbi` | Tabix index for the sample GVCF |
+| `variants/raw/cohort.raw.vcf.gz` | Unfiltered multi-sample cohort VCF gathered in reference-contig order |
+| `variants/raw/cohort.raw.vcf.gz.tbi` | Tabix index for the raw cohort VCF |
+
+The raw cohort VCF is an intermediate scientific result. It must not be treated as a filtered analysis-ready SNP panel.
 
 ### Samplesheet contract
 
@@ -172,6 +188,14 @@ The following parameters define the reference bundle.
 The synthetic test settings are defined in `conf/test.config`. An example for Longxiaodou 4 is provided in `conf/references/longxiaodou4.config.example`.
 
 When an optional index parameter is omitted, the workflow generates the corresponding index with SAMtools, GATK, or BWA-MEM2. When supplied, index paths and expected filenames are validated before process execution.
+
+### Variant-calling parameters
+
+| Parameter | Default | Description |
+| --- | ---: | --- |
+| `sample_ploidy` | `2` | Positive integer passed to HaplotypeCaller as the expected sample ploidy |
+
+Ploidy is applied consistently to every biological sample in one pipeline run. Mixed-ploidy cohorts are not currently supported.
 
 ### Workflow layout
 
@@ -401,14 +425,15 @@ The following foundation and preprocessing capabilities are implemented:
 - sample-level read-group merging
 - library-aware GATK duplicate marking without removing duplicate records
 - BAM indexing and SAMtools flagstat, stats, and idxstats reports
+- sample-level GATK HaplotypeCaller GVCF generation
+- contig-level GenomicsDBImport and GenotypeGVCFs
+- reference-order gathering into an indexed raw cohort VCF
 - redistributable deterministic fixtures and a functional Docker smoke-test profile
 
 The following analysis and reproducibility capabilities remain planned:
 
 - MultiQC report aggregation
-- GATK HaplotypeCaller GVCF generation
-- multi-sample Joint Genotyping
-- variant and cohort QC
+- variant filtering and cohort QC
 - documented GS-panel output contracts
 - nf-test coverage and functional CI
 - software-version, parameter, and checksum manifests

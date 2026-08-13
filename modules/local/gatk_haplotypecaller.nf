@@ -4,12 +4,6 @@ process GATK_HAPLOTYPECALLER {
 
     container 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
 
-    publishDir(
-        "${params.outdir}/variants/gvcf",
-        mode: 'copy',
-        pattern: "${meta.id}.g.vcf.gz*"
-    )
-
     input:
     tuple val(meta), path(bam), path(bai)
     tuple val(reference_meta), path(fasta)

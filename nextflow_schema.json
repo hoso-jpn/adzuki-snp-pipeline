@@ -63,6 +63,11 @@
       "type": "string",
       "description": "Optional BWA-MEM2 index prefix; basename must match reference_fasta",
       "minLength": 1
+    },
+    "sample_ploidy": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Sample ploidy passed to GATK HaplotypeCaller"
     }
   },
   "required": [
