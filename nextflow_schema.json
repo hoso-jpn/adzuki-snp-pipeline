@@ -73,6 +73,11 @@
       "type": "boolean",
       "description": "Whether to run the GS (genomic selection) SNP panel lineage; its schema v1 is diploid-only, so this must be false whenever sample_ploidy is not 2"
     },
+    "optical_duplicate_pixel_distance": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Maximum pixel distance between read clusters for GATK MarkDuplicates to call them optical (rather than PCR/library) duplicates; the default (100) matches GATK's own unmodified default and is appropriate for unpatterned flowcells, but should be raised (commonly to ~2500) for patterned flowcells (e.g. HiSeq X, NovaSeq) per GATK/Picard guidance"
+    },
     "snp_filter_qd_min": {
       "type": "number",
       "minimum": 0,

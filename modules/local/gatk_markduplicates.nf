@@ -34,6 +34,7 @@ process GATK_MARKDUPLICATES {
         --METRICS_FILE ${meta.id}.markduplicates.metrics.txt \
         --REMOVE_DUPLICATES false \
         --CREATE_INDEX false \
+        --OPTICAL_DUPLICATE_PIXEL_DISTANCE ${params.optical_duplicate_pixel_distance} \
         --VALIDATION_STRINGENCY STRICT
     """
 }
