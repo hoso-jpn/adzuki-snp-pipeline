@@ -14,14 +14,15 @@ This work represents plant-genetics and bioinformatics research that informs the
 | --- | --- | --- |
 | Manual single-sample SNP-calling pilot | Executed once | SRR29909135 was processed manually; the result has not yet been reproduced by an automated test |
 | Documented command sequence | Available | Commands are recorded below, but software versions and execution parameters are not yet fully locked |
-| Nextflow DSL2 workflow | Implemented through filtered cohort VCFs and variant QC | Strict-syntax-compatible preprocessing, mapping, duplicate marking, GVCF generation, Joint Genotyping, hard filtering, PASS extraction, and QC processes are available |
+| Nextflow DSL2 workflow | Implemented through filtered cohort VCFs, variant QC, and a GS SNP panel | Strict-syntax-compatible preprocessing, mapping, duplicate marking, GVCF generation, Joint Genotyping, hard filtering, PASS extraction, QC processes, and GS panel normalization/matrix-building are available |
 | Variant calling and genotyping | Functionally validated with synthetic data | HaplotypeCaller, contig-level GenomicsDBImport and GenotypeGVCFs, and reference-order GatherVcfs are connected |
 | Variant filtering and QC | Functionally validated with synthetic data | SNPs and indels are separated, configurable hard filters are applied, PASS records are extracted, and raw, filtered, and PASS QC artifacts are generated; FILTER-value and per-annotation evaluable-rate accounting distinguish a missing annotation from a satisfied threshold, and a cohort-wide reconciliation reports where `raw/snp` + `raw/indel` diverges from `raw/all`; threshold suitability remains unvalidated on real cohorts |
+| GS panel (genomic selection) | Functionally validated with synthetic data | `raw/all` is normalized (`bcftools norm -m-`) and reclassified by post-split REF/ALT shape, re-filtered on a distinct lineage, and converted to a dosage matrix with sample/variant metadata, full-lineage record accounting, and a reproducibility manifest (see [`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md)); MAF/call-rate filtering, LD pruning, and imputation are out of scope, threshold suitability is unvalidated on real cohorts, and no downstream repository currently reads this panel |
 | Configurable reference bundle | Implemented | The workflow accepts compatible prebuilt indexes or generates FASTA, sequence-dictionary, and BWA-MEM2 indexes |
 | Multi-sample Joint Genotyping | Functionally validated with synthetic data | Two samples and two contigs complete GenomicsDBImport-based Joint Genotyping; both samples cover both contigs, so each deterministic SNP locus resolves to a non-missing `1/1`/`0/0` pair (`AC=2;AN=4;AF=0.5`) rather than a missing genotype; real-data cohorts remain unvalidated |
 | Read preprocessing and QC | Implemented without MultiQC | Raw and trimmed FastQC, paired-end fastp, mapping logs, duplicate metrics, and SAMtools QC are produced |
-| Pipeline-level tests | Partially implemented | A clean synthetic Docker smoke test validates three read groups, two sample GVCFs, two expected raw SNPs with confident `1/1`/`0/0` genotypes at both loci, hard-filter annotations, indexed PASS outputs, seven variant-QC tasks, and 36 QC artifacts; an [nf-test](https://www.nf-test.com/) pipeline-level test automates this genotype/annotation contract (`tests/pipeline/adzuki_snp_pipeline.nf.test`); a module-level nf-test separately confirms, against the real pinned GATK container, that `GATK_SELECTVARIANTS` excludes a `MIXED`-type record from both the SNP and indel selections (`tests/modules/gatk_selectvariants.nf.test`); broader nf-test coverage of every module remains planned (Issue #1 #G) |
-| Functional CI | Implemented for the synthetic fixture path | `.github/workflows/test.yml` runs `nextflow lint .`, the pipeline-level nf-test suite, and the `GATK_SELECTVARIANTS` module-level nf-test (`-profile test,docker`) on every push and pull request against `main`; `.github/workflows/lint.yml` separately checks repository structure only; real-data cohort CI remains out of scope |
+| Pipeline-level tests | Partially implemented | A clean synthetic Docker smoke test validates three read groups, two sample GVCFs, two expected raw SNPs with confident `1/1`/`0/0` genotypes at both loci, hard-filter annotations, indexed PASS outputs, seven variant-QC tasks, 38 QC artifacts, and the GS panel's empty-panel contract; an [nf-test](https://www.nf-test.com/) pipeline-level test automates this contract (`tests/pipeline/adzuki_snp_pipeline.nf.test`); module-level nf-tests separately confirm, against the real pinned GATK and bcftools containers, that `GATK_SELECTVARIANTS` excludes a `MIXED`-type record from both the SNP and indel selections (`tests/modules/gatk_selectvariants.nf.test`) and that `GS_NORMALIZE_VARIANTS` splits a `MIXED` record with correctly recoded genotypes (`tests/modules/gs_normalize_variants.nf.test`); broader nf-test coverage of every module remains planned (Issue #1 #G) |
+| Functional CI | Implemented for the synthetic fixture path | `.github/workflows/test.yml` runs `nextflow lint .` and a combined nf-test suite (pipeline-level plus the `GATK_SELECTVARIANTS` and `GS_NORMALIZE_VARIANTS` module-level tests, `-profile test,docker`) on every push and pull request against `main`; `.github/workflows/lint.yml` separately checks repository structure only; real-data cohort CI remains out of scope |
 | Base quality score recalibration (BQSR) | Intentionally excluded | No validated known-sites resource is available; see [Design Decisions](#design-decisions) |
 | Production use | Not supported | This is an experimental plant-research repository |
 
@@ -195,6 +196,12 @@ The refactor's output was verified against the previous AWK implementation by ru
 | `qc/variants/cohort.filtered.<type>.filter_qc.summary.txt` | Human-readable FILTER and annotation-coverage summary |
 | `qc/variants/cohort.variant_type_accounting.tsv` | Cohort-wide reconciliation of `raw/all` against the `raw/snp` and `raw/indel` selections |
 | `qc/variants/cohort.variant_type_accounting.summary.txt` | Human-readable variant-type accounting summary |
+| `variants/gs_normalized/cohort_gs.normalized.vcf.gz` | `raw/all`, left-normalized and multiallelic-split (`bcftools norm -m-`); still contains every variant type |
+| `qc/variants/cohort_gs.classification_accounting.tsv` | Post-split REF/ALT-shape classification and duplicate-key accounting for the GS lineage |
+| `qc/variants/cohort_gs.classification_accounting.summary.txt` | Human-readable classification accounting summary |
+| `variants/gs_classified/cohort_gs.classified.vcf.gz` | Biallelic-SNP-only subset of the normalized VCF, FILTER reset to `.` |
+| `variants/gs_filtered/cohort_gs.snp.filtered.vcf.gz` | The classified VCF with the same SNP hard filters re-applied |
+| `variants/gs_pass/cohort_gs.snp.pass.vcf.gz` | GS-eligible PASS records; the source VCF for the GS panel itself |
 
 Every compressed VCF listed above is accompanied by a `.tbi` index. Variant QC is generated for seven stage/type combinations: `raw/all`, `raw/snp`, `raw/indel`, `filtered/snp`, `filtered/indel`, `pass/snp`, and `pass/indel`. The FILTER/annotation-coverage files above are generated once per variant type from the `filtered` VCF only (`raw` FILTER values are always unset and `pass` FILTER values are always `PASS` by construction, so neither stage has a meaningful FILTER breakdown), and the variant-type accounting file is generated once per cohort.
 
@@ -211,6 +218,25 @@ A record's `FILTER` column can legitimately be empty of a given tag for two very
 Not every annotation has a hard filter for every variant type: indels have no `SOR`, `MQ`, or `MQRankSum` filter (see the parameter table below), so `annotation_qc.tsv` reports `filter_tag`, `filter_tagged_records`, and `filter_hit_rate` as `NA` for those three rows under `variant_type=indel` -- this means the annotation's filtering is out of scope for that variant type, which is a different situation from "missing" (still reported via `present_records`/`missing_records`) and from "evaluated but zero hits".
 
 `GATK SelectVariants`'s `--select-type-to-include` classifies each record as a whole into exactly one overall type (SNP, INDEL, MIXED, MNP, ...) and selects it only on an exact match against that single type -- confirmed against the pinned GATK 4.6.2.0 container in `tests/modules/gatk_selectvariants.nf.test`. A `MIXED`-type record (one site carrying both a SNP-type and an indel-type ALT allele) therefore does not match `SNP` and does not match `INDEL`, and is excluded from **both** `cohort.snp.vcf.gz` and `cohort.indel.vcf.gz` -- it is never selected into both. `records_not_selected` (`raw_all_records - raw_snp_records - raw_indel_records`, in `variant_type_accounting.tsv`) is expected to be `>= 0` in normal operation: it counts `MIXED`/MNP/symbolic/other-typed records present in `raw/all` but excluded from both type-specific selections, so `raw/snp` and `raw/indel` are not guaranteed to partition `raw/all`. Note that a multiallelic site whose ALT alleles are all the same elementary type (for example two SNP alleles) is still classified as pure `SNP` or `INDEL` and is not part of `records_not_selected`; only `MIXED`-typed sites are excluded from both selections, so `number_of_multiallelic_sites` and `records_not_selected` are not expected to match exactly. `records_not_selected` can still go negative if `raw/snp` and `raw/indel` are not actually disjoint; `variant_type_accounting.tsv` always reports the value as computed (never hidden or clamped) and flags it as a warning, alongside `snp_indel_duplicate_records` (records with an identical `CHROM`/`POS`/`REF`/`ALT` present in both selections) as the direct diagnostic for a genuine duplicated output record -- which is the only way this invariant could legitimately be violated.
+
+### Genomic selection (GS) panel
+
+The workflow separately derives a genomic selection (GS) SNP panel from `raw/all`, normalizing and reclassifying multiallelic and `MIXED`-type records before re-applying the SNP hard filters on a distinct lineage (`cohort_gs.*`), so that the primary `raw`/`filtered`/`pass` outputs above are never touched by this process. The full data contract -- input/normalization/classification/eligibility rules, the dosage encoding and why `int8` was rejected, the missing/non-standard genotype policy, on-disk vs. in-memory matrix shape, and the empty-panel contract -- is documented in [`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md); only the output list is repeated here.
+
+| Output | Description |
+| --- | --- |
+| `gs_panel/cohort.gs_panel.genotype_matrix.tsv.gz` | Dosage matrix (variant rows x sample columns); `-1`/`0`/`+1`/`nan` |
+| `gs_panel/cohort.gs_panel.sample_metadata.tsv` | Per-sample missing/non-standard genotype counts and rates |
+| `gs_panel/cohort.gs_panel.variant_metadata.tsv` | Per-variant `CHROM`/`POS`/`REF`/`ALT`/`QUAL` and missingness |
+| `gs_panel/cohort.gs_panel.genotype_encoding_accounting.tsv` | Cohort-wide genotype classification counts (standard dosage vs. missing vs. phased vs. non-diploid vs. non-biallelic-index) |
+| `gs_panel/cohort.gs_panel.genotype_encoding_accounting.summary.txt` | Human-readable genotype-encoding summary |
+| `gs_panel/cohort.gs_panel.record_accounting.tsv` | Full-lineage record reconciliation (`raw_all` -> `normalized` -> `classified` -> `gs_pass` -> matrix) and `panel_status` (`empty`/`populated`) |
+| `gs_panel/cohort.gs_panel.record_accounting.summary.txt` | Human-readable record accounting summary |
+| `gs_panel/cohort.gs_panel.manifest.json` | Schema-versioned reproducibility manifest: run ID, container digests, hard-filter parameters, and artifact checksums |
+
+A GS panel with zero eligible records is a normal outcome, not an error -- it is in fact what the pipeline's own default synthetic fixture produces today, since both synthetic SNPs fail `SNP_SOR_HIGH` (the same result as the primary lineage's `pass/snp` output). The matrix header (sample list) and sample metadata are still written in full; only the variant rows are absent, and `record_accounting.tsv`'s `panel_status` field says so explicitly.
+
+As of this writing, [`genomic-prediction-resnet-hybrid`](https://github.com/hoso-jpn/genomic-prediction-resnet-hybrid) has no adzuki- or VCF-specific ingestion code; the panel's conventions (dosage encoding, dtype, on-disk shape, manifest structure) were chosen to match that repository's own tested SoyNAM-loading conventions so that a future loader there has a well-specified contract to build against, not because a matching loader already exists there.
 
 ### Samplesheet contract
 
@@ -296,6 +322,7 @@ modules/local/
 tests/data/
 tests/scripts/
 tests/pipeline/
+tests/modules/
 tests/bin/
 tests/nextflow.config
 ```
@@ -525,13 +552,13 @@ The following foundation, analysis, and QC capabilities are implemented:
 - a synthetic fixture where both samples cover both deterministic SNP loci, resolving to confident `1/1`/`0/0` genotypes instead of a missing call
 - an nf-test pipeline-level test asserting that genotype/annotation contract, run in GitHub Actions on every push and pull request against `main`
 - FILTER-value and per-annotation evaluable-rate accounting for the filtered VCFs, distinguishing a missing annotation from a satisfied threshold, plus a cohort-wide `raw/all` vs. `raw/snp`/`raw/indel` reconciliation
+- a documented GS-panel data contract (Issue #1 #F): `raw/all` normalization and post-split reclassification of multiallelic and `MIXED`-type records, a distinct GS-specific hard-filter re-application, a dosage genotype matrix with sample/variant metadata, full-lineage record accounting, and a schema-versioned reproducibility manifest with software-version, parameter, and checksum information, plus a module-level nf-test verifying `MIXED`-record splitting against the real pinned bcftools container
 
 The following analysis and reproducibility capabilities remain planned:
 
 - MultiQC report aggregation
-- documented GS-panel output contracts
 - comprehensive nf-test coverage across every module, and a Python-testable variant-QC module (Issue #1 #G)
-- software-version, parameter, and checksum manifests
+- an adzuki/VCF-panel ingestion path in `genomic-prediction-resnet-hybrid` (tracked as a follow-up issue on that repository, not in scope here)
 
 A capability is considered implemented only after its corresponding code and validation are present in this repository.
 
@@ -569,6 +596,8 @@ The following repositories represent distinct stages of a longer-term research s
 - [genomic-prediction-resnet-hybrid](https://github.com/hoso-jpn/genomic-prediction-resnet-hybrid) — auditable comparison of GBLUP and neural genomic-prediction models using compatible individual-level data
 
 The public Dryad dataset currently used by `adzuki-gwas-analysis` does not contain individual-level genotypes and phenotypes. Therefore, these three repositories should not be read as an already-operational SNP-to-GWAS-to-genomic-prediction service.
+
+As of this writing, `genomic-prediction-resnet-hybrid` has no adzuki- or VCF-specific ingestion code; its only verified data path reads unrelated SoyNAM soybean data. This pipeline's [GS panel](#genomic-selection-gs-panel) was designed to match that repository's own tested conventions (dosage encoding, dtype, on-disk shape, manifest structure) so a future loader there has a well-specified contract to build against, not because that loader exists yet.
 
 ---
 
