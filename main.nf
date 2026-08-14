@@ -23,7 +23,18 @@ workflow {
     // nextflow.config's own `true` default (already a real Boolean).
     def gsPanelEnabled = params.enable_gs_panel.toString().toBoolean()
 
-    if (gsPanelEnabled && params.sample_ploidy != 2) {
+    // The same class of bug as the boolean coercion above, in the
+    // opposite direction: a CLI-provided `--sample_ploidy 2` resolves
+    // to the *String* "2", not the Groovy Integer 2. Groovy's `!=`
+    // does not coerce a String and an Integer to compare by numeric
+    // value, so `"2" != 2` evaluates to `true` -- meaning a user who
+    // explicitly, correctly passes `--sample_ploidy 2` would otherwise
+    // hit the fail-fast below by mistake. `.toString().toInteger()`
+    // first is correct whether the value came from the CLI (String) or
+    // from nextflow.config's own `2` default (already a real Integer).
+    def samplePloidy = params.sample_ploidy.toString().toInteger()
+
+    if (gsPanelEnabled && samplePloidy != 2) {
         error(
             "params.sample_ploidy is ${params.sample_ploidy}, but params.enable_gs_panel " +
             'is true (the default). The GS panel schema (v1) is diploid-only and would ' +
