@@ -367,14 +367,23 @@ def write_matrix(path: Path, vcf: GsPassVcf) -> None:
 
     The header is always written, even with zero variants, so an empty
     panel never loses the sample list -- only the data rows are absent.
+
+    Compressed with ``mtime=0`` so that identical logical content always
+    produces byte-identical compressed output: ``gzip.open`` embeds the
+    current wall-clock time in the gzip header by default, which would
+    otherwise make two runs over the same input produce different
+    checksums in the manifest even though nothing about the data
+    changed -- undermining the "same input reproduces the same panel"
+    guarantee this contract requires.
     """
     header = ["variant_key", *vcf.sample_names]
     rows = build_matrix_rows(vcf)
 
-    with gzip.open(path, "wt", encoding="utf-8") as handle:
-        handle.write("\t".join(header) + "\n")
-        for row in rows:
-            handle.write("\t".join(row) + "\n")
+    lines = ["\t".join(header)]
+    lines.extend("\t".join(row) for row in rows)
+    text = "\n".join(lines) + "\n"
+
+    path.write_bytes(gzip.compress(text.encode("utf-8"), mtime=0))
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:

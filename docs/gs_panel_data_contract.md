@@ -357,6 +357,20 @@ pipeline (`nextflow run owner/repo`); it is legitimately `null` for this
 repository's own documented `nextflow run .` local-directory invocation,
 and is reported as such honestly rather than worked around.
 
+**Checksum reproducibility, verified and limited:** the matrix, sample
+metadata, variant metadata, and record-accounting checksums are
+byte-for-byte reproducible across independent runs over identical input
+(`bin/build_gs_panel.py`'s matrix writer explicitly sets `mtime=0` on its
+gzip output for exactly this reason — verified directly by running the
+generated- and prebuilt-reference-index paths and diffing every
+`gs_panel/` artifact). The GS-eligible PASS VCF's own checksum
+(`cohort_gs.snp.pass.vcf.gz`) is **not** reproducible run-to-run: GATK
+embeds the actual wall-clock run time in its `##GATKCommandLine` VCF
+header on every invocation, a property of every VCF this pipeline
+produces (not something introduced by, or fixable within, the GS panel
+work), so its checksum will legitimately differ between two runs even
+when every underlying record is identical.
+
 ## Empty panel contract
 
 Zero GS-eligible PASS records is a normal, expected outcome — not an

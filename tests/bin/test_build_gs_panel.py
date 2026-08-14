@@ -160,6 +160,21 @@ class BuildMatrixTests(unittest.TestCase):
 
         self.assertEqual(lines, ["variant_key\tsample_a\tsample_b"])
 
+    def test_identical_content_produces_byte_identical_compressed_output(self) -> None:
+        # gzip embeds the current wall-clock time by default, which would
+        # otherwise make two runs over the same input produce different
+        # bytes (and therefore different checksums) despite identical
+        # logical content -- verify the fix (mtime=0) actually holds.
+        vcf = build_module.parse_gs_pass_vcf(FIXTURES_DIR / "build_panel_standard.vcf.gz")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            first_path = Path(tmp) / "first.tsv.gz"
+            second_path = Path(tmp) / "second.tsv.gz"
+            build_module.write_matrix(first_path, vcf)
+            build_module.write_matrix(second_path, vcf)
+
+            self.assertEqual(first_path.read_bytes(), second_path.read_bytes())
+
     def test_dosage_tokens_round_trip_through_float(self) -> None:
         for token in ("-1", "0", "1", "nan"):
             # every cell token must be float()-parseable without special-casing
