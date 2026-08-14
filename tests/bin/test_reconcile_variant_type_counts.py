@@ -13,6 +13,7 @@ import sys
 import tempfile
 import types
 import unittest
+from collections import Counter
 from pathlib import Path
 
 
@@ -52,15 +53,18 @@ def _write_variant_qc_tsv(
 
 
 class ParseVcfSitesTests(unittest.TestCase):
-    """Tests for parse_vcf_sites: record counts and (contig, position) sets."""
+    """Tests for parse_vcf_sites: record counts and (CHROM, POS, REF, ALT) multisets."""
 
-    def test_counts_records_and_collects_positions(self) -> None:
+    def test_counts_records_and_collects_variant_keys(self) -> None:
         sites = reconcile_module.parse_vcf_sites(
             FIXTURES_DIR / "reconcile_clean_raw_all.vcf.gz"
         )
 
         self.assertEqual(sites.record_count, 2)
-        self.assertEqual(sites.positions, frozenset({("chrTest", "100"), ("chrTest", "200")}))
+        self.assertEqual(
+            sites.variant_keys,
+            Counter({("chrTest", "100", "A", "T"): 1, ("chrTest", "200", "C", "G"): 1}),
+        )
 
     def test_empty_vcf_has_zero_records(self) -> None:
         sites = reconcile_module.parse_vcf_sites(
@@ -68,7 +72,23 @@ class ParseVcfSitesTests(unittest.TestCase):
         )
 
         self.assertEqual(sites.record_count, 0)
-        self.assertEqual(sites.positions, frozenset())
+        self.assertEqual(sites.variant_keys, Counter())
+
+    def test_distinct_records_sharing_a_position_are_not_the_same_key(self) -> None:
+        # A real SNP and a real indel can legitimately share a
+        # coordinate without being the same record; (CHROM, POS) alone
+        # would conflate them, so identity must include REF/ALT too.
+        raw_snp = reconcile_module.parse_vcf_sites(
+            FIXTURES_DIR / "reconcile_duplicate_raw_snp.vcf.gz"
+        )
+        raw_indel = reconcile_module.parse_vcf_sites(
+            FIXTURES_DIR / "reconcile_duplicate_raw_indel.vcf.gz"
+        )
+
+        shared_positions = {key[:2] for key in raw_snp.variant_keys} & {
+            key[:2] for key in raw_indel.variant_keys
+        }
+        self.assertEqual(shared_positions, {("chrTest", "300")})
 
     def test_malformed_row_raises_with_file_and_cause(self) -> None:
         import gzip
@@ -121,7 +141,7 @@ class ReadCrossReferencedMetricsTests(unittest.TestCase):
 class ReconcileTests(unittest.TestCase):
     """Tests for the reconciliation arithmetic across the three scenarios."""
 
-    def test_clean_split_has_zero_not_selected_and_no_overlap(self) -> None:
+    def test_clean_split_has_zero_not_selected_and_no_duplicates(self) -> None:
         raw_all = reconcile_module.parse_vcf_sites(FIXTURES_DIR / "reconcile_clean_raw_all.vcf.gz")
         raw_snp = reconcile_module.parse_vcf_sites(FIXTURES_DIR / "reconcile_clean_raw_snp.vcf.gz")
         raw_indel = reconcile_module.parse_vcf_sites(
@@ -136,9 +156,9 @@ class ReconcileTests(unittest.TestCase):
         self.assertEqual(result.raw_indel_records, 0)
         self.assertEqual(result.records_not_selected, 0)
         self.assertFalse(result.records_not_selected_is_negative)
-        self.assertEqual(result.snp_indel_overlap_records, 0)
+        self.assertEqual(result.snp_indel_duplicate_records, 0)
 
-    def test_excluded_record_yields_positive_not_selected_without_overlap(self) -> None:
+    def test_excluded_record_yields_positive_not_selected_without_duplicates(self) -> None:
         raw_all = reconcile_module.parse_vcf_sites(
             FIXTURES_DIR / "reconcile_excluded_raw_all.vcf.gz"
         )
@@ -153,43 +173,58 @@ class ReconcileTests(unittest.TestCase):
         result = reconcile_module.reconcile(raw_all, raw_snp, raw_indel, cross_referenced)
 
         # 3 raw/all - 1 snp - 1 indel = 1 record (the MNP-like site at
-        # position 200) selected into neither type-specific VCF.
+        # position 200) excluded from both type-specific VCFs. This is
+        # the normal, expected shape of a positive records_not_selected
+        # under GATK's per-VariantContext single-type classification
+        # (confirmed against the real pinned GATK container; see
+        # tests/modules/gatk_selectvariants.nf.test).
         self.assertEqual(result.records_not_selected, 1)
         self.assertFalse(result.records_not_selected_is_negative)
-        self.assertEqual(result.snp_indel_overlap_records, 0)
+        self.assertEqual(result.snp_indel_duplicate_records, 0)
 
-    def test_multiallelic_overlap_yields_negative_not_selected_and_is_flagged(self) -> None:
+    def test_duplicate_record_yields_negative_not_selected_and_is_flagged(self) -> None:
+        # This fixture hand-places the *identical* (CHROM, POS, REF,
+        # ALT) row into both the raw/snp and raw/indel files to
+        # exercise the defensive duplicate-detection path -- it is a
+        # synthetic corruption scenario (e.g. what a wiring or dedup
+        # bug could produce), NOT a reproduction of real GATK
+        # SelectVariants behavior. GATK classifies a MIXED-type record
+        # (a site with both a SNP and an indel ALT allele) as a single
+        # overall type and excludes it from *both* the snp and indel
+        # selections rather than placing it in both; that real
+        # contract is verified separately against the pinned GATK
+        # container in tests/modules/gatk_selectvariants.nf.test.
         raw_all = reconcile_module.parse_vcf_sites(
-            FIXTURES_DIR / "reconcile_overlap_raw_all.vcf.gz"
+            FIXTURES_DIR / "reconcile_duplicate_raw_all.vcf.gz"
         )
         raw_snp = reconcile_module.parse_vcf_sites(
-            FIXTURES_DIR / "reconcile_overlap_raw_snp.vcf.gz"
+            FIXTURES_DIR / "reconcile_duplicate_raw_snp.vcf.gz"
         )
         raw_indel = reconcile_module.parse_vcf_sites(
-            FIXTURES_DIR / "reconcile_overlap_raw_indel.vcf.gz"
+            FIXTURES_DIR / "reconcile_duplicate_raw_indel.vcf.gz"
         )
         cross_referenced = {"number_of_mnps": "0", "number_of_others": "0", "number_of_multiallelic_sites": "1"}
 
         result = reconcile_module.reconcile(raw_all, raw_snp, raw_indel, cross_referenced)
 
-        # 3 raw/all - 2 snp - 2 indel = -1: the site at position 300 is
-        # counted in both type-specific selections.
+        # 3 raw/all - 2 snp - 2 indel = -1: the row at position 300 is
+        # duplicated, byte-for-byte, across both type-specific files.
         self.assertEqual(result.raw_all_records, 3)
         self.assertEqual(result.raw_snp_records, 2)
         self.assertEqual(result.raw_indel_records, 2)
         self.assertEqual(result.records_not_selected, -1)
         self.assertTrue(result.records_not_selected_is_negative)
-        self.assertEqual(result.snp_indel_overlap_records, 1)
+        self.assertEqual(result.snp_indel_duplicate_records, 1)
 
     def test_negative_value_is_not_silently_omitted_from_output(self) -> None:
         raw_all = reconcile_module.parse_vcf_sites(
-            FIXTURES_DIR / "reconcile_overlap_raw_all.vcf.gz"
+            FIXTURES_DIR / "reconcile_duplicate_raw_all.vcf.gz"
         )
         raw_snp = reconcile_module.parse_vcf_sites(
-            FIXTURES_DIR / "reconcile_overlap_raw_snp.vcf.gz"
+            FIXTURES_DIR / "reconcile_duplicate_raw_snp.vcf.gz"
         )
         raw_indel = reconcile_module.parse_vcf_sites(
-            FIXTURES_DIR / "reconcile_overlap_raw_indel.vcf.gz"
+            FIXTURES_DIR / "reconcile_duplicate_raw_indel.vcf.gz"
         )
         cross_referenced = {"number_of_mnps": "0", "number_of_others": "0", "number_of_multiallelic_sites": "1"}
         result = reconcile_module.reconcile(raw_all, raw_snp, raw_indel, cross_referenced)
@@ -199,11 +234,12 @@ class ReconcileTests(unittest.TestCase):
 
         self.assertEqual(values_by_metric["records_not_selected"], "-1")
         self.assertEqual(values_by_metric["records_not_selected_is_negative"], "true")
-        self.assertEqual(values_by_metric["snp_indel_overlap_records"], "1")
+        self.assertEqual(values_by_metric["snp_indel_duplicate_records"], "1")
 
         summary_text = reconcile_module.build_summary_text("cohort", result)
         self.assertIn("WARNING: records_not_selected is negative", summary_text)
-        self.assertIn("snp_indel_overlap_records = 1", summary_text)
+        self.assertIn("It is NOT explained by MIXED-type records being selected into both", summary_text)
+        self.assertIn("snp_indel_duplicate_records = 1", summary_text)
 
 
 class OutputContractTests(unittest.TestCase):
@@ -308,11 +344,11 @@ class CliTests(unittest.TestCase):
                     "--cohort-id",
                     "cohort",
                     "--raw-all-vcf",
-                    str(FIXTURES_DIR / "reconcile_overlap_raw_all.vcf.gz"),
+                    str(FIXTURES_DIR / "reconcile_duplicate_raw_all.vcf.gz"),
                     "--raw-snp-vcf",
-                    str(FIXTURES_DIR / "reconcile_overlap_raw_snp.vcf.gz"),
+                    str(FIXTURES_DIR / "reconcile_duplicate_raw_snp.vcf.gz"),
                     "--raw-indel-vcf",
-                    str(FIXTURES_DIR / "reconcile_overlap_raw_indel.vcf.gz"),
+                    str(FIXTURES_DIR / "reconcile_duplicate_raw_indel.vcf.gz"),
                     "--raw-all-variant-qc",
                     str(variant_qc_path),
                     "--output",

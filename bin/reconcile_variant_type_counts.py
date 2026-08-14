@@ -2,25 +2,37 @@
 """Reconcile raw/all record counts against the raw/snp and raw/indel splits.
 
 `GATK_SELECTVARIANTS` produces `cohort.snp.vcf.gz` and
-`cohort.indel.vcf.gz` independently from `cohort.raw.vcf.gz`, each by
-asking whether *any* allele at a site matches the requested type. A
-single Nextflow task in the existing seven-channel variant QC (one
+`cohort.indel.vcf.gz` independently from `cohort.raw.vcf.gz`. Under
+GATK's `--select-type-to-include` contract, each VariantContext is
+classified as a whole into exactly one overall type (SNP, INDEL,
+MIXED, MNP, ... via `vc.getType()`), and is selected only on an exact
+match against that single type -- confirmed empirically against the
+pinned GATK 4.6.2.0 container: a MIXED-type record (one site carrying
+both a SNP-type and an indel-type ALT allele) is excluded from *both*
+the SNP and the INDEL selections. It is never selected into both.
+
+A single Nextflow task in the existing seven-channel variant QC (one
 `BCFTOOLS_STATS` call per raw/all, raw/snp, or raw/indel selection)
 cannot answer whether the three record counts are mutually consistent,
 because each of those tasks only ever sees one of the three VCFs. This
 tool reads all three files together and reports:
 
-- how many raw/all records are not present in either type-specific
-  selection (`records_not_selected`), and
-- how many (contig, position) sites appear in *both* the snp and indel
-  selections (`snp_indel_overlap_records`), the direct evidence for a
-  multiallelic site with both a SNP and an indel allele being counted
-  in both outputs.
+- how many raw/all records are excluded from both type-specific
+  selections (`records_not_selected`) -- expected to be >= 0 in normal
+  operation, since it counts MIXED/MNP/symbolic/other-typed records,
+  not double-selected ones, and
+- how many records with an identical (CHROM, POS, REF, ALT) appear in
+  *both* the raw/snp and raw/indel selections
+  (`snp_indel_duplicate_records`) -- expected to be 0 in normal
+  operation; a non-zero value is direct evidence of a duplicated
+  output record, which is the only way `records_not_selected` could
+  legitimately go negative.
 
-`records_not_selected` can be negative when overlap inflates
-`raw_snp_records + raw_indel_records` past `raw_all_records`; this tool
-always reports the value as computed and separately flags it, rather
-than omitting or clamping it.
+`records_not_selected` can still be negative if that invariant is
+violated for any reason; this tool always reports the value as
+computed and separately flags it as a warning, rather than omitting or
+clamping it, since silently hiding an unexpected negative value would
+be worse than surfacing one whose cause needs investigating.
 """
 
 from __future__ import annotations
@@ -28,6 +40,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,10 +67,10 @@ class MalformedVariantQcError(Exception):
 
 @dataclass(frozen=True)
 class VcfSites:
-    """The record count and (contig, position) set read from one VCF."""
+    """The record count and per-record identity multiset read from one VCF."""
 
     record_count: int
-    positions: frozenset[tuple[str, str]]
+    variant_keys: Counter[tuple[str, str, str, str]]
 
 
 @dataclass(frozen=True)
@@ -69,14 +82,20 @@ class ReconciliationResult:
     raw_indel_records: int
     records_not_selected: int
     records_not_selected_is_negative: bool
-    snp_indel_overlap_records: int
+    snp_indel_duplicate_records: int
     cross_referenced: dict[str, str]
 
 
 def parse_vcf_sites(path: Path) -> VcfSites:
-    """Count data rows and collect (contig, position) pairs from a VCF."""
+    """Count data rows and collect a (CHROM, POS, REF, ALT) multiset from a VCF.
+
+    Identity is keyed on all four fields, not just (CHROM, POS): a real
+    SNP and a real indel can legitimately share the same coordinate
+    without being the same record (or any kind of double-count), so
+    position alone would misclassify that as a duplicate.
+    """
     record_count = 0
-    positions: set[tuple[str, str]] = set()
+    variant_keys: Counter[tuple[str, str, str, str]] = Counter()
 
     with gzip.open(path, "rt", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
@@ -87,16 +106,16 @@ def parse_vcf_sites(path: Path) -> VcfSites:
 
             fields = line.split("\t")
 
-            if len(fields) < 2:
+            if len(fields) < 5:
                 raise MalformedVcfError(
                     f"{path}: line {line_number}: data row has {len(fields)} "
-                    "tab-separated fields, expected at least 2"
+                    "tab-separated fields, expected at least 5"
                 )
 
             record_count += 1
-            positions.add((fields[0], fields[1]))
+            variant_keys[(fields[0], fields[1], fields[3], fields[4])] += 1
 
-    return VcfSites(record_count=record_count, positions=frozenset(positions))
+    return VcfSites(record_count=record_count, variant_keys=variant_keys)
 
 
 def read_cross_referenced_metrics(path: Path) -> dict[str, str]:
@@ -144,7 +163,7 @@ def reconcile(
 ) -> ReconciliationResult:
     """Compute the raw/all vs. raw/snp/raw/indel reconciliation."""
     records_not_selected = raw_all.record_count - raw_snp.record_count - raw_indel.record_count
-    overlap = len(raw_snp.positions & raw_indel.positions)
+    duplicate_records = sum((raw_snp.variant_keys & raw_indel.variant_keys).values())
 
     return ReconciliationResult(
         raw_all_records=raw_all.record_count,
@@ -152,7 +171,7 @@ def reconcile(
         raw_indel_records=raw_indel.record_count,
         records_not_selected=records_not_selected,
         records_not_selected_is_negative=records_not_selected < 0,
-        snp_indel_overlap_records=overlap,
+        snp_indel_duplicate_records=duplicate_records,
         cross_referenced=cross_referenced,
     )
 
@@ -169,7 +188,7 @@ def build_output_rows(cohort_id: str, result: ReconciliationResult) -> list[list
             "records_not_selected_is_negative",
             "true" if result.records_not_selected_is_negative else "false",
         ],
-        [cohort_id, "snp_indel_overlap_records", str(result.snp_indel_overlap_records)],
+        [cohort_id, "snp_indel_duplicate_records", str(result.snp_indel_duplicate_records)],
     ]
 
     for metric in CROSS_REFERENCED_METRICS:
@@ -193,29 +212,53 @@ def build_summary_text(cohort_id: str, result: ReconciliationResult) -> str:
         ),
     ]
 
+    lines.append(
+        "Under GATK SelectVariants' contract, --select-type-to-include "
+        "classifies each VariantContext as a whole (a single overall "
+        "type: SNP, INDEL, MIXED, MNP, ...) and selects it only on an "
+        "exact match. A MIXED-type record (for example one site with "
+        "both a SNP and an indel ALT allele) does not match SNP and "
+        "does not match INDEL, so it is excluded from *both* "
+        "cohort.snp.vcf.gz and cohort.indel.vcf.gz -- it is not "
+        "selected into both. records_not_selected is therefore expected "
+        "to be >= 0 in normal operation, counting records excluded from "
+        "both selections (MIXED, MNP, symbolic, or other non-SNP/"
+        "non-INDEL types)."
+    )
+
     if result.records_not_selected_is_negative:
+        cause = (
+            "which is direct evidence of duplicated output records."
+            if result.snp_indel_duplicate_records > 0
+            else "so duplicated records are not the cause here -- check "
+            "for a wiring or input-file mismatch instead."
+        )
         lines.append(
-            "WARNING: records_not_selected is negative. GATK SelectVariants "
-            "selects a record into cohort.snp.vcf.gz or cohort.indel.vcf.gz "
-            "whenever *any* allele at that site matches the requested type, "
-            "so a multiallelic site carrying both a SNP and an indel allele "
-            "is counted in both outputs and inflates raw_snp + raw_indel "
-            f"past raw_all. snp_indel_overlap_records = "
-            f"{result.snp_indel_overlap_records} site(s) appear in both "
-            "the raw/snp and raw/indel selections, which is direct "
-            "evidence for this double-counting."
+            "WARNING: records_not_selected is negative. This violates "
+            "the expected raw_snp/raw_indel disjointness under GATK "
+            "SelectVariants' per-VariantContext single-type "
+            "classification and needs investigation. It is NOT "
+            "explained by MIXED-type records being selected into both "
+            "outputs (SelectVariants does not do that; see above). "
+            f"snp_indel_duplicate_records = "
+            f"{result.snp_indel_duplicate_records} record(s) with an "
+            "identical (CHROM, POS, REF, ALT) appear in both the "
+            f"raw/snp and raw/indel selections, {cause}"
         )
     else:
         lines.append(
-            f"snp_indel_overlap_records: {result.snp_indel_overlap_records} "
-            "site(s) appear in both the raw/snp and raw/indel selections."
+            f"snp_indel_duplicate_records: {result.snp_indel_duplicate_records} "
+            "record(s) with an identical (CHROM, POS, REF, ALT) appear in "
+            "both the raw/snp and raw/indel selections (expected to be 0 "
+            "in normal operation; a non-zero value indicates duplicated "
+            "output records)."
         )
 
     lines.append(
-        "SNP + indel is not guaranteed to equal raw/all: MNP, other, and "
-        "multiallelic records (from raw/all's own variant_qc.tsv) may "
-        "fall outside both type-specific selections, or (see above) be "
-        "counted in both."
+        "SNP + indel is not guaranteed to equal raw/all: MIXED, MNP, "
+        "other, and symbolic-typed records (see raw/all's own "
+        "variant_qc.tsv for related counts) are excluded from both "
+        "type-specific selections by GATK's classification contract."
     )
     lines.append(
         f"raw/all number_of_mnps: {result.cross_referenced['number_of_mnps']}"
@@ -225,7 +268,13 @@ def build_summary_text(cohort_id: str, result: ReconciliationResult) -> str:
     )
     lines.append(
         "raw/all number_of_multiallelic_sites: "
-        f"{result.cross_referenced['number_of_multiallelic_sites']}"
+        f"{result.cross_referenced['number_of_multiallelic_sites']} (a "
+        "multiallelic site whose ALT alleles are all the same "
+        "elementary type, e.g. two SNP alts, is still classified as "
+        "pure SNP or INDEL and is not part of records_not_selected; "
+        "only MIXED-typed multiallelic sites are excluded from both "
+        "selections, so this count and records_not_selected are not "
+        "expected to match exactly)"
     )
 
     return "\n".join(lines) + "\n"
