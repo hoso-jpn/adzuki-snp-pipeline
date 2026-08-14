@@ -12,6 +12,11 @@ process BUILD_GS_PANEL_MANIFEST {
     path(matrix)
     path(sample_metadata)
     path(variant_metadata)
+    path(genotype_accounting)
+    path(genotype_accounting_summary)
+    tuple val(raw_all_meta), path(raw_all_vcf), path(raw_all_vcf_index)
+    tuple val(reference_meta), path(reference_fasta)
+    tuple val(reference_fai_meta), path(reference_fai)
     val(pipeline_version)
     val(git_commit)
     val(bcftools_container)
@@ -30,6 +35,7 @@ process BUILD_GS_PANEL_MANIFEST {
         --bcftools-container '${bcftools_container}' \
         --gatk-container '${gatk_container}' \
         --python-container '${python_container}' \
+        --sample-ploidy ${params.sample_ploidy} \
         --snp-filter-qd-min ${params.snp_filter_qd_min} \
         --snp-filter-qual-min ${params.snp_filter_qual_min} \
         --snp-filter-sor-max ${params.snp_filter_sor_max} \
@@ -42,7 +48,13 @@ process BUILD_GS_PANEL_MANIFEST {
         --checksum-file ${matrix} \
         --checksum-file ${sample_metadata} \
         --checksum-file ${variant_metadata} \
+        --checksum-file ${genotype_accounting} \
+        --checksum-file ${genotype_accounting_summary} \
         --checksum-file ${record_accounting} \
+        --checksum-file ${record_accounting_summary} \
+        --checksum-file ${raw_all_vcf} \
+        --checksum-file ${reference_fasta} \
+        --checksum-file ${reference_fai} \
         --output ${meta.id}.gs_panel.manifest.json
     """
 }

@@ -24,6 +24,8 @@ SCRIPT_PATH = REPO_ROOT / "bin" / "build_gs_panel_manifest.py"
 
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 
+PLOIDY_CLI_ARGS = ["--sample-ploidy", "2"]
+
 SNP_FILTER_CLI_ARGS = [
     "--snp-filter-qd-min", "2.0",
     "--snp-filter-qual-min", "30.0",
@@ -133,6 +135,7 @@ class BuildManifestTests(unittest.TestCase):
             bcftools_container="bcftools:1.24",
             gatk_container="gatk:4.6.2.0",
             python_container="python:3.12",
+            sample_ploidy=2,
             snp_filter_params={"snp_filter_qd_min": 2.0},
             panel_status="populated",
             checksums={},
@@ -168,6 +171,16 @@ class BuildManifestTests(unittest.TestCase):
         )
         self.assertEqual(manifest["manifest_hash"], recomputed)
 
+    def test_sample_ploidy_is_recorded_in_parameters(self) -> None:
+        manifest = self._build(sample_ploidy=2)
+        self.assertEqual(manifest["parameters"]["sample_ploidy"], 2)
+
+    def test_genotype_encoding_schema_is_recorded_verbatim(self) -> None:
+        manifest = self._build()
+        self.assertEqual(manifest["genotype_encoding"], manifest_module.GENOTYPE_ENCODING_SCHEMA)
+        self.assertEqual(manifest["genotype_encoding"]["missing_token"], "nan")
+        self.assertEqual(manifest["genotype_encoding"]["ploidy"], "diploid_only")
+
 
 class WriteJsonAtomicTests(unittest.TestCase):
     """Tests for write_json_atomic: no temp file left behind, valid JSON written."""
@@ -202,6 +215,7 @@ class CliTests(unittest.TestCase):
                     "--bcftools-container", "bcftools:1.24",
                     "--gatk-container", "gatk:4.6.2.0",
                     "--python-container", "python:3.12",
+                    *PLOIDY_CLI_ARGS,
                     *SNP_FILTER_CLI_ARGS,
                     "--record-accounting", str(accounting_path),
                     "--checksum-file", str(matrix_path),
@@ -217,6 +231,8 @@ class CliTests(unittest.TestCase):
             self.assertIn("matrix.tsv.gz", manifest["checksums"])
             self.assertRegex(manifest["run_id"], RUN_ID_PATTERN)
             self.assertEqual(manifest["parameters"]["snp_filter_qd_min"], 2.0)
+            self.assertEqual(manifest["parameters"]["sample_ploidy"], 2)
+            self.assertEqual(manifest["genotype_encoding"], manifest_module.GENOTYPE_ENCODING_SCHEMA)
 
     def test_main_fails_clearly_for_a_missing_accounting_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -232,6 +248,7 @@ class CliTests(unittest.TestCase):
                         "--bcftools-container", "bcftools:1.24",
                         "--gatk-container", "gatk:4.6.2.0",
                         "--python-container", "python:3.12",
+                        *PLOIDY_CLI_ARGS,
                         *SNP_FILTER_CLI_ARGS,
                         "--record-accounting", str(missing_accounting),
                         "--output", str(tmp_path / "manifest.json"),
@@ -257,6 +274,7 @@ class CliTests(unittest.TestCase):
                     "--bcftools-container", "bcftools:1.24",
                     "--gatk-container", "gatk:4.6.2.0",
                     "--python-container", "python:3.12",
+                    *PLOIDY_CLI_ARGS,
                     *SNP_FILTER_CLI_ARGS,
                     "--record-accounting", str(accounting_path),
                     "--output", str(output_path),

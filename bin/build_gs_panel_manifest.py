@@ -29,6 +29,18 @@ as populated only when Nextflow itself pulls a git-hosted pipeline
 repository's own documented `nextflow run .` local-directory
 invocation; an empty value is recorded as `null`, honestly, rather
 than worked around.
+
+To let a reader reconstruct exactly which inputs and reference produced
+a given panel -- not just verify the panel's own outputs against
+themselves -- the checksums also cover the raw/all cohort VCF and the
+reference FASTA/FAI used for normalization (`--checksum-file`, passed
+by the workflow alongside every `gs_panel/` artifact; there is nothing
+input-specific about `checksum_files()` itself, so no separate code
+path was needed for this). `--sample-ploidy` and the genotype-encoding
+scheme itself (dosage table, missing token, matrix orientation) are
+recorded directly in the manifest so a reader never has to cross-
+reference this script's source or `docs/gs_panel_data_contract.md` to
+know how to interpret the matrix.
 """
 
 from __future__ import annotations
@@ -53,6 +65,20 @@ SNP_FILTER_PARAM_NAMES: tuple[str, ...] = (
     "snp_filter_mq_rank_sum_min",
     "snp_filter_read_pos_rank_sum_min",
 )
+
+# A fixed description of this schema's genotype encoding (see
+# bin/build_gs_panel.py and docs/gs_panel_data_contract.md for the
+# full reasoning) -- static, not derived from any file, but recorded
+# directly in every manifest so a reader never has to cross-reference
+# this script's source to know how to interpret the matrix.
+GENOTYPE_ENCODING_SCHEMA: dict[str, object] = {
+    "schema": "diploid_additive_dosage_v1",
+    "dosage_by_genotype": {"0/0": -1, "0/1_or_1/0": 0, "1/1": 1},
+    "phasing": "ignored for dosage; 0|1 encodes identically to 0/1",
+    "missing_token": "nan",
+    "matrix_orientation": "variant_rows_by_sample_columns",
+    "ploidy": "diploid_only",
+}
 
 
 class MalformedAccountingError(Exception):
@@ -146,6 +172,7 @@ def build_manifest(
     bcftools_container: str,
     gatk_container: str,
     python_container: str,
+    sample_ploidy: int,
     snp_filter_params: dict[str, float],
     panel_status: str,
     checksums: dict[str, str],
@@ -153,6 +180,8 @@ def build_manifest(
     generated_at: str,
 ) -> dict[str, object]:
     """Build the manifest document, including its own content hash."""
+    parameters: dict[str, object] = {"sample_ploidy": sample_ploidy, **snp_filter_params}
+
     manifest: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
@@ -165,7 +194,8 @@ def build_manifest(
             "gatk": gatk_container,
             "python": python_container,
         },
-        "parameters": snp_filter_params,
+        "parameters": parameters,
+        "genotype_encoding": GENOTYPE_ENCODING_SCHEMA,
         "panel_status": panel_status,
         "checksums": checksums,
     }
@@ -209,6 +239,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--bcftools-container", required=True, help="Pinned bcftools image reference.")
     parser.add_argument("--gatk-container", required=True, help="Pinned GATK image reference.")
     parser.add_argument("--python-container", required=True, help="Pinned Python image reference.")
+    parser.add_argument(
+        "--sample-ploidy",
+        required=True,
+        type=int,
+        help="The pipeline's configured sample ploidy (params.sample_ploidy), "
+        "recorded for provenance (this schema is diploid-only; see build_gs_panel.py).",
+    )
 
     for name in SNP_FILTER_PARAM_NAMES:
         parser.add_argument(f"--{name.replace('_', '-')}", required=True, type=float)
@@ -256,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
         bcftools_container=args.bcftools_container,
         gatk_container=args.gatk_container,
         python_container=args.python_container,
+        sample_ploidy=args.sample_ploidy,
         snp_filter_params=snp_filter_params,
         panel_status=panel_status,
         checksums=checksums,
