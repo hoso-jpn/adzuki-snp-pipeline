@@ -11,6 +11,7 @@ process RECONCILE_GS_PANEL_ACCOUNTING {
     tuple val(normalized_meta), path(normalized_vcf), path(normalized_vcf_index)
     path(normalization_accounting)
     tuple val(gs_pass_meta), path(gs_pass_vcf), path(gs_pass_vcf_index)
+    tuple val(matrix_meta), path(matrix)
     path(variant_metadata)
     path(sample_metadata)
 
@@ -30,6 +31,7 @@ process RECONCILE_GS_PANEL_ACCOUNTING {
         --normalized-vcf ${normalized_vcf} \
         --normalization-accounting ${normalization_accounting} \
         --gs-pass-vcf ${gs_pass_vcf} \
+        --matrix ${matrix} \
         --variant-metadata ${variant_metadata} \
         --sample-metadata ${sample_metadata} \
         --output ${meta.id}.gs_panel.record_accounting.tsv \
