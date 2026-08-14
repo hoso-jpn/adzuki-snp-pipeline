@@ -258,6 +258,45 @@ class CliTests(unittest.TestCase):
             self.assertEqual(exit_code, 1)
             self.assertIn(str(missing_accounting), stderr.getvalue())
 
+    def _run_main_with_ploidy(self, ploidy: str) -> tuple[int, Path, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            accounting_path = tmp_path / "accounting.tsv"
+            _write_record_accounting(accounting_path, "populated")
+            output_path = tmp_path / "manifest.json"
+            stderr = io.StringIO()
+
+            with contextlib.redirect_stderr(stderr):
+                exit_code = manifest_module.main(
+                    [
+                        "--cohort-id", "cohort",
+                        "--pipeline-version", "0.2.0-dev",
+                        "--bcftools-container", "bcftools:1.24",
+                        "--gatk-container", "gatk:4.6.2.0",
+                        "--python-container", "python:3.12",
+                        "--sample-ploidy", ploidy,
+                        *SNP_FILTER_CLI_ARGS,
+                        "--record-accounting", str(accounting_path),
+                        "--output", str(output_path),
+                    ]
+                )
+
+            return exit_code, output_path, stderr.getvalue()
+
+    def test_main_fails_fast_for_haploid_ploidy(self) -> None:
+        exit_code, output_path, stderr = self._run_main_with_ploidy("1")
+
+        self.assertEqual(exit_code, 1)
+        self.assertFalse(output_path.exists())
+        self.assertIn("diploid", stderr)
+
+    def test_main_fails_fast_for_polyploid_ploidy(self) -> None:
+        exit_code, output_path, stderr = self._run_main_with_ploidy("3")
+
+        self.assertEqual(exit_code, 1)
+        self.assertFalse(output_path.exists())
+        self.assertIn("diploid", stderr)
+
     def test_cli_subprocess_runs_end_to_end(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

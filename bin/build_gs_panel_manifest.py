@@ -41,6 +41,15 @@ scheme itself (dosage table, missing token, matrix orientation) are
 recorded directly in the manifest so a reader never has to cross-
 reference this script's source or `docs/gs_panel_data_contract.md` to
 know how to interpret the matrix.
+
+`main()` fails fast (exit 1, no manifest written) if `--sample-ploidy`
+is not 2, independently of `build_gs_panel.py`'s own identical check:
+in the normal pipeline `build_gs_panel.py` always runs first and would
+already have failed on the same input, but this script has no way to
+know that when invoked on its own, and a manifest whose
+`parameters.sample_ploidy` contradicts its own
+`genotype_encoding.ploidy == "diploid_only"` would be a self-
+contradictory provenance record.
 """
 
 from __future__ import annotations
@@ -243,8 +252,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--sample-ploidy",
         required=True,
         type=int,
-        help="The pipeline's configured sample ploidy (params.sample_ploidy), "
-        "recorded for provenance (this schema is diploid-only; see build_gs_panel.py).",
+        help="The pipeline's configured sample ploidy (params.sample_ploidy). "
+        "This schema is diploid-only: a value other than 2 fails fast (exit 1, "
+        "no manifest written) rather than being merely recorded.",
     )
 
     for name in SNP_FILTER_PARAM_NAMES:
@@ -273,6 +283,19 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI end to end and return a process exit code."""
     args = parse_args(argv)
+
+    if args.sample_ploidy != 2:
+        print(
+            "build_gs_panel_manifest.py: error: this GS panel schema (v1) is "
+            f"diploid-only, but --sample-ploidy was {args.sample_ploidy}. Writing "
+            "a manifest with parameters.sample_ploidy set to this value alongside "
+            "genotype_encoding.ploidy=\"diploid_only\" would record self-"
+            "contradictory provenance. In the normal pipeline this is unreachable "
+            "because build_gs_panel.py already fails fast on the same input, but "
+            "this script must not depend on that when invoked on its own.",
+            file=sys.stderr,
+        )
+        return 1
 
     try:
         panel_status = read_panel_status(args.record_accounting)
