@@ -33,3 +33,6 @@ results/
 
 # Synthetic test fixtures
 !tests/data/reads/*.fastq.gz
+!tests/bin/fixtures/*.vcf.gz
+!tests/modules/fixtures/*.vcf.gz
+!tests/modules/fixtures/*.vcf.gz.tbi

@@ -132,7 +132,7 @@ nextflow_pipeline {
             // implies (0 missing genotypes for the raw cohort, "NA"
             // missingness where 0 records exist).
             def qcFiles = new File("$outputDir/qc/variants").listFiles()
-            assert qcFiles.size() == 28
+            assert qcFiles.size() == 36
 
             def rawAllVariantQc = path("$outputDir/qc/variants/cohort.raw.all.variant_qc.tsv")
                 .readLines()
@@ -158,6 +158,76 @@ nextflow_pipeline {
             // missingness rather than a division-by-zero crash or 0
             def passSnpSampleQc = path("$outputDir/qc/variants/cohort.pass.snp.sample_qc.tsv").readLines()
             assert passSnpSampleQc.drop(1).every { line -> line.split("\t")[8] == "NA" }
+
+            // Issue #15: bin/summarize_filter_qc.py adds FILTER-value
+            // breakdown and per-annotation coverage for the filtered
+            // stage. Both synthetic SNPs fail only SNP_SOR_HIGH, so
+            // assert the breakdown reflects exactly that combination,
+            // and that MQRankSum/ReadPosRankSum -- absent from GATK's
+            // INFO output for this fixture -- are reported as
+            // "not evaluated" (evaluable_rate 0, filter_hit_rate NA)
+            // rather than silently read as "passed".
+            def filteredSnpBreakdown = path("$outputDir/qc/variants/cohort.filtered.snp.filter_breakdown.tsv")
+                .readLines()
+                .drop(1)
+                .collectEntries { line ->
+                    def fields = line.split("\t")
+                    [("${fields[3]}:${fields[4]}".toString()): fields[5]]
+                }
+            assert filteredSnpBreakdown["summary:total_records"] == "2"
+            assert filteredSnpBreakdown["summary:pass_records"] == "0"
+            assert filteredSnpBreakdown["summary:non_pass_records"] == "2"
+            assert filteredSnpBreakdown["summary:multi_tag_records"] == "0"
+            assert filteredSnpBreakdown["summary:distinct_filter_combinations"] == "1"
+            assert filteredSnpBreakdown["summary:distinct_filter_tags"] == "1"
+            assert filteredSnpBreakdown["combination:SNP_SOR_HIGH"] == "2"
+            assert filteredSnpBreakdown["tag:SNP_SOR_HIGH"] == "2"
+
+            def filteredIndelBreakdown = path("$outputDir/qc/variants/cohort.filtered.indel.filter_breakdown.tsv")
+                .readLines()
+                .drop(1)
+                .collectEntries { line ->
+                    def fields = line.split("\t")
+                    [("${fields[3]}:${fields[4]}".toString()): fields[5]]
+                }
+            assert filteredIndelBreakdown["summary:total_records"] == "0"
+            assert filteredIndelBreakdown["summary:pass_records"] == "0"
+            assert filteredIndelBreakdown["summary:non_pass_records"] == "0"
+
+            def filteredSnpAnnotationQc = path("$outputDir/qc/variants/cohort.filtered.snp.annotation_qc.tsv")
+                .readLines()
+                .drop(1)
+                .collectEntries { line ->
+                    def fields = line.split("\t")
+                    [(fields[3]): fields]
+                }
+            assert filteredSnpAnnotationQc["MQRankSum"][5] == "0"
+            assert filteredSnpAnnotationQc["MQRankSum"][7] == "0.000000"
+            assert filteredSnpAnnotationQc["MQRankSum"][10] == "NA"
+            assert filteredSnpAnnotationQc["ReadPosRankSum"][5] == "0"
+            assert filteredSnpAnnotationQc["ReadPosRankSum"][7] == "0.000000"
+            assert filteredSnpAnnotationQc["ReadPosRankSum"][10] == "NA"
+            assert filteredSnpAnnotationQc["SOR"][5] == "2"
+            assert filteredSnpAnnotationQc["SOR"][9] == "2"
+            assert filteredSnpAnnotationQc["SOR"][10] == "1.000000"
+
+            // Issue #15: bin/reconcile_variant_type_counts.py cross-checks
+            // raw/all against the raw/snp + raw/indel split. This fixture
+            // has no MIXED/MNP/other records, so the split must reconcile
+            // cleanly (records_not_selected == 0, no duplicate records).
+            def variantTypeAccounting = path("$outputDir/qc/variants/cohort.variant_type_accounting.tsv")
+                .readLines()
+                .drop(1)
+                .collectEntries { line ->
+                    def fields = line.split("\t")
+                    [(fields[1]): fields[2]]
+                }
+            assert variantTypeAccounting["raw_all_records"] == "2"
+            assert variantTypeAccounting["raw_snp_records"] == "2"
+            assert variantTypeAccounting["raw_indel_records"] == "0"
+            assert variantTypeAccounting["records_not_selected"] == "0"
+            assert variantTypeAccounting["records_not_selected_is_negative"] == "false"
+            assert variantTypeAccounting["snp_indel_duplicate_records"] == "0"
         }
     }
 }

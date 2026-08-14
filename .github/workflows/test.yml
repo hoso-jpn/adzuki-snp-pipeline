@@ -32,5 +32,9 @@ jobs:
       - name: Lint
         run: nextflow lint .
 
-      - name: Run pipeline-level nf-test
-        run: nf-test test tests/pipeline/adzuki_snp_pipeline.nf.test --ci
+      - name: Run nf-test suite (pipeline-level and GATK SelectVariants module-level)
+        run: >-
+          nf-test test
+          tests/pipeline/adzuki_snp_pipeline.nf.test
+          tests/modules/gatk_selectvariants.nf.test
+          --ci
