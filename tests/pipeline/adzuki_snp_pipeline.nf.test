@@ -35,11 +35,28 @@ nextflow_pipeline {
                 // this test left sample_ploidy unset and could not have
                 // caught it.
                 sample_ploidy = "2"
+                // Issue #8: a CLI-equivalent String, not a bare Groovy
+                // integer literal (see the sample_ploidy comment above
+                // for why this matters), and deliberately NOT the
+                // default (100) so that a passing assertion below can
+                // only mean this value was actually propagated to the
+                // real GATK MarkDuplicates command, not just that the
+                // default happened to already satisfy it.
+                optical_duplicate_pixel_distance = "2500"
             }
         }
 
         then {
             assert workflow.success
+
+            // Issue #8: exactly one BWA_MEM2_MEM_SORT task per read
+            // group (3: sample_a_L001, sample_a_L002, sample_b_L001),
+            // and no standalone SAMTOOLS_SORT task at all -- the two
+            // tools now run inside a single piped task instead.
+            def taskNames = workflow.trace.tasks().collect { task -> task.name }
+            def mappingTasks = taskNames.findAll { name -> name.contains("BWA_MEM2_MEM_SORT") }
+            assert mappingTasks.size() == 3
+            assert taskNames.every { name -> !name.contains("SAMTOOLS_SORT") }
 
             // one gVCF per biological sample (Issue #12)
             assert path("$outputDir/variants/gvcf/sample_a.g.vcf.gz").exists()
@@ -134,6 +151,99 @@ nextflow_pipeline {
                 assert refSample["GT"] == expected.ref_genotype
                 assert refSample["DP"] == expected.ref_sample_dp
             }
+
+            // Issue #8: decode the real merged, duplicate-marked BAM
+            // headers/records directly (BGZF is valid concatenated-
+            // member gzip, so java.util.zip.GZIPInputStream alone can
+            // read it -- no samtools binary needed on the test runner)
+            // rather than trusting the mapping/merge/dedup design intent.
+            def parseBamHeaderText = { File bamFile ->
+                def bytes = new java.util.zip.GZIPInputStream(new FileInputStream(bamFile)).bytes
+                assert new String(bytes[0..2] as byte[]) == "BAM"
+                assert bytes[3] == 1: "unexpected BAM magic byte 4: ${bytes[3]}"
+                int lText = ((bytes[4] & 0xFF)) | ((bytes[5] & 0xFF) << 8) | ((bytes[6] & 0xFF) << 16) | ((bytes[7] & 0xFF) << 24)
+                return new String(bytes[8..(8 + lText - 1)] as byte[])
+            }
+            def parseBamAlignmentStats = { File bamFile ->
+                def bytes = new java.util.zip.GZIPInputStream(new FileInputStream(bamFile)).bytes
+                int pos = 0
+                def readInt32 = {
+                    int v = ((bytes[pos] & 0xFF)) | ((bytes[pos + 1] & 0xFF) << 8) | ((bytes[pos + 2] & 0xFF) << 16) | ((bytes[pos + 3] & 0xFF) << 24)
+                    pos += 4
+                    return v
+                }
+                def readUInt16 = {
+                    int v = ((bytes[pos] & 0xFF)) | ((bytes[pos + 1] & 0xFF) << 8)
+                    pos += 2
+                    return v
+                }
+                pos = 4
+                int lText = readInt32()
+                pos += lText
+                int nRef = readInt32()
+                (1..nRef).each {
+                    int lName = readInt32()
+                    pos += lName
+                    readInt32()
+                }
+                int total = 0
+                int duplicates = 0
+                while (pos < bytes.length) {
+                    int blockSize = readInt32()
+                    int recordStart = pos
+                    pos += 14
+                    int flag = readUInt16()
+                    if ((flag & 0x400) != 0) {
+                        duplicates++
+                    }
+                    total++
+                    pos = recordStart + blockSize
+                }
+                return [total: total, duplicates: duplicates]
+            }
+
+            def sampleABam = new File("$outputDir/alignment/sample_a.markdup.bam")
+            def sampleBBam = new File("$outputDir/alignment/sample_b.markdup.bam")
+
+            def sampleAHeaderLines = parseBamHeaderText(sampleABam).split("\n")
+            assert sampleAHeaderLines.find { line -> line.startsWith("@HD") }?.contains("SO:coordinate")
+            def sampleARgLines = sampleAHeaderLines.findAll { line -> line.startsWith("@RG") }
+            assert sampleARgLines.size() == 2
+            def sampleARgL001 = sampleARgLines.find { line -> line.contains("ID:sample_a_L001") }
+            def sampleARgL002 = sampleARgLines.find { line -> line.contains("ID:sample_a_L002") }
+            assert sampleARgL001 != null: "sample_a BAM is missing @RG ID:sample_a_L001"
+            assert sampleARgL002 != null: "sample_a BAM is missing @RG ID:sample_a_L002"
+            assert sampleARgL001.contains("SM:sample_a") && sampleARgL001.contains("LB:lib_a") &&
+                sampleARgL001.contains("PL:ILLUMINA") && sampleARgL001.contains("PU:flowcell1.L001.ATCACG")
+            assert sampleARgL002.contains("SM:sample_a") && sampleARgL002.contains("LB:lib_a") &&
+                sampleARgL002.contains("PL:ILLUMINA") && sampleARgL002.contains("PU:flowcell1.L002.ATCACG")
+
+            def sampleBHeaderLines = parseBamHeaderText(sampleBBam).split("\n")
+            assert sampleBHeaderLines.find { line -> line.startsWith("@HD") }?.contains("SO:coordinate")
+            def sampleBRgLines = sampleBHeaderLines.findAll { line -> line.startsWith("@RG") }
+            assert sampleBRgLines.size() == 1
+            assert sampleBRgLines[0].contains("ID:sample_b_L001") && sampleBRgLines[0].contains("SM:sample_b") &&
+                sampleBRgLines[0].contains("LB:lib_b") && sampleBRgLines[0].contains("PL:ILLUMINA") &&
+                sampleBRgLines[0].contains("PU:flowcell1.L001.CGATGT")
+
+            def sampleAStats = parseBamAlignmentStats(sampleABam)
+            assert sampleAStats.total == 40
+            assert sampleAStats.duplicates == 4
+
+            def sampleBStats = parseBamAlignmentStats(sampleBBam)
+            assert sampleBStats.total == 24
+            assert sampleBStats.duplicates == 0
+
+            def sampleAMetrics = path("$outputDir/qc/markduplicates/sample_a.markduplicates.metrics.txt")
+            def sampleBMetrics = path("$outputDir/qc/markduplicates/sample_b.markduplicates.metrics.txt")
+            assert sampleAMetrics.exists()
+            assert sampleBMetrics.exists()
+
+            // optical_duplicate_pixel_distance actually reaches the real
+            // GATK command line (Picard records its own full invocation
+            // as a comment header in the metrics file)
+            assert sampleAMetrics.text.contains("--OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500")
+            assert sampleBMetrics.text.contains("--OPTICAL_DUPLICATE_PIXEL_DISTANCE 2500")
 
             // PR #14 filtering/QC regression guard: both synthetic
             // SNPs still fail the default SOR threshold, and indels
@@ -537,6 +647,94 @@ nextflow_pipeline {
             assert !new File("$outputDir/qc").exists()
             assert !new File("$outputDir/alignment").exists()
             assert !new File("$outputDir/gs_panel").exists()
+        }
+    }
+
+    test("a negative optical_duplicate_pixel_distance is rejected before any process runs") {
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                // Issue #8: a CLI-equivalent String (not a bare Groovy
+                // integer literal) -- schema validation must reject this
+                // regardless of the value's Groovy runtime type, since a
+                // real `--optical_duplicate_pixel_distance -5` CLI
+                // invocation hands nf-schema exactly this String.
+                optical_duplicate_pixel_distance = "-5"
+            }
+        }
+
+        then {
+            assert !workflow.success
+
+            // no analysis process (mapping, MarkDuplicates, or
+            // otherwise) may have started -- the failure must happen at
+            // schema validation, before any work is done.
+            assert workflow.trace.tasks().isEmpty()
+
+            assert !new File("$outputDir/variants").exists()
+            assert !new File("$outputDir/qc").exists()
+            assert !new File("$outputDir/alignment").exists()
+            assert !new File("$outputDir/gs_panel").exists()
+        }
+    }
+
+    test("a fully prebuilt (non-generated) BWA-MEM2 index completes the whole pipeline and skips BWA_MEM2_INDEX") {
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                sample_ploidy = "2"
+                // tests/data/reference/prebuilt_bwa_index/ (see
+                // tests/modules/bwa_mem2_mem_sort.nf.test for how this
+                // fixture was built and its recorded tool
+                // version/checksums); bwa_index_prefix's basename must
+                // match reference_fasta's basename (main.nf enforces
+                // this), so the fixture directory's files are named
+                // synthetic.fa.* to match tests/data/reference/synthetic.fa.
+                bwa_index_prefix = "${projectDir}/tests/data/reference/prebuilt_bwa_index/synthetic.fa"
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            // BWA_MEM2_INDEX must not run at all when a prebuilt index
+            // is supplied -- only the 3 BWA_MEM2_MEM_SORT mapping tasks
+            // should reference bwa-mem2.
+            def taskNames = workflow.trace.tasks().collect { task -> task.name }
+            assert taskNames.every { name -> !name.contains("BWA_MEM2_INDEX") }
+            assert taskNames.findAll { name -> name.contains("BWA_MEM2_MEM_SORT") }.size() == 3
+
+            // the same diploid genotype contract as the generated-index
+            // path above must still hold: a prebuilt index is not
+            // expected to, and does not, change alignment results for
+            // this fixture.
+            def raw_lines = path("$outputDir/variants/raw/cohort.raw.vcf.gz").linesGzip
+            def data_lines = raw_lines.findAll { line -> !line.startsWith("#") }
+            assert data_lines.size() == 2
         }
     }
 }

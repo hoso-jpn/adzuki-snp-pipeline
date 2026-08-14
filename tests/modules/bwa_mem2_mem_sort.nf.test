@@ -1,0 +1,166 @@
+nextflow_process {
+
+    name "BWA_MEM2_MEM_SORT pipe-based mapping+sort contract"
+    script "modules/local/bwa_mem2_mem_sort.nf"
+    process "BWA_MEM2_MEM_SORT"
+
+    // Issue #8: the process pipes bwa-mem2's alignment stream directly
+    // into `samtools sort` and never writes an intermediate `.sam` file.
+    // These assertions read the real BAM produced by the pinned combined
+    // container -- decoding the uncompressed BAM header directly via
+    // java.util.zip.GZIPInputStream (BGZF is valid, concatenated-member
+    // gzip, so this needs no samtools binary on the test runner) -- and
+    // list the task's own work directory to confirm no `.sam` sibling
+    // was ever created, rather than trusting the module's design intent.
+    def parseBamHeaderText = { File bamFile ->
+        def bytes = new java.util.zip.GZIPInputStream(new FileInputStream(bamFile)).bytes
+        assert new String(bytes[0..2] as byte[]) == "BAM"
+        assert bytes[3] == 1: "unexpected BAM magic byte 4: ${bytes[3]}"
+        int lText = ((bytes[4] & 0xFF)) | ((bytes[5] & 0xFF) << 8) | ((bytes[6] & 0xFF) << 16) | ((bytes[7] & 0xFF) << 24)
+        return new String(bytes[8..(8 + lText - 1)] as byte[])
+    }
+
+    setup {
+        run("BWA_MEM2_INDEX") {
+            script "modules/local/bwa_mem2_index.nf"
+            process {
+                """
+                input[0] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa"),
+                ]
+                """
+            }
+        }
+    }
+
+    test("maps and sorts a read group with no intermediate .sam and correctly split bwa-mem2/samtools CPU threads") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [
+                        id: 'sample_a',
+                        read_group_id: 'sample_a_L001',
+                        library_id: 'lib_a',
+                        platform: 'ILLUMINA',
+                        platform_unit: 'flowcell1.L001.ATCACG',
+                    ],
+                    file("${projectDir}/tests/data/reads/sample_a_L001_R1.fastq.gz"),
+                    file("${projectDir}/tests/data/reads/sample_a_L001_R2.fastq.gz"),
+                ]
+                input[1] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa"),
+                ]
+                input[2] = BWA_MEM2_INDEX.out.indexes
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // exactly one BAM and one mapping-log output, no third
+            // "sam"-named output channel exists on this process at all
+            assert process.out.bam.size() == 1
+            assert process.out.log.size() == 1
+
+            def bamFile = new File(path(process.out.bam[0][1]).toString())
+            def workDirFiles = bamFile.getParentFile().listFiles()*.name
+
+            assert workDirFiles.any { name -> name.endsWith(".sorted.bam") }
+            assert workDirFiles.every { name -> !name.endsWith(".sam") }: "found a .sam file in the task work directory: ${workDirFiles}"
+
+            def headerText = parseBamHeaderText(bamFile)
+            def headerLines = headerText.split("\n")
+
+            def hdLine = headerLines.find { line -> line.startsWith("@HD") }
+            assert hdLine != null: "no @HD line found in BAM header"
+            assert hdLine.contains("SO:coordinate")
+
+            def rgLine = headerLines.find { line -> line.startsWith("@RG") }
+            assert rgLine != null: "no @RG line found in BAM header"
+            assert rgLine.contains("ID:sample_a_L001")
+            assert rgLine.contains("SM:sample_a")
+            assert rgLine.contains("LB:lib_a")
+            assert rgLine.contains("PL:ILLUMINA")
+            assert rgLine.contains("PU:flowcell1.L001.ATCACG")
+
+            // CPU-oversubscription guard (Issue #8): under this test
+            // profile's task.cpus=2, bwa-mem2 must NOT receive the full
+            // 2 threads while samtools sort also runs concurrently --
+            // the real @PG CL lines embedded by each tool are read
+            // directly, not assumed from the module's own source.
+            def bwaPgLine = headerLines.find { line -> line.startsWith("@PG") && line.contains("ID:bwa-mem2") }
+            def samtoolsPgLine = headerLines.find { line -> line.startsWith("@PG") && line.contains("ID:samtools") }
+            assert bwaPgLine != null: "no bwa-mem2 @PG line found in BAM header"
+            assert samtoolsPgLine != null: "no samtools @PG line found in BAM header"
+            assert bwaPgLine.contains("bwa-mem2 mem -t 1 ")
+            assert samtoolsPgLine.contains("samtools sort -@ 1 ")
+
+            // sort_mem_per_thread_mib must never fall below 1 MiB and
+            // must actually be passed to samtools sort's -m flag, not
+            // silently left at the tool's own 768M/thread default
+            assert samtoolsPgLine =~ /-m \d+M/
+            assert !samtoolsPgLine.contains("-m 0M")
+        }
+    }
+
+    test("completes with a fully prebuilt (non-generated) BWA-MEM2 index") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [
+                        id: 'sample_b',
+                        read_group_id: 'sample_b_L001',
+                        library_id: 'lib_b',
+                        platform: 'ILLUMINA',
+                        platform_unit: 'flowcell1.L001.CGATGT',
+                    ],
+                    file("${projectDir}/tests/data/reads/sample_b_L001_R1.fastq.gz"),
+                    file("${projectDir}/tests/data/reads/sample_b_L001_R2.fastq.gz"),
+                ]
+                input[1] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa"),
+                ]
+                input[2] = [
+                    [ id: 'synthetic' ],
+                    // tests/data/reference/prebuilt_bwa_index/: built
+                    // once via `docker run
+                    // quay.io/biocontainers/bwa-mem2:2.3--he70b90d_0@sha256:374f4b910b4b04d32772fccd4cab1cdcd0758356856a960cfa8b1edebfd38c9f
+                    // bwa-mem2 index synthetic.fa` (the exact same pinned
+                    // digest BWA_MEM2_INDEX uses); real bwa-mem2 --version
+                    // printed 2.2.1. Per-file sha256 checksums are
+                    // recorded in CHECKSUMS.sha256 alongside the fixture,
+                    // so this "prebuilt index" path exercises a real,
+                    // reproducibly-generated (not hand-written) index
+                    // without requiring BWA_MEM2_INDEX to run first.
+                    [
+                        file("${projectDir}/tests/data/reference/prebuilt_bwa_index/synthetic.fa.0123"),
+                        file("${projectDir}/tests/data/reference/prebuilt_bwa_index/synthetic.fa.amb"),
+                        file("${projectDir}/tests/data/reference/prebuilt_bwa_index/synthetic.fa.ann"),
+                        file("${projectDir}/tests/data/reference/prebuilt_bwa_index/synthetic.fa.bwt.2bit.64"),
+                        file("${projectDir}/tests/data/reference/prebuilt_bwa_index/synthetic.fa.pac"),
+                    ],
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def bamFile = new File(path(process.out.bam[0][1]).toString())
+            def headerText = parseBamHeaderText(bamFile)
+            def headerLines = headerText.split("\n")
+
+            assert headerLines.find { line -> line.startsWith("@HD") }?.contains("SO:coordinate")
+            assert headerLines.find { line -> line.startsWith("@RG") }?.contains("ID:sample_b_L001")
+        }
+    }
+}
