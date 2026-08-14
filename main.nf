@@ -77,6 +77,16 @@ workflow {
 
     samples_ch = channel.fromList(sample_rows)
 
+    // Issue #8: computed once, synchronously, directly from the fully
+    // materialized samplesheet list -- before any channel operation
+    // runs -- so that groupTuple() downstream can be told exactly how
+    // many read groups to expect per sample via groupKey() and emit
+    // each sample's merged BAM the moment its own read groups are all
+    // mapped, rather than waiting for every sample's mapping to finish.
+    read_group_counts_by_sample = sample_rows
+        .collect { row -> row[0].id }
+        .countBy { sample_id -> sample_id }
+
     reference_meta = [
         id       : params.reference_id,
         name     : params.reference_name,
@@ -159,6 +169,7 @@ workflow {
 
     ADZUKI_SNP_PIPELINE(
         samples_ch,
-        reference_ch
+        reference_ch,
+        read_group_counts_by_sample
     )
 }
