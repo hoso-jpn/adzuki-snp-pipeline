@@ -72,10 +72,34 @@ class ClassifyGenotypeTests(unittest.TestCase):
         self.assertEqual(cell.category, "missing")
         self.assertEqual(cell.dosage, "nan")
 
-    def test_phased_is_its_own_category(self) -> None:
+    def test_phased_hom_ref_has_same_dosage_as_unphased(self) -> None:
+        cell = build_module.classify_genotype("0|0")
+        self.assertEqual(cell.category, "standard")
+        self.assertEqual(cell.dosage, "-1")
+        self.assertTrue(cell.is_phased)
+
+    def test_phased_het_has_same_dosage_as_unphased(self) -> None:
+        # Phase records haplotype origin, not allele count: per the VCF
+        # spec, 0|1 and 0/1 have identical allele content and must
+        # resolve to the identical dosage.
         cell = build_module.classify_genotype("0|1")
-        self.assertEqual(cell.category, "phased")
-        self.assertEqual(cell.dosage, "nan")
+        self.assertEqual(cell.category, "standard")
+        self.assertEqual(cell.dosage, "0")
+        self.assertTrue(cell.is_phased)
+
+    def test_phased_hom_alt_has_same_dosage_as_unphased(self) -> None:
+        cell = build_module.classify_genotype("1|1")
+        self.assertEqual(cell.category, "standard")
+        self.assertEqual(cell.dosage, "1")
+        self.assertTrue(cell.is_phased)
+
+    def test_unphased_calls_have_is_phased_false(self) -> None:
+        self.assertFalse(build_module.classify_genotype("0/1").is_phased)
+
+    def test_phased_missing_is_still_missing(self) -> None:
+        cell = build_module.classify_genotype("0|.")
+        self.assertEqual(cell.category, "missing")
+        self.assertTrue(cell.is_phased)
 
     def test_haploid_is_non_diploid(self) -> None:
         cell = build_module.classify_genotype("0")
@@ -84,6 +108,11 @@ class ClassifyGenotypeTests(unittest.TestCase):
     def test_triploid_is_non_diploid(self) -> None:
         cell = build_module.classify_genotype("0/0/1")
         self.assertEqual(cell.category, "non_diploid")
+
+    def test_phased_triploid_is_still_non_diploid(self) -> None:
+        cell = build_module.classify_genotype("0|0|1")
+        self.assertEqual(cell.category, "non_diploid")
+        self.assertTrue(cell.is_phased)
 
     def test_non_biallelic_index_is_its_own_category(self) -> None:
         cell = build_module.classify_genotype("0/2")
@@ -205,11 +234,13 @@ class SampleMetadataTests(unittest.TestCase):
         self.assertEqual(rows[1], ["cohort", "1", "sample_b", "0", "0.000000", "0"])
 
     def test_non_standard_fixture_counts_non_standard_as_missing_too(self) -> None:
+        # sample_a across the 4 variants: 0|1 (phased, but now a real
+        # dosage -- not missing), 0 (haploid), 0/0/1 (triploid),
+        # 0/2 (non-biallelic-index) -> 3 missing, all 3 non-standard.
         vcf = build_module.parse_gs_pass_vcf(FIXTURES_DIR / "build_panel_non_standard.vcf.gz")
         rows = build_module.build_sample_metadata_rows("cohort", vcf)
 
-        # sample_a: phased, haploid, triploid, non-biallelic-index -> all 4 non-standard
-        self.assertEqual(rows[0], ["cohort", "0", "sample_a", "4", "1.000000", "4"])
+        self.assertEqual(rows[0], ["cohort", "0", "sample_a", "3", "0.750000", "3"])
 
     def test_empty_vcf_reports_na_rate_not_zero(self) -> None:
         vcf = build_module.parse_gs_pass_vcf(FIXTURES_DIR / "build_panel_empty.vcf.gz")
@@ -255,30 +286,50 @@ class GenotypeAccountingTests(unittest.TestCase):
         self.assertEqual(metrics["total_treated_as_missing"], "0")
 
     def test_non_standard_fixture_accounting_breaks_down_every_reason(self) -> None:
-        # var1: sample_a=0|1 (phased), sample_b=0/0 (standard)
+        # var1: sample_a=0|1 (phased, but a real dosage: standard het),
+        #       sample_b=0/0 (standard hom-ref)
         # var2: sample_a=0, sample_b=1 (both haploid -> non_diploid)
-        # var3: sample_a=0/0/1 (triploid -> non_diploid), sample_b=0/1 (standard)
-        # var4: sample_a=0/2 (non_biallelic_index), sample_b=0/0 (standard)
+        # var3: sample_a=0/0/1 (triploid -> non_diploid), sample_b=0/1 (standard het)
+        # var4: sample_a=0/2 (non_biallelic_index), sample_b=0/0 (standard hom-ref)
         vcf = build_module.parse_gs_pass_vcf(FIXTURES_DIR / "build_panel_non_standard.vcf.gz")
         metrics = {
             row[1]: row[2] for row in build_module.build_genotype_accounting_rows("cohort", vcf)
         }
 
-        self.assertEqual(metrics["phased_calls_treated_as_missing"], "1")
+        self.assertNotIn("phased_calls_treated_as_missing", metrics)
         self.assertEqual(metrics["non_diploid_calls_treated_as_missing"], "3")
         self.assertEqual(metrics["non_biallelic_index_calls_treated_as_missing"], "1")
-        self.assertEqual(metrics["total_treated_as_missing"], "5")
+        self.assertEqual(metrics["missing_calls"], "0")
+        self.assertEqual(metrics["total_treated_as_missing"], "4")
         self.assertEqual(metrics["standard_hom_ref_calls"], "2")
-        self.assertEqual(metrics["standard_het_calls"], "1")
+        self.assertEqual(metrics["standard_het_calls"], "2")
         self.assertEqual(metrics["standard_hom_alt_calls"], "0")
+        # exactly one call (var1 sample_a, 0|1) was phased
+        self.assertEqual(metrics["phased_genotype_count"], "1")
+
+    def test_phased_standard_call_is_not_double_counted_as_missing(self) -> None:
+        vcf = build_module.parse_gs_pass_vcf(FIXTURES_DIR / "build_panel_non_standard.vcf.gz")
+        metrics = {
+            row[1]: row[2] for row in build_module.build_genotype_accounting_rows("cohort", vcf)
+        }
+        total_standard = (
+            int(metrics["standard_hom_ref_calls"])
+            + int(metrics["standard_het_calls"])
+            + int(metrics["standard_hom_alt_calls"])
+        )
+        self.assertEqual(
+            total_standard + int(metrics["total_treated_as_missing"]),
+            int(metrics["total_genotype_cells"]),
+        )
 
     def test_summary_text_mentions_every_reason(self) -> None:
         vcf = build_module.parse_gs_pass_vcf(FIXTURES_DIR / "build_panel_non_standard.vcf.gz")
         summary = build_module.build_genotype_accounting_summary_text("cohort", vcf)
 
-        self.assertIn("phased, treated as missing", summary)
         self.assertIn("non-diploid, treated as missing", summary)
         self.assertIn("non-biallelic-index, treated as missing", summary)
+        self.assertIn("Phased genotype calls: 1", summary)
+        self.assertNotIn("phased, treated as missing", summary)
 
 
 class OutputContractTests(unittest.TestCase):
@@ -334,6 +385,8 @@ class CliTests(unittest.TestCase):
                     str(FIXTURES_DIR / "build_panel_standard.vcf.gz"),
                     "--cohort-id",
                     "cohort",
+                    "--sample-ploidy",
+                    "2",
                     "--matrix-output",
                     str(matrix_path),
                     "--sample-metadata-output",
@@ -370,6 +423,8 @@ class CliTests(unittest.TestCase):
                         str(missing_vcf),
                         "--cohort-id",
                         "cohort",
+                        "--sample-ploidy",
+                        "2",
                         "--matrix-output",
                         str(tmp_path / "m.tsv.gz"),
                         "--sample-metadata-output",
@@ -386,6 +441,67 @@ class CliTests(unittest.TestCase):
             self.assertEqual(exit_code, 1)
             self.assertIn(str(missing_vcf), stderr.getvalue())
 
+    def test_main_fails_fast_for_haploid_ploidy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            stderr = io.StringIO()
+
+            with contextlib.redirect_stderr(stderr):
+                exit_code = build_module.main(
+                    [
+                        "--gs-pass-vcf",
+                        str(FIXTURES_DIR / "build_panel_standard.vcf.gz"),
+                        "--cohort-id",
+                        "cohort",
+                        "--sample-ploidy",
+                        "1",
+                        "--matrix-output",
+                        str(tmp_path / "m.tsv.gz"),
+                        "--sample-metadata-output",
+                        str(tmp_path / "sm.tsv"),
+                        "--variant-metadata-output",
+                        str(tmp_path / "vm.tsv"),
+                        "--genotype-accounting-output",
+                        str(tmp_path / "a.tsv"),
+                        "--genotype-accounting-summary-output",
+                        str(tmp_path / "s.txt"),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("diploid-only", stderr.getvalue())
+            self.assertFalse((tmp_path / "m.tsv.gz").exists())
+
+    def test_main_fails_fast_for_polyploid_ploidy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            stderr = io.StringIO()
+
+            with contextlib.redirect_stderr(stderr):
+                exit_code = build_module.main(
+                    [
+                        "--gs-pass-vcf",
+                        str(FIXTURES_DIR / "build_panel_standard.vcf.gz"),
+                        "--cohort-id",
+                        "cohort",
+                        "--sample-ploidy",
+                        "4",
+                        "--matrix-output",
+                        str(tmp_path / "m.tsv.gz"),
+                        "--sample-metadata-output",
+                        str(tmp_path / "sm.tsv"),
+                        "--variant-metadata-output",
+                        str(tmp_path / "vm.tsv"),
+                        "--genotype-accounting-output",
+                        str(tmp_path / "a.tsv"),
+                        "--genotype-accounting-summary-output",
+                        str(tmp_path / "s.txt"),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("diploid-only", stderr.getvalue())
+
     def test_cli_subprocess_runs_end_to_end(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -399,6 +515,8 @@ class CliTests(unittest.TestCase):
                     str(FIXTURES_DIR / "build_panel_empty.vcf.gz"),
                     "--cohort-id",
                     "cohort",
+                    "--sample-ploidy",
+                    "2",
                     "--matrix-output",
                     str(matrix_path),
                     "--sample-metadata-output",

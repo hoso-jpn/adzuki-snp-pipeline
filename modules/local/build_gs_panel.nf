@@ -23,6 +23,7 @@ process BUILD_GS_PANEL {
     build_gs_panel.py \
         --gs-pass-vcf ${gs_pass_vcf} \
         --cohort-id '${meta.id}' \
+        --sample-ploidy ${params.sample_ploidy} \
         --matrix-output ${prefix}.genotype_matrix.tsv.gz \
         --sample-metadata-output ${prefix}.sample_metadata.tsv \
         --variant-metadata-output ${prefix}.variant_metadata.tsv \

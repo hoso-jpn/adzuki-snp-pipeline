@@ -24,14 +24,31 @@ dosage is `allele_count - 1`, so `0/0` -> -1, `0/1` (or `1/0`) -> 0, and
 a sentinel could collide with a real dosage value or require every
 downstream consumer to special-case it.
 
-Only a genotype that is a clean, unphased, diploid, biallelic-index
-call (`0/0`, `0/1`, `1/0`, `1/1`) is encoded as a dosage; every other
-shape -- missing (`.`, `./.`, or any allele position that is `.`),
-phased (`|`), non-diploid (haploid, triploid, ...), or an allele index
+Phasing (`|` vs `/`) does not affect dosage: per the VCF specification,
+the separator only records whether the call is phased, not which or how
+many alleles are present, so `0|1` carries exactly the same allele
+count as `0/1` and must resolve to the same dosage (0). Earlier
+revisions of this script treated any phased call as missing, which was
+wrong -- phase is orthogonal to additive dosage. Every genotype is
+still checked for how many phased calls it contained
+(`phased_genotype_count` in the accounting output), but that count is
+informational and never removes a cell from the dosage matrix by
+itself.
+
+A genotype is encoded as a dosage as long as it is diploid with a
+biallelic-index call (`0/0`, `0/1`, `1/0`, `1/1`, in either phasing).
+Every other shape -- missing (`.`, `./.`, or any allele position that
+is `.`), non-diploid (haploid, triploid, ...), or an allele index
 outside `{0, 1}` (defensive: the input is already biallelic-only by
 construction) -- is treated as missing in the matrix, but counted
 under its own specific reason so "never silently coerce" is checkable
 with real numbers, not just asserted in prose.
+
+This encoding is diploid-only by design (schema v1): `--sample-ploidy`
+must equal 2, checked before any other work, because a non-diploid
+ploidy would make every genotype call "non-diploid-shaped" by
+definition, silently producing an all-missing (but successfully
+completing) panel rather than a meaningful error.
 """
 
 from __future__ import annotations
@@ -99,10 +116,18 @@ class GsPassVcf:
 
 @dataclass(frozen=True)
 class GenotypeCell:
-    """One sample's classified genotype at one variant."""
+    """One sample's classified genotype at one variant.
+
+    ``is_phased`` is orthogonal to ``category``/``dosage``: a phased
+    call that is otherwise a clean diploid biallelic-index genotype is
+    ``category="standard"`` with a real dosage, exactly like its
+    unphased counterpart -- phasing is tracked for informational
+    accounting only, never as a reason to treat a cell as missing.
+    """
 
     category: str
     dosage: str
+    is_phased: bool
 
 
 def _locate_gt_index(format_field: str, path: Path) -> int:
@@ -174,24 +199,31 @@ def parse_gs_pass_vcf(path: Path) -> GsPassVcf:
 
 
 def classify_genotype(gt: str) -> GenotypeCell:
-    """Classify one raw GT string into a category and its matrix dosage token."""
+    """Classify one raw GT string into a category and its matrix dosage token.
+
+    Phasing (``|`` vs ``/``) never changes the category or dosage: it
+    only changes ``is_phased``. The VCF specification defines ``|``/``/``
+    as recording phase, not allele identity or count, so a phased call
+    is resolved exactly like its unphased counterpart.
+    """
     is_phased = "|" in gt
     alleles = gt.split("|") if is_phased else gt.split("/")
 
     if any(allele in (".", "") for allele in alleles):
-        return GenotypeCell(category="missing", dosage=MISSING_CELL_TOKEN)
-
-    if is_phased:
-        return GenotypeCell(category="phased", dosage=MISSING_CELL_TOKEN)
+        return GenotypeCell(category="missing", dosage=MISSING_CELL_TOKEN, is_phased=is_phased)
 
     if len(alleles) != 2:
-        return GenotypeCell(category="non_diploid", dosage=MISSING_CELL_TOKEN)
+        return GenotypeCell(category="non_diploid", dosage=MISSING_CELL_TOKEN, is_phased=is_phased)
 
     if any(allele not in ("0", "1") for allele in alleles):
-        return GenotypeCell(category="non_biallelic_index", dosage=MISSING_CELL_TOKEN)
+        return GenotypeCell(
+            category="non_biallelic_index", dosage=MISSING_CELL_TOKEN, is_phased=is_phased
+        )
 
     alt_count = alleles.count("1")
-    return GenotypeCell(category="standard", dosage=DOSAGE_BY_ALT_COUNT[alt_count])
+    return GenotypeCell(
+        category="standard", dosage=DOSAGE_BY_ALT_COUNT[alt_count], is_phased=is_phased
+    )
 
 
 def _format_rate(numerator: int, denominator: int) -> str:
@@ -273,13 +305,19 @@ def build_variant_metadata_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[str
 
 
 def build_genotype_accounting_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[str]]:
-    """Build the cohort-wide genotype-encoding accounting rows."""
+    """Build the cohort-wide genotype-encoding accounting rows.
+
+    ``phased_genotype_count`` is reported separately from every other
+    metric here: it counts calls that were phased, regardless of
+    whether they were standard, missing, or otherwise non-standard, and
+    is never added into ``total_treated_as_missing`` -- a phased call
+    that resolves to a real dosage is not missing.
+    """
     counts = {
         "standard_hom_ref_calls": 0,
         "standard_het_calls": 0,
         "standard_hom_alt_calls": 0,
         "missing_calls": 0,
-        "phased_calls_treated_as_missing": 0,
         "non_diploid_calls_treated_as_missing": 0,
         "non_biallelic_index_calls_treated_as_missing": 0,
     }
@@ -290,16 +328,18 @@ def build_genotype_accounting_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[
     }
     non_standard_metric_by_category = {
         "missing": "missing_calls",
-        "phased": "phased_calls_treated_as_missing",
         "non_diploid": "non_diploid_calls_treated_as_missing",
         "non_biallelic_index": "non_biallelic_index_calls_treated_as_missing",
     }
 
     total_genotype_cells = 0
+    phased_genotype_count = 0
     for record in vcf.records:
         for gt in record.sample_genotypes:
             total_genotype_cells += 1
             cell = classify_genotype(gt)
+            if cell.is_phased:
+                phased_genotype_count += 1
             if cell.category == "standard":
                 counts[dosage_metric_by_token[cell.dosage]] += 1
             else:
@@ -307,7 +347,6 @@ def build_genotype_accounting_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[
 
     total_treated_as_missing = (
         counts["missing_calls"]
-        + counts["phased_calls_treated_as_missing"]
         + counts["non_diploid_calls_treated_as_missing"]
         + counts["non_biallelic_index_calls_treated_as_missing"]
     )
@@ -316,6 +355,7 @@ def build_genotype_accounting_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[
     for metric, value in counts.items():
         rows.append([cohort_id, metric, str(value)])
     rows.append([cohort_id, "total_treated_as_missing", str(total_treated_as_missing)])
+    rows.append([cohort_id, "phased_genotype_count", str(phased_genotype_count)])
 
     return rows
 
@@ -334,7 +374,6 @@ def build_genotype_accounting_summary_text(cohort_id: str, vcf: GsPassVcf) -> st
         f"  standard het (0): {accounting['standard_het_calls']}",
         f"  standard hom-alt (+1): {accounting['standard_hom_alt_calls']}",
         f"  missing (nan): {accounting['missing_calls']}",
-        f"  phased, treated as missing (nan): {accounting['phased_calls_treated_as_missing']}",
         (
             "  non-diploid, treated as missing (nan): "
             f"{accounting['non_diploid_calls_treated_as_missing']}"
@@ -344,6 +383,14 @@ def build_genotype_accounting_summary_text(cohort_id: str, vcf: GsPassVcf) -> st
             f"{accounting['non_biallelic_index_calls_treated_as_missing']}"
         ),
         f"Total cells treated as missing: {accounting['total_treated_as_missing']}",
+        (
+            f"Phased genotype calls: {accounting['phased_genotype_count']} "
+            "(informational only -- phasing does not affect dosage or "
+            "missingness; a phased call that is otherwise a clean diploid "
+            "biallelic-index genotype is encoded exactly like its unphased "
+            "counterpart, per the VCF specification's definition of "
+            "'|' as recording phase, not allele identity)."
+        ),
         (
             "Every non-standard genotype shape is counted under its own "
             "reason rather than a single undifferentiated 'missing' "
@@ -402,6 +449,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--cohort-id", required=True, help="Cohort identifier.")
     parser.add_argument(
+        "--sample-ploidy",
+        required=True,
+        type=int,
+        help="The pipeline's configured sample ploidy (params.sample_ploidy); "
+        "this schema is diploid-only, so any value other than 2 is a hard error.",
+    )
+    parser.add_argument(
         "--matrix-output",
         required=True,
         type=Path,
@@ -438,6 +492,18 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI end to end and return a process exit code."""
     args = parse_args(argv)
+
+    if args.sample_ploidy != 2:
+        print(
+            "build_gs_panel.py: error: this GS panel schema (v1) is diploid-only, "
+            f"but --sample-ploidy was {args.sample_ploidy}. Every genotype call "
+            "would be classified as non-diploid-shaped and encoded as missing, "
+            "which would silently produce an all-missing panel rather than a "
+            "meaningful error. A generalized encoding is tracked as future work; "
+            "until then, this schema cannot be used for non-diploid cohorts.",
+            file=sys.stderr,
+        )
+        return 1
 
     try:
         vcf = parse_gs_pass_vcf(args.gs_pass_vcf)
