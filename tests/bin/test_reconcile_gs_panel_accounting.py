@@ -35,20 +35,50 @@ def _load_module(name: str, path: Path) -> types.ModuleType:
 reconcile_module = _load_module("reconcile_gs_panel_accounting", SCRIPT_PATH)
 
 
-def _vcf(record_count: int, sample_count: int, all_rows_ok: bool = True):
+def _vcf(
+    record_count: int,
+    sample_count: int,
+    *,
+    sample_ids: tuple[str, ...] | None = None,
+    variant_keys: tuple[str, ...] | None = None,
+    all_rows_ok: bool = True,
+):
     return reconcile_module.VcfSummary(
         record_count=record_count,
         sample_count=sample_count,
+        sample_ids=sample_ids if sample_ids is not None else tuple(
+            f"sample_{i}" for i in range(sample_count)
+        ),
+        variant_keys=variant_keys if variant_keys is not None else tuple(
+            f"chrTest:{100 * (i + 1)}:A:G" for i in range(record_count)
+        ),
         all_rows_have_expected_sample_count=all_rows_ok,
     )
 
 
-def _matrix(variant_count: int, sample_count: int):
-    return reconcile_module.MatrixSummary(variant_count=variant_count, sample_count=sample_count)
+def _matrix(
+    variant_count: int,
+    sample_count: int,
+    *,
+    sample_ids: tuple[str, ...] | None = None,
+    variant_keys: tuple[str, ...] | None = None,
+    all_rows_ok: bool = True,
+):
+    return reconcile_module.MatrixSummary(
+        variant_count=variant_count,
+        sample_count=sample_count,
+        sample_ids=sample_ids if sample_ids is not None else tuple(
+            f"sample_{i}" for i in range(sample_count)
+        ),
+        variant_keys=variant_keys if variant_keys is not None else tuple(
+            f"chrTest:{100 * (i + 1)}:A:G" for i in range(variant_count)
+        ),
+        all_rows_have_expected_width=all_rows_ok,
+    )
 
 
 class SummarizeVcfTests(unittest.TestCase):
-    """Tests for summarize_vcf: record/sample counts and row-shape checks."""
+    """Tests for summarize_vcf: record/sample counts, identity, and row-shape checks."""
 
     def test_counts_records_and_samples(self) -> None:
         summary = reconcile_module.summarize_vcf(FIXTURES_DIR / "reconcile_gs_clean_raw_all.vcf.gz")
@@ -56,10 +86,22 @@ class SummarizeVcfTests(unittest.TestCase):
         self.assertEqual(summary.sample_count, 2)
         self.assertTrue(summary.all_rows_have_expected_sample_count)
 
+    def test_reads_sample_ids_in_header_order(self) -> None:
+        summary = reconcile_module.summarize_vcf(FIXTURES_DIR / "reconcile_gs_clean_raw_all.vcf.gz")
+        self.assertEqual(summary.sample_ids, ("sample_a", "sample_b"))
+
+    def test_reads_variant_keys_in_file_order(self) -> None:
+        summary = reconcile_module.summarize_vcf(FIXTURES_DIR / "reconcile_gs_clean_raw_all.vcf.gz")
+        self.assertEqual(
+            summary.variant_keys,
+            ("chrTest:100:A:G", "chrTest:200:C:T", "chrTest:300:A:ATT"),
+        )
+
     def test_empty_vcf_has_zero_records_but_keeps_sample_count(self) -> None:
         summary = reconcile_module.summarize_vcf(FIXTURES_DIR / "reconcile_gs_empty_pass.vcf.gz")
         self.assertEqual(summary.record_count, 0)
         self.assertEqual(summary.sample_count, 2)
+        self.assertEqual(summary.variant_keys, ())
         self.assertTrue(summary.all_rows_have_expected_sample_count)
 
     def test_row_with_wrong_sample_field_count_is_flagged_not_rejected(self) -> None:
@@ -68,6 +110,9 @@ class SummarizeVcfTests(unittest.TestCase):
         )
         self.assertEqual(summary.record_count, 2)
         self.assertFalse(summary.all_rows_have_expected_sample_count)
+        # the variant key is still captured even though the sample-field
+        # count for this row is wrong -- CHROM/POS/REF/ALT are unaffected.
+        self.assertEqual(summary.variant_keys, ("chrTest:100:A:G", "chrTest:200:C:T"))
 
     def test_missing_chrom_header_raises(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -115,17 +160,34 @@ class SummarizeVcfTests(unittest.TestCase):
 
 
 class SummarizeMatrixTests(unittest.TestCase):
-    """Tests for summarize_matrix: header validation and row counting."""
+    """Tests for summarize_matrix: header validation, identity, and row-width checks."""
 
     def test_counts_variant_and_sample_columns(self) -> None:
         summary = reconcile_module.summarize_matrix(FIXTURES_DIR / "reconcile_gs_clean_matrix.tsv.gz")
         self.assertEqual(summary.variant_count, 1)
         self.assertEqual(summary.sample_count, 2)
+        self.assertTrue(summary.all_rows_have_expected_width)
+
+    def test_reads_sample_ids_and_variant_keys(self) -> None:
+        summary = reconcile_module.summarize_matrix(FIXTURES_DIR / "reconcile_gs_clean_matrix.tsv.gz")
+        self.assertEqual(summary.sample_ids, ("sample_a", "sample_b"))
+        self.assertEqual(summary.variant_keys, ("chrTest:100:A:G",))
 
     def test_header_only_matrix_has_zero_variants_but_keeps_samples(self) -> None:
         summary = reconcile_module.summarize_matrix(FIXTURES_DIR / "reconcile_gs_empty_matrix.tsv.gz")
         self.assertEqual(summary.variant_count, 0)
         self.assertEqual(summary.sample_count, 2)
+        self.assertEqual(summary.variant_keys, ())
+
+    def test_row_with_dropped_column_is_flagged_not_rejected(self) -> None:
+        summary = reconcile_module.summarize_matrix(
+            FIXTURES_DIR / "reconcile_gs_dropped_column_matrix.tsv.gz"
+        )
+        # the row is still counted and its variant_key still captured --
+        # only the width flag records that something is wrong.
+        self.assertEqual(summary.variant_count, 1)
+        self.assertEqual(summary.variant_keys, ("chrTest:100:A:G",))
+        self.assertFalse(summary.all_rows_have_expected_width)
 
     def test_empty_file_raises(self) -> None:
         with self.assertRaises(reconcile_module.MalformedMatrixError) as raised:
@@ -159,20 +221,61 @@ class ReadAccountingMetricTests(unittest.TestCase):
         self.assertIn("no_such_metric", str(raised.exception))
 
 
-class CountMetadataRowsTests(unittest.TestCase):
-    """Tests for count_metadata_rows."""
+class ReadMetadataColumnTests(unittest.TestCase):
+    """Tests for read_metadata_column: named-column extraction, in row order."""
 
-    def test_counts_data_rows_excluding_header(self) -> None:
-        count = reconcile_module.count_metadata_rows(
-            FIXTURES_DIR / "reconcile_gs_clean_sample_metadata.tsv"
+    def test_reads_sample_id_column_in_order(self) -> None:
+        values = reconcile_module.read_metadata_column(
+            FIXTURES_DIR / "reconcile_gs_clean_sample_metadata.tsv", "sample_id"
         )
-        self.assertEqual(count, 2)
+        self.assertEqual(values, ("sample_a", "sample_b"))
+
+    def test_reads_variant_key_column_in_order(self) -> None:
+        values = reconcile_module.read_metadata_column(
+            FIXTURES_DIR / "reconcile_gs_clean_variant_metadata.tsv", "variant_key"
+        )
+        self.assertEqual(values, ("chrTest:100:A:G",))
 
     def test_zero_data_rows_is_valid(self) -> None:
-        count = reconcile_module.count_metadata_rows(
-            FIXTURES_DIR / "reconcile_gs_empty_variant_metadata.tsv"
+        values = reconcile_module.read_metadata_column(
+            FIXTURES_DIR / "reconcile_gs_empty_variant_metadata.tsv", "variant_key"
         )
-        self.assertEqual(count, 0)
+        self.assertEqual(values, ())
+
+    def test_missing_column_raises(self) -> None:
+        with self.assertRaises(reconcile_module.MalformedAccountingError) as raised:
+            reconcile_module.read_metadata_column(
+                FIXTURES_DIR / "reconcile_gs_clean_sample_metadata.tsv", "no_such_column"
+            )
+        self.assertIn("no_such_column", str(raised.exception))
+
+    def test_row_too_short_for_column_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "short_row.tsv"
+            path.write_text("a\tb\tc\nx\ty\n", encoding="utf-8")
+
+            with self.assertRaises(reconcile_module.MalformedAccountingError) as raised:
+                reconcile_module.read_metadata_column(path, "c")
+            self.assertIn(str(path), str(raised.exception))
+
+
+class DescribeSequenceMismatchTests(unittest.TestCase):
+    """Tests for _describe_sequence_mismatch: bounded, useful diagnostics."""
+
+    def test_reports_length_difference(self) -> None:
+        message = reconcile_module._describe_sequence_mismatch(
+            [("a", ("x", "y")), ("b", ("x",))]
+        )
+        self.assertIn("a=2", message)
+        self.assertIn("b=1", message)
+
+    def test_reports_first_differing_index(self) -> None:
+        message = reconcile_module._describe_sequence_mismatch(
+            [("a", ("x", "y", "z")), ("b", ("x", "Y", "z"))]
+        )
+        self.assertIn("index 1", message)
+        self.assertIn("a[1]='y'", message)
+        self.assertIn("b[1]='Y'", message)
 
 
 class ReconcileTests(unittest.TestCase):
@@ -183,10 +286,10 @@ class ReconcileTests(unittest.TestCase):
             raw_all=_vcf(3, 2),
             normalized=_vcf(3, 2),
             classified_biallelic_snp_records=2,
-            gs_pass=_vcf(1, 2),
-            matrix=_matrix(1, 2),
-            variant_metadata_records=1,
-            sample_metadata_records=2,
+            gs_pass=_vcf(1, 2, variant_keys=("chrTest:100:A:G",)),
+            matrix=_matrix(1, 2, variant_keys=("chrTest:100:A:G",)),
+            variant_metadata_keys=("chrTest:100:A:G",),
+            sample_metadata_ids=("sample_0", "sample_1"),
         )
 
         self.assertEqual(result.raw_all_records, 3)
@@ -196,15 +299,33 @@ class ReconcileTests(unittest.TestCase):
         self.assertEqual(result.matrix_sample_count, 2)
         self.assertEqual(result.panel_status, "populated")
 
+    def test_multi_variant_matching_order_is_not_flagged(self) -> None:
+        """A larger, genuinely-agreeing scenario: order preserved everywhere."""
+        keys = ("chrTest:100:A:G", "chrTest:200:C:T", "chrTest:300:A:G")
+        samples = ("sample_a", "sample_b", "sample_c")
+
+        result = reconcile_module.reconcile(
+            raw_all=_vcf(3, 3, sample_ids=samples),
+            normalized=_vcf(3, 3, sample_ids=samples),
+            classified_biallelic_snp_records=3,
+            gs_pass=_vcf(3, 3, sample_ids=samples, variant_keys=keys),
+            matrix=_matrix(3, 3, sample_ids=samples, variant_keys=keys),
+            variant_metadata_keys=keys,
+            sample_metadata_ids=samples,
+        )
+
+        self.assertEqual(result.matrix_variant_records, 3)
+        self.assertEqual(result.panel_status, "populated")
+
     def test_empty_panel_is_not_flagged_as_an_error(self) -> None:
         result = reconcile_module.reconcile(
             raw_all=_vcf(2, 2),
             normalized=_vcf(2, 2),
             classified_biallelic_snp_records=2,
-            gs_pass=_vcf(0, 2),
-            matrix=_matrix(0, 2),
-            variant_metadata_records=0,
-            sample_metadata_records=2,
+            gs_pass=_vcf(0, 2, variant_keys=()),
+            matrix=_matrix(0, 2, variant_keys=()),
+            variant_metadata_keys=(),
+            sample_metadata_ids=("sample_0", "sample_1"),
         )
 
         self.assertEqual(result.panel_status, "empty")
@@ -218,64 +339,95 @@ class ReconcileTests(unittest.TestCase):
                 classified_biallelic_snp_records=1,
                 gs_pass=_vcf(2, 2),
                 matrix=_matrix(2, 2),
-                variant_metadata_records=2,
-                sample_metadata_records=2,
+                variant_metadata_keys=_vcf(2, 2).variant_keys,
+                sample_metadata_ids=("sample_0", "sample_1"),
             )
         self.assertIn("negative", str(raised.exception))
 
     def test_matrix_variant_count_mismatch_raises(self) -> None:
-        """The core P1-3 regression: the matrix disagreeing with its own
-        source VCF must be fatal even when nothing else looks wrong."""
+        """The core matrix-corruption regression: a matrix that silently
+        lost its one data row must be caught even though nothing else
+        looks wrong."""
         with self.assertRaises(reconcile_module.InconsistentGsPanelError) as raised:
             reconcile_module.reconcile(
                 raw_all=_vcf(3, 2),
                 normalized=_vcf(3, 2),
                 classified_biallelic_snp_records=2,
-                gs_pass=_vcf(1, 2),
-                matrix=_matrix(0, 2),
-                variant_metadata_records=1,
-                sample_metadata_records=2,
+                gs_pass=_vcf(1, 2, variant_keys=("chrTest:100:A:G",)),
+                matrix=_matrix(0, 2, variant_keys=()),
+                variant_metadata_keys=("chrTest:100:A:G",),
+                sample_metadata_ids=("sample_0", "sample_1"),
             )
-        self.assertIn("variant counts disagree", str(raised.exception))
+        self.assertIn("variant identity and/or order disagree", str(raised.exception))
 
-    def test_variant_metadata_mismatch_raises(self) -> None:
+    def test_matrix_row_width_mismatch_raises(self) -> None:
         with self.assertRaises(reconcile_module.InconsistentGsPanelError) as raised:
             reconcile_module.reconcile(
                 raw_all=_vcf(3, 2),
                 normalized=_vcf(3, 2),
                 classified_biallelic_snp_records=2,
-                gs_pass=_vcf(1, 2),
-                matrix=_matrix(1, 2),
-                variant_metadata_records=2,
-                sample_metadata_records=2,
+                gs_pass=_vcf(1, 2, variant_keys=("chrTest:100:A:G",)),
+                matrix=_matrix(1, 2, variant_keys=("chrTest:100:A:G",), all_rows_ok=False),
+                variant_metadata_keys=("chrTest:100:A:G",),
+                sample_metadata_ids=("sample_0", "sample_1"),
             )
-        self.assertIn("variant counts disagree", str(raised.exception))
+        self.assertIn("column count", str(raised.exception))
 
-    def test_matrix_sample_count_mismatch_raises(self) -> None:
+    def test_variant_key_value_mismatch_raises_even_with_equal_counts(self) -> None:
+        """Same variant *count* everywhere, but the matrix's own
+        variant_key names a different variant than the PASS VCF."""
         with self.assertRaises(reconcile_module.InconsistentGsPanelError) as raised:
             reconcile_module.reconcile(
                 raw_all=_vcf(3, 2),
                 normalized=_vcf(3, 2),
                 classified_biallelic_snp_records=2,
-                gs_pass=_vcf(1, 2),
-                matrix=_matrix(1, 1),
-                variant_metadata_records=1,
-                sample_metadata_records=2,
+                gs_pass=_vcf(1, 2, variant_keys=("chrTest:100:A:G",)),
+                matrix=_matrix(1, 2, variant_keys=("chrTest:999:A:G",)),
+                variant_metadata_keys=("chrTest:100:A:G",),
+                sample_metadata_ids=("sample_0", "sample_1"),
             )
-        self.assertIn("sample counts disagree", str(raised.exception))
+        self.assertIn("variant identity and/or order disagree", str(raised.exception))
+
+    def test_variant_order_mismatch_raises_even_with_equal_sets(self) -> None:
+        """Same two variant keys everywhere, but variant_metadata lists
+        them in the opposite order from the matrix and the PASS VCF."""
+        with self.assertRaises(reconcile_module.InconsistentGsPanelError) as raised:
+            reconcile_module.reconcile(
+                raw_all=_vcf(2, 2),
+                normalized=_vcf(2, 2),
+                classified_biallelic_snp_records=2,
+                gs_pass=_vcf(2, 2, variant_keys=("chrTest:100:A:G", "chrTest:200:C:T")),
+                matrix=_matrix(2, 2, variant_keys=("chrTest:100:A:G", "chrTest:200:C:T")),
+                variant_metadata_keys=("chrTest:200:C:T", "chrTest:100:A:G"),
+                sample_metadata_ids=("sample_0", "sample_1"),
+            )
+        self.assertIn("same length (2), first disagreement at index 0", str(raised.exception))
+
+    def test_sample_order_mismatch_raises_even_with_equal_sets(self) -> None:
+        with self.assertRaises(reconcile_module.InconsistentGsPanelError) as raised:
+            reconcile_module.reconcile(
+                raw_all=_vcf(1, 2),
+                normalized=_vcf(1, 2),
+                classified_biallelic_snp_records=1,
+                gs_pass=_vcf(1, 2, sample_ids=("sample_a", "sample_b")),
+                matrix=_matrix(1, 2, sample_ids=("sample_b", "sample_a")),
+                variant_metadata_keys=_vcf(1, 2).variant_keys,
+                sample_metadata_ids=("sample_a", "sample_b"),
+            )
+        self.assertIn("sample identity and/or order disagree", str(raised.exception))
 
     def test_sample_metadata_mismatch_raises(self) -> None:
         with self.assertRaises(reconcile_module.InconsistentGsPanelError) as raised:
             reconcile_module.reconcile(
-                raw_all=_vcf(3, 2),
-                normalized=_vcf(3, 2),
-                classified_biallelic_snp_records=2,
+                raw_all=_vcf(1, 2),
+                normalized=_vcf(1, 2),
+                classified_biallelic_snp_records=1,
                 gs_pass=_vcf(1, 2),
                 matrix=_matrix(1, 2),
-                variant_metadata_records=1,
-                sample_metadata_records=1,
+                variant_metadata_keys=_vcf(1, 2).variant_keys,
+                sample_metadata_ids=("sample_0",),
             )
-        self.assertIn("sample counts disagree", str(raised.exception))
+        self.assertIn("sample identity and/or order disagree", str(raised.exception))
 
     def test_raw_all_row_shape_mismatch_raises(self) -> None:
         with self.assertRaises(reconcile_module.InconsistentGsPanelError) as raised:
@@ -285,8 +437,8 @@ class ReconcileTests(unittest.TestCase):
                 classified_biallelic_snp_records=2,
                 gs_pass=_vcf(1, 2),
                 matrix=_matrix(1, 2),
-                variant_metadata_records=1,
-                sample_metadata_records=2,
+                variant_metadata_keys=_vcf(1, 2).variant_keys,
+                sample_metadata_ids=("sample_0", "sample_1"),
             )
         self.assertIn("raw/all", str(raised.exception))
 
@@ -298,8 +450,8 @@ class ReconcileTests(unittest.TestCase):
                 classified_biallelic_snp_records=2,
                 gs_pass=_vcf(1, 2),
                 matrix=_matrix(1, 2),
-                variant_metadata_records=1,
-                sample_metadata_records=2,
+                variant_metadata_keys=_vcf(1, 2).variant_keys,
+                sample_metadata_ids=("sample_0", "sample_1"),
             )
         self.assertIn("normalized", str(raised.exception))
 
@@ -311,8 +463,8 @@ class ReconcileTests(unittest.TestCase):
                 classified_biallelic_snp_records=2,
                 gs_pass=_vcf(1, 2, all_rows_ok=False),
                 matrix=_matrix(1, 2),
-                variant_metadata_records=1,
-                sample_metadata_records=2,
+                variant_metadata_keys=_vcf(1, 2).variant_keys,
+                sample_metadata_ids=("sample_0", "sample_1"),
             )
         self.assertIn("PASS VCF", str(raised.exception))
 
@@ -325,10 +477,10 @@ class OutputContractTests(unittest.TestCase):
             raw_all=_vcf(3, 2),
             normalized=_vcf(3, 2),
             classified_biallelic_snp_records=2,
-            gs_pass=_vcf(1, 2),
-            matrix=_matrix(1, 2),
-            variant_metadata_records=1,
-            sample_metadata_records=2,
+            gs_pass=_vcf(1, 2, variant_keys=("chrTest:100:A:G",)),
+            matrix=_matrix(1, 2, variant_keys=("chrTest:100:A:G",)),
+            variant_metadata_keys=("chrTest:100:A:G",),
+            sample_metadata_ids=("sample_0", "sample_1"),
         )
 
     def test_output_header(self) -> None:
@@ -351,10 +503,10 @@ class OutputContractTests(unittest.TestCase):
             raw_all=_vcf(2, 2),
             normalized=_vcf(2, 2),
             classified_biallelic_snp_records=2,
-            gs_pass=_vcf(0, 2),
-            matrix=_matrix(0, 2),
-            variant_metadata_records=0,
-            sample_metadata_records=2,
+            gs_pass=_vcf(0, 2, variant_keys=()),
+            matrix=_matrix(0, 2, variant_keys=()),
+            variant_metadata_keys=(),
+            sample_metadata_ids=("sample_0", "sample_1"),
         )
         summary = reconcile_module.build_summary_text("cohort", result)
         self.assertIn("normal outcome, not an error", summary)
@@ -438,18 +590,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(values["panel_status"], "empty")
 
     def test_main_fails_when_matrix_disagrees_with_metadata_that_still_looks_correct(self) -> None:
-        """The core P1-3 regression: a matrix that silently lost its one
-        data row must be caught even though variant/sample metadata still
-        report the original, correct-looking counts -- this is exactly
-        the corruption an earlier revision of this tool could not see,
-        because it never opened the matrix file at all."""
+        """The core matrix-corruption regression: a matrix that silently
+        lost its one data row must be caught even though variant/sample
+        metadata still report the original, correct-looking counts."""
         exit_code, output_path, _summary_path, stderr = self._run_main(
             "clean", matrix_override=FIXTURES_DIR / "reconcile_gs_matrix_corrupt_matrix.tsv.gz"
         )
 
         self.assertEqual(exit_code, 1)
         self.assertFalse(output_path.exists())
-        self.assertIn("variant counts disagree", stderr)
+        self.assertIn("variant identity and/or order disagree", stderr)
 
     def test_main_fails_when_matrix_drops_a_sample_column(self) -> None:
         exit_code, output_path, _summary_path, stderr = self._run_main(
@@ -458,7 +608,50 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         self.assertFalse(output_path.exists())
-        self.assertIn("sample counts disagree", stderr)
+        self.assertIn("sample identity and/or order disagree", stderr)
+
+    def test_main_fails_when_matrix_row_has_a_dropped_dosage_column(self) -> None:
+        """Same row/sample counts as the clean fixture; only the row's
+        own column width is wrong."""
+        exit_code, output_path, _summary_path, stderr = self._run_main(
+            "clean", matrix_override=FIXTURES_DIR / "reconcile_gs_dropped_column_matrix.tsv.gz"
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertFalse(output_path.exists())
+        self.assertIn("column count", stderr)
+
+    def test_main_fails_when_matrix_sample_order_is_swapped(self) -> None:
+        """Same sample set and count as the clean fixture; only the
+        matrix header's column order is wrong."""
+        exit_code, output_path, _summary_path, stderr = self._run_main(
+            "clean", matrix_override=FIXTURES_DIR / "reconcile_gs_sample_reordered_matrix.tsv.gz"
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertFalse(output_path.exists())
+        self.assertIn("sample identity and/or order disagree", stderr)
+
+    def test_main_fails_when_matrix_variant_key_is_swapped(self) -> None:
+        """Same row/sample counts as the clean fixture; the matrix's
+        variant_key names a different variant than the PASS VCF."""
+        exit_code, output_path, _summary_path, stderr = self._run_main(
+            "clean", matrix_override=FIXTURES_DIR / "reconcile_gs_variant_key_swapped_matrix.tsv.gz"
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertFalse(output_path.exists())
+        self.assertIn("variant identity and/or order disagree", stderr)
+
+    def test_main_fails_when_variant_metadata_is_reordered(self) -> None:
+        """Same two variant keys everywhere, but variant_metadata lists
+        them in the opposite order from the matrix and the PASS VCF --
+        counts alone cannot catch this."""
+        exit_code, output_path, _summary_path, stderr = self._run_main("reordered")
+
+        self.assertEqual(exit_code, 1)
+        self.assertFalse(output_path.exists())
+        self.assertIn("variant identity and/or order disagree", stderr)
 
     def test_main_fails_when_variant_metadata_disagrees(self) -> None:
         exit_code, output_path, _summary_path, stderr = self._run_main(
@@ -468,7 +661,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         self.assertFalse(output_path.exists())
-        self.assertIn("variant counts disagree", stderr)
+        self.assertIn("variant identity and/or order disagree", stderr)
 
     def test_main_fails_clearly_for_a_missing_input_file(self) -> None:
         tmp_path = Path(tempfile.mkdtemp())

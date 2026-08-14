@@ -18,6 +18,18 @@ corrupted only the matrix (a dropped row, a misaligned column, a
 truncated write) would go completely undetected as long as the metadata
 files still looked correct.
 
+A later revision closed that gap for *counts*, but a subtler bug
+remained possible: the matrix, the PASS VCF, and the metadata files
+could all have the *same number* of rows while disagreeing on *which*
+variant or sample each row actually describes -- a shuffled sample
+column, a variant_key swapped for a different one, or the matrix and
+variant metadata simply listing their rows in a different order.
+Counting alone cannot catch any of this, so this tool now compares the
+actual, ordered sequence of sample IDs and variant keys across every
+artifact, not just their lengths, and also checks that every matrix
+data row has exactly `1 + sample_count` columns (a column-count check
+`summarize_matrix()` did not previously perform at all).
+
 The full reconciliation is:
 
     raw_all_records
@@ -26,18 +38,19 @@ The full reconciliation is:
          and duplicate-key exclusion; from classify_normalized_variants.py)
       -> gs_pass_records (post GS-specific hard filtering)
       -> matrix_variant_records / variant_metadata_records (both read
-         directly, and must agree with gs_pass_records and each other)
+         directly, and must agree with gs_pass_records and each other
+         in count, identity, AND order)
 
 Sample counts are reconciled the same way: the GS-eligible PASS VCF's
-own sample count must agree with the matrix's header and the sample
-metadata file's row count.
+own sample IDs, in header order, must exactly match the matrix header
+and the sample metadata file's own `sample_id` column, in order.
 
 Every one of these cross-file checks is a **hard error**
 (`InconsistentGsPanelError`, exit 1, no output written), not a warning:
 there is no legitimate scientific scenario where the matrix and its own
-source VCF disagree on record or sample counts -- unlike, say, a
-negative `records_not_selected` in the primary lineage (a real
-consequence of GATK's multiallelic handling), any mismatch here can
+source VCF disagree on record or sample counts, identity, or order --
+unlike, say, a negative `records_not_selected` in the primary lineage (a
+real consequence of GATK's multiallelic handling), any mismatch here can
 only mean a bug in this pipeline's own wiring or scripts, and should
 stop the run rather than be reported alongside a set of numbers that
 cannot all be trusted at once.
@@ -53,6 +66,8 @@ from pathlib import Path
 
 OUTPUT_HEADER: tuple[str, ...] = ("cohort_id", "metric", "value")
 CLASSIFIED_RECORDS_METRIC = "output_records"
+SAMPLE_ID_COLUMN = "sample_id"
+VARIANT_KEY_COLUMN = "variant_key"
 
 
 class MalformedVcfError(Exception):
@@ -77,19 +92,24 @@ class InconsistentGsPanelError(Exception):
 
 @dataclass(frozen=True)
 class VcfSummary:
-    """Record and sample counts read directly from one VCF."""
+    """Record/sample counts, identity, and row-shape read directly from one VCF."""
 
     record_count: int
     sample_count: int
+    sample_ids: tuple[str, ...]
+    variant_keys: tuple[str, ...]
     all_rows_have_expected_sample_count: bool
 
 
 @dataclass(frozen=True)
 class MatrixSummary:
-    """Variant and sample counts read directly from the genotype matrix."""
+    """Variant/sample counts, identity, and row-shape read directly from the matrix."""
 
     variant_count: int
     sample_count: int
+    sample_ids: tuple[str, ...]
+    variant_keys: tuple[str, ...]
+    all_rows_have_expected_width: bool
 
 
 @dataclass(frozen=True)
@@ -110,16 +130,21 @@ class ReconciliationResult:
 
 
 def summarize_vcf(path: Path) -> VcfSummary:
-    """Count records and samples in a bgzipped VCF, checking row shape.
+    """Read sample IDs and per-row variant keys from a bgzipped VCF.
 
     ``all_rows_have_expected_sample_count`` defends against a
     truncated or otherwise malformed data row that has the right
     number of fixed columns but the wrong number of sample columns --
     a shape error `MalformedVcfError`'s plain field-count check alone
-    would not catch, since it only requires *at least* 10 fields.
+    would not catch, since it only requires *at least* 10 fields. A
+    row's variant key is still recorded even when its sample-field
+    count is wrong: the CHROM/POS/REF/ALT columns are unaffected by a
+    malformed sample-field count, and withholding the key would only
+    make the resulting hard error harder to diagnose.
     """
+    sample_ids: tuple[str, ...] | None = None
     sample_count: int | None = None
-    record_count = 0
+    variant_keys: list[str] = []
     all_rows_consistent = True
 
     with gzip.open(path, "rt", encoding="utf-8") as handle:
@@ -136,7 +161,8 @@ def summarize_vcf(path: Path) -> VcfSummary:
                         f"{path}: #CHROM header has {len(fields)} fields, expected "
                         "at least 10 (9 fixed columns plus one or more samples)"
                     )
-                sample_count = len(fields) - 9
+                sample_ids = tuple(fields[9:])
+                sample_count = len(sample_ids)
                 continue
 
             if line.startswith("#"):
@@ -152,22 +178,32 @@ def summarize_vcf(path: Path) -> VcfSummary:
                     "expected at least 10"
                 )
 
-            record_count += 1
+            variant_keys.append(f"{fields[0]}:{fields[1]}:{fields[3]}:{fields[4]}")
             if len(fields) - 9 != sample_count:
                 all_rows_consistent = False
 
-    if sample_count is None:
+    if sample_ids is None or sample_count is None:
         raise MalformedVcfError(f"{path}: no #CHROM header line found")
 
     return VcfSummary(
-        record_count=record_count,
+        record_count=len(variant_keys),
         sample_count=sample_count,
+        sample_ids=sample_ids,
+        variant_keys=tuple(variant_keys),
         all_rows_have_expected_sample_count=all_rows_consistent,
     )
 
 
 def summarize_matrix(path: Path) -> MatrixSummary:
-    """Read the genotype matrix's own header and row count directly."""
+    """Read the genotype matrix's own header, sample IDs, and variant keys.
+
+    ``all_rows_have_expected_width`` defends against a data row with
+    too few or too many dosage columns -- for example one dropped
+    column from a truncated write -- which the previous revision of
+    this function could not detect at all, since it only counted
+    non-empty lines without ever checking a single row's field count
+    against the header's own declared sample count.
+    """
     with gzip.open(path, "rt", encoding="utf-8") as handle:
         header_line = handle.readline().rstrip("\n")
 
@@ -181,10 +217,30 @@ def summarize_matrix(path: Path) -> MatrixSummary:
                 f"got {header_fields[0]!r}"
             )
 
-        sample_count = len(header_fields) - 1
-        variant_count = sum(1 for line in handle if line.rstrip("\n"))
+        sample_ids = tuple(header_fields[1:])
+        sample_count = len(sample_ids)
 
-    return MatrixSummary(variant_count=variant_count, sample_count=sample_count)
+        variant_keys: list[str] = []
+        all_rows_expected_width = True
+
+        for line in handle:
+            line = line.rstrip("\n")
+
+            if not line:
+                continue
+
+            fields = line.split("\t")
+            variant_keys.append(fields[0])
+            if len(fields) != 1 + sample_count:
+                all_rows_expected_width = False
+
+    return MatrixSummary(
+        variant_count=len(variant_keys),
+        sample_count=sample_count,
+        sample_ids=sample_ids,
+        variant_keys=tuple(variant_keys),
+        all_rows_have_expected_width=all_rows_expected_width,
+    )
 
 
 def read_accounting_metric(path: Path, metric: str) -> str:
@@ -210,14 +266,63 @@ def read_accounting_metric(path: Path, metric: str) -> str:
     raise MalformedAccountingError(f"{path}: missing required metric: {metric}")
 
 
-def count_metadata_rows(path: Path) -> int:
-    """Count data rows (excluding the header) in a metadata TSV."""
+def read_metadata_column(path: Path, column: str) -> tuple[str, ...]:
+    """Read one named column's values, in row order, from a metadata TSV.
+
+    Locating the column by name (rather than a hardcoded index) means
+    this keeps working even if `build_gs_panel.py` ever reorders its
+    own metadata columns.
+    """
     lines = path.read_text(encoding="utf-8").splitlines()
 
     if not lines:
         raise MalformedAccountingError(f"{path}: file is empty")
 
-    return sum(1 for line in lines[1:] if line)
+    header = lines[0].split("\t")
+    if column not in header:
+        raise MalformedAccountingError(f"{path}: missing required column: {column}")
+    index = header.index(column)
+
+    values: list[str] = []
+    for line in lines[1:]:
+        if not line:
+            continue
+
+        fields = line.split("\t")
+        if len(fields) <= index:
+            raise MalformedAccountingError(
+                f"{path}: row has {len(fields)} tab-separated fields, expected "
+                f"at least {index + 1} to read column {column!r}"
+            )
+
+        values.append(fields[index])
+
+    return tuple(values)
+
+
+def _describe_sequence_mismatch(labeled: list[tuple[str, tuple[str, ...]]]) -> str:
+    """Build a bounded-size diagnostic for 2+ named sequences that disagree.
+
+    Never dumps every element: a GS panel can hold thousands of
+    variants, so the message instead reports either a length
+    disagreement or the first index at which the sequences diverge --
+    always enough to start debugging, never proportional to panel size.
+    """
+    lengths = {name: len(seq) for name, seq in labeled}
+    if len(set(lengths.values())) > 1:
+        length_desc = ", ".join(f"{name}={length}" for name, length in lengths.items())
+        return f"lengths differ ({length_desc})"
+
+    common_length = next(iter(lengths.values()))
+    for index in range(common_length):
+        values_at_index = {name: seq[index] for name, seq in labeled}
+        if len(set(values_at_index.values())) > 1:
+            detail = ", ".join(
+                f"{name}[{index}]={value!r}" for name, value in values_at_index.items()
+            )
+            return f"same length ({common_length}), first disagreement at index {index}: {detail}"
+
+    return "sequences are equal"
 
 
 def reconcile(
@@ -227,15 +332,18 @@ def reconcile(
     classified_biallelic_snp_records: int,
     gs_pass: VcfSummary,
     matrix: MatrixSummary,
-    variant_metadata_records: int,
-    sample_metadata_records: int,
+    variant_metadata_keys: tuple[str, ...],
+    sample_metadata_ids: tuple[str, ...],
 ) -> ReconciliationResult:
     """Cross-check every GS panel artifact and compute the full lineage.
 
     Raises `InconsistentGsPanelError` immediately on the first
     disagreement found, rather than collecting every mismatch: once one
     artifact disagrees with its own source, none of the remaining
-    numbers can be trusted either.
+    numbers can be trusted either. Identity/order checks (tuple
+    equality) subsume the plain count checks they replace -- two
+    sequences cannot be equal without also being the same length -- so
+    there is no separate, redundant count-only comparison left here.
     """
     if not raw_all.all_rows_have_expected_sample_count:
         raise InconsistentGsPanelError(
@@ -252,6 +360,11 @@ def reconcile(
             "GS-eligible PASS VCF has at least one data row whose sample-field "
             "count does not match its own #CHROM header"
         )
+    if not matrix.all_rows_have_expected_width:
+        raise InconsistentGsPanelError(
+            "genotype matrix has at least one data row whose column count does "
+            "not equal '1 + sample_count' implied by its own header"
+        )
 
     gs_hard_filter_excluded_records = classified_biallelic_snp_records - gs_pass.record_count
     if gs_hard_filter_excluded_records < 0:
@@ -262,20 +375,30 @@ def reconcile(
             "remove records, never add them, so this can only be a bug"
         )
 
-    if not (matrix.variant_count == gs_pass.record_count == variant_metadata_records):
+    if not (gs_pass.sample_ids == matrix.sample_ids == sample_metadata_ids):
         raise InconsistentGsPanelError(
-            "variant counts disagree across the GS panel's own artifacts: "
-            f"gs_pass_records={gs_pass.record_count}, "
-            f"matrix_variant_records={matrix.variant_count}, "
-            f"variant_metadata_records={variant_metadata_records}"
+            "sample identity and/or order disagree across the GS panel's own "
+            "artifacts: "
+            + _describe_sequence_mismatch(
+                [
+                    ("gs_pass_vcf", gs_pass.sample_ids),
+                    ("matrix", matrix.sample_ids),
+                    ("sample_metadata", sample_metadata_ids),
+                ]
+            )
         )
 
-    if not (matrix.sample_count == gs_pass.sample_count == sample_metadata_records):
+    if not (gs_pass.variant_keys == matrix.variant_keys == variant_metadata_keys):
         raise InconsistentGsPanelError(
-            "sample counts disagree across the GS panel's own artifacts: "
-            f"gs_pass_sample_count={gs_pass.sample_count}, "
-            f"matrix_sample_count={matrix.sample_count}, "
-            f"sample_metadata_records={sample_metadata_records}"
+            "variant identity and/or order disagree across the GS panel's own "
+            "artifacts: "
+            + _describe_sequence_mismatch(
+                [
+                    ("gs_pass_vcf", gs_pass.variant_keys),
+                    ("matrix", matrix.variant_keys),
+                    ("variant_metadata", variant_metadata_keys),
+                ]
+            )
         )
 
     return ReconciliationResult(
@@ -287,8 +410,8 @@ def reconcile(
         gs_pass_sample_count=gs_pass.sample_count,
         matrix_variant_records=matrix.variant_count,
         matrix_sample_count=matrix.sample_count,
-        variant_metadata_records=variant_metadata_records,
-        sample_metadata_records=sample_metadata_records,
+        variant_metadata_records=len(variant_metadata_keys),
+        sample_metadata_records=len(sample_metadata_ids),
         panel_status="empty" if matrix.variant_count == 0 else "populated",
     )
 
@@ -298,8 +421,9 @@ def build_output_rows(cohort_id: str, result: ReconciliationResult) -> list[list
 
     Every count here is independently sourced (VCF, matrix, or
     metadata file); by the time this function is called, `reconcile()`
-    has already confirmed they all agree, so the values shown are not
-    merely one script's opinion of the panel's shape.
+    has already confirmed they all agree in count, identity, and
+    order, so the values shown are not merely one script's opinion of
+    the panel's shape.
     """
     return [
         [cohort_id, "raw_all_records", str(result.raw_all_records)],
@@ -347,9 +471,10 @@ def build_summary_text(cohort_id: str, result: ReconciliationResult) -> str:
             f"variant row(s) and {result.matrix_sample_count} sample column(s); "
             f"variant metadata has {result.variant_metadata_records} row(s); "
             f"sample metadata has {result.sample_metadata_records} row(s). "
-            "All four numbers on each axis (record/variant and sample) are "
-            "equal -- this file would not exist otherwise, since any "
-            "disagreement is a hard error."
+            "The counts, the identity (variant_key / sample ID), and the row "
+            "order all agree across every artifact -- this file would not "
+            "exist otherwise, since any disagreement on any of the three is "
+            "a hard error."
         ),
         f"panel_status: {result.panel_status}",
     ]
@@ -443,8 +568,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         gs_pass = summarize_vcf(args.gs_pass_vcf)
         matrix = summarize_matrix(args.matrix)
-        variant_metadata_records = count_metadata_rows(args.variant_metadata)
-        sample_metadata_records = count_metadata_rows(args.sample_metadata)
+        variant_metadata_keys = read_metadata_column(args.variant_metadata, VARIANT_KEY_COLUMN)
+        sample_metadata_ids = read_metadata_column(args.sample_metadata, SAMPLE_ID_COLUMN)
     except OSError as error:
         print(f"reconcile_gs_panel_accounting.py: error: {error}", file=sys.stderr)
         return 1
@@ -459,8 +584,8 @@ def main(argv: list[str] | None = None) -> int:
             classified_biallelic_snp_records=classified_biallelic_snp_records,
             gs_pass=gs_pass,
             matrix=matrix,
-            variant_metadata_records=variant_metadata_records,
-            sample_metadata_records=sample_metadata_records,
+            variant_metadata_keys=variant_metadata_keys,
+            sample_metadata_ids=sample_metadata_ids,
         )
     except InconsistentGsPanelError as error:
         print(f"reconcile_gs_panel_accounting.py: error: {error}", file=sys.stderr)
