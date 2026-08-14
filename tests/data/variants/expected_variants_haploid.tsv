@@ -1,0 +1,3 @@
+contig	position	ref	alt	alt_sample_id	alt_genotype	ref_sample_id	ref_genotype	ac	an	af
+chrSynthetic1	1501	C	G	sample_a	1	sample_b	0	1	2	0.5
+chrSynthetic2	1601	A	C	sample_b	1	sample_a	0	1	2	0.5
