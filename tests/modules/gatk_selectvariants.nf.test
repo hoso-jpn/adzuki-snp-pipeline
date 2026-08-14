@@ -1,0 +1,79 @@
+nextflow_process {
+
+    name "GATK_SELECTVARIANTS variant-type classification contract"
+    script "modules/local/gatk_selectvariants.nf"
+    process "GATK_SELECTVARIANTS"
+
+    // tests/modules/fixtures/mixed_type_contract.vcf.gz carries three
+    // hand-crafted records against the synthetic reference contigs:
+    //   chrSynthetic1:1000  REF=A  ALT=G       (pure SNP)
+    //   chrSynthetic1:2000  REF=T  ALT=TAAA    (pure indel, insertion)
+    //   chrSynthetic1:3000  REF=C  ALT=T,CAAA  (MIXED: one SNP-type
+    //                                          allele + one indel-type
+    //                                          allele at the same site)
+    //
+    // Issue #15's original reconcile_variant_type_counts.py design
+    // assumed GATK SelectVariants selects a record into a type-specific
+    // output whenever *any* allele matches, so a MIXED record would
+    // land in both cohort.snp.vcf.gz and cohort.indel.vcf.gz. Review
+    // feedback on PR #22 pointed out this is backwards: SelectVariants
+    // classifies a VariantContext as a whole into exactly one overall
+    // type via vc.getType(), and --select-type-to-include matches on
+    // that single type -- so a MIXED record is excluded from *both*
+    // selections instead. These two tests run the real pinned GATK
+    // 4.6.2.0 container (no mocking) to pin down that contract.
+
+    test("a MIXED-type record is excluded from the SNP selection, and only the pure SNP record is kept") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'mixed_contract', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi"),
+                    "SNP"
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def snpRecords = path(process.out.vcf[0][1])
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+
+            assert snpRecords.size() == 1
+            assert snpRecords[0].startsWith("chrSynthetic1\t1000\t")
+        }
+    }
+
+    test("the same MIXED-type record is also excluded from the indel selection, and only the pure indel record is kept") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'mixed_contract', variant_type: 'indel' ],
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi"),
+                    "INDEL"
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def indelRecords = path(process.out.vcf[0][1])
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+
+            assert indelRecords.size() == 1
+            assert indelRecords[0].startsWith("chrSynthetic1\t2000\t")
+        }
+    }
+}

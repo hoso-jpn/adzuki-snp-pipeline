@@ -34,3 +34,6 @@ jobs:
 
       - name: Run pipeline-level nf-test
         run: nf-test test tests/pipeline/adzuki_snp_pipeline.nf.test --ci
+
+      - name: Run module-level nf-test (GATK SelectVariants type-classification contract)
+        run: nf-test test tests/modules/gatk_selectvariants.nf.test --ci
