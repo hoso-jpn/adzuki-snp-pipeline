@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import io
 import random
+import re
 from pathlib import Path
 
 
@@ -10,6 +12,59 @@ RANDOM_SEED = 20260812
 CONTIG_LENGTH = 5000
 READ_LENGTH = 100
 FRAGMENT_LENGTH = 300
+
+
+def casava_read_name(
+    read_group_id: str,
+    contig_name: str,
+    number: int,
+) -> str:
+    """Build a CASAVA 1.8-style read name GATK MarkDuplicates can parse.
+
+    Issue #8: the previous read names (e.g.
+    "sample_a_L001_chrSynthetic1_001") contain no ':'-separated
+    fields, so GATK's default READ_NAME_REGEX -- which expects a
+    standard Illumina 5- or 7-element colon-separated name to extract
+    tile/x/y for optical-duplicate detection -- could not parse them
+    (confirmed directly: MarkDuplicates logged "did not start with a
+    parsable number" for these names and always reported 0 optical
+    duplicate clusters). This function instead returns a 7-element
+    "<instrument>:<run>:<flowcell>:<lane>:<tile>:<x>:<y>" name, so the
+    standard, unmodified GATK read-name parsing path is actually
+    exercised by this fixture rather than silently degraded.
+
+    Lane is parsed from the read_group_id's own "_L<NNN>" suffix. Tile
+    and the x/y baselines are derived from stable hashes of
+    read_group_id and contig_name (not of sample_id, which this
+    function never sees) specifically so that two read groups sharing
+    a lane number but belonging to different samples -- e.g.
+    sample_a_L001 and sample_b_L001, realistically multiplexed on the
+    same physical lane -- still land on different simulated tiles,
+    matching the fact that two different samples' DNA can never
+    occupy the same physical cluster. `number` (the existing
+    per-read-group, per-contig sequential fragment index) is added on
+    top of those baselines to keep every read's coordinates distinct
+    within its own read group and contig, preserving the same
+    (read_group_id, contig_name, number) uniqueness guarantee the old
+    name encoded positionally.
+    """
+    lane_match = re.search(r"_L(\d+)$", read_group_id)
+    lane = int(lane_match.group(1)) if lane_match else 1
+
+    group_hash = int(
+        hashlib.sha256(read_group_id.encode("ascii")).hexdigest(),
+        16,
+    )
+    contig_hash = int(
+        hashlib.sha256(contig_name.encode("ascii")).hexdigest(),
+        16,
+    )
+
+    tile = 1101 + (group_hash % 8)
+    x_pos = 1000 + (group_hash % 4000) + number
+    y_pos = 2000 + (contig_hash % 4000) + number
+
+    return f"SIM:1:FC1:{lane}:{tile}:{x_pos}:{y_pos}"
 
 
 def alternate_base(reference_base: str) -> str:
@@ -101,8 +156,10 @@ def build_fastq(
             read2 = reverse_complement(
                 fragment[-READ_LENGTH:]
             )
-            read_name = (
-                f"{read_group_id}_{contig_name}_{number:03d}"
+            read_name = casava_read_name(
+                read_group_id,
+                contig_name,
+                number,
             )
             quality = "I" * READ_LENGTH
 

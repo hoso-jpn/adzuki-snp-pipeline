@@ -23,12 +23,8 @@ include {
 } from '../modules/local/bwa_mem2_index'
 
 include {
-    BWA_MEM2_MEM
-} from '../modules/local/bwa_mem2_mem'
-
-include {
-    SAMTOOLS_SORT
-} from '../modules/local/samtools_sort'
+    BWA_MEM2_MEM_SORT
+} from '../modules/local/bwa_mem2_mem_sort'
 
 include {
     SAMTOOLS_MERGE
@@ -184,6 +180,7 @@ workflow ADZUKI_SNP_PIPELINE {
     take:
     samples_ch
     reference_ch
+    read_group_counts_by_sample
 
     main:
     raw_reads_ch = samples_ch.map {
@@ -281,23 +278,36 @@ workflow ADZUKI_SNP_PIPELINE {
         bwa_indexes_ch = BWA_MEM2_INDEX.out.indexes
     }
 
-    BWA_MEM2_MEM(
+    BWA_MEM2_MEM_SORT(
         FASTP.out.reads,
         reference_ch,
         bwa_indexes_ch
     )
 
-    SAMTOOLS_SORT(BWA_MEM2_MEM.out.sam)
-
-    sample_bams_ch = SAMTOOLS_SORT.out.bam
+    // Issue #8: groupTuple() with no explicit size buffers every
+    // tuple until BWA_MEM2_MEM_SORT's *entire* upstream channel
+    // closes -- i.e. until every read group of every sample has
+    // finished mapping -- before emitting even a single completed
+    // sample group, even if that sample's own read groups all
+    // finished long ago. read_group_counts_by_sample (computed once
+    // in main.nf, directly from the samplesheet, before any channel
+    // work begins) tells groupKey() exactly how many tuples to expect
+    // per sample_id, so groupTuple() can emit each sample's group the
+    // moment its own read groups are all in, independent of any other
+    // sample's progress. `groupKey.target` recovers the original
+    // sample_id string afterwards (see Nextflow's grouping docs for
+    // this pattern) -- the sorted-bam-name ordering contract below is
+    // otherwise unchanged.
+    sample_bams_ch = BWA_MEM2_MEM_SORT.out.bam
         .map {
             meta,
             bam ->
-            tuple(meta.id, bam)
+            def expected_read_groups = read_group_counts_by_sample[meta.id]
+            tuple(groupKey(meta.id, expected_read_groups), bam)
         }
         .groupTuple()
         .map {
-            sample_id,
+            sample_key,
             bams ->
             def sorted_bams = bams.sort {
                 bam ->
@@ -305,7 +315,7 @@ workflow ADZUKI_SNP_PIPELINE {
             }
 
             tuple(
-                [id: sample_id],
+                [id: sample_key.target],
                 sorted_bams
             )
         }
@@ -620,7 +630,7 @@ workflow ADZUKI_SNP_PIPELINE {
     fastp_reports = FASTP.out.reports
     trimmed_fastqc_html = FASTQC_TRIMMED.out.html
     trimmed_fastqc_zip = FASTQC_TRIMMED.out.zip
-    mapping_logs = BWA_MEM2_MEM.out.log
+    mapping_logs = BWA_MEM2_MEM_SORT.out.log
     duplicate_metrics = GATK_MARKDUPLICATES.out.metrics
     marked_bams = SAMTOOLS_INDEX.out.bam
     sample_gvcfs = GATK_HAPLOTYPECALLER.out.gvcf
