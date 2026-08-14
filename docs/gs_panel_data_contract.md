@@ -108,10 +108,16 @@ longer applies once a site has been split:
 
 | Post-split shape | Class | Eligible for the panel? |
 | --- | --- | --- |
+| ALT is the literal `.` (no alternate allele observed at this site) | `no_alt` | no — excluded, counted |
 | `len(REF) == 1` and `len(ALT) == 1` | `snp` | yes, subject to the duplicate-key check below |
 | `len(REF) == len(ALT) > 1` | `mnp` | no — excluded, counted |
 | `len(REF) != len(ALT)` (and not symbolic) | `indel` | no — excluded, counted |
 | ALT contains `<`, `[`, `]`, or is `*` | `symbolic_or_star` | no — excluded, counted |
+
+`no_alt` is checked before every other shape: `.` and a single-base REF
+are the same string length, so a no-ALT record would otherwise be
+silently miscounted as a `snp` rather than excluded and reported under
+its own reason.
 
 A row whose ALT still contains a comma after `bcftools norm -m-` is a
 hard error (`MalformedVcfError`): this should never happen post-split, so
@@ -123,6 +129,15 @@ the extras — because there is no automatic way to decide which of two
 identical records is "correct"; keeping one at random would be a silent,
 unreviewable choice. The count and the actual colliding keys are reported
 in `cohort_gs.classification_accounting.summary.txt`.
+
+**The VCF `ID` column is never used for variant identity.** Variant
+identity throughout this panel — the duplicate-key check above, the
+`variant_key` used in the matrix and variant metadata, and every record-
+accounting figure — is `CHROM:POS:REF:ALT` only. `ID` is carried through
+unmodified into the classified VCF's output rows, but it is not retained
+in any GS panel metadata file and never inspected for uniqueness.
+Duplicate `ID` values across otherwise-distinct records are therefore
+permitted and silently ignored, not an error.
 
 Every kept record's FILTER is reset to `.` before this stage's output is
 handed to hard filtering (see below): this is currently a no-op in
@@ -182,10 +197,23 @@ this repository's established convention for its other QC scripts.
 
 | Genotype | Dosage |
 | --- | ---: |
-| `0/0` (homozygous reference) | `-1` |
-| `0/1` or `1/0` (heterozygous) | `0` |
-| `1/1` (homozygous alternate) | `+1` |
+| `0/0` or `0\|0` (homozygous reference) | `-1` |
+| `0/1`, `1/0`, `0\|1`, or `1\|0` (heterozygous) | `0` |
+| `1/1` or `1\|1` (homozygous alternate) | `+1` |
 | missing or non-standard (see below) | `nan` |
+
+Phasing (`/` vs `\|`) never affects dosage. Per the VCF specification, the
+separator in a `GT` field records only whether the call is phased —
+whether the alleles' parental origin is known — not which alleles or how
+many are present: `0\|1` carries exactly the same allele content as
+`0/1` and must resolve to the same dosage. A genotype's phasedness is
+tracked purely as an informational count (`phased_genotype_count`, see
+below); it is never a reason to treat a call as missing. **An earlier
+revision of this classifier got this wrong** — it nulled out every
+phased call regardless of its allele content — and has been corrected;
+`tests/bin/test_build_gs_panel.py`'s `ClassifyGenotypeTests` now pins
+phased hom-ref/het/hom-alt calls to the same dosage as their unphased
+equivalents.
 
 This is the **same** `-1`/`0`/`+1` scheme `genomic-prediction-resnet-hybrid`'s
 own `soynam_data.py` already uses for its (unrelated) SoyNAM data
@@ -209,23 +237,45 @@ are the *only* four tokens ever written, and all four round-trip through
 
 ### Genotype classification (missing and non-standard handling)
 
-A genotype is encoded as a dosage only if it is a clean, unphased,
-diploid, biallelic-index call (`0/0`, `0/1`, `1/0`, or `1/1`). Every other
-shape is treated as missing in the matrix (`nan`), but counted under its
-own specific reason — never folded into one undifferentiated "missing"
+A genotype is encoded as a dosage as long as it is **diploid** with a
+biallelic-index call — `0/0`, `0/1`, `1/0`, or `1/1`, in either phasing
+(phasing itself never disqualifies a call; see above). Every other shape
+is treated as missing in the matrix (`nan`), but counted under its own
+specific reason — never folded into one undifferentiated "missing"
 bucket:
 
 | Reason | Example | Counted as |
 | --- | --- | --- |
 | Missing | `.`, `./.`, `0/.` (any allele position is `.`) | `missing_calls` |
-| Phased | `0\|1` | `phased_calls_treated_as_missing` |
 | Non-diploid | `0` (haploid), `0/0/1` (triploid) | `non_diploid_calls_treated_as_missing` |
 | Non-biallelic allele index | `0/2` (defensive — should not occur given the input is already biallelic-only) | `non_biallelic_index_calls_treated_as_missing` |
 
 `cohort.gs_panel.genotype_encoding_accounting.tsv` reports the cohort-wide
 total for each reason (plus `total_treated_as_missing`, the sum of all
-four); the sample and variant metadata files (below) report the same
-breakdown at finer granularity.
+three); the sample and variant metadata files (below) report the same
+breakdown at finer granularity. `phased_genotype_count` is reported
+alongside these but is **not** part of `total_treated_as_missing` — it is
+a purely informational count of how many calls (standard or otherwise)
+used `|`, independent of whether that call was ultimately encoded as a
+dosage or as missing.
+
+### Diploid-only constraint (schema v1)
+
+This encoding is diploid-only by design, not merely by convention: the
+classification rule above has no way to assign a meaningful dosage to a
+haploid or polyploid call, so a cohort with `sample_ploidy != 2` would
+have *every* genotype fall into `non_diploid_calls_treated_as_missing`,
+producing a matrix that is entirely `nan` while still exiting `0` and
+looking, from the pipeline's own machine-readable status, like a normal
+completed run. `bin/build_gs_panel.py` and
+`bin/build_gs_panel_manifest.py` both therefore fail fast — exit `1`,
+before writing any output — whenever `--sample-ploidy` (wired from
+`params.sample_ploidy`) is not exactly `2`, and
+`cohort.gs_panel.manifest.json` records the configured `sample_ploidy`
+under `parameters` so a reader never has to guess which ploidy a given
+panel was built under. A generalized, ploidy-aware encoding is tracked as
+future work (see Issue #1's roadmap); until it exists, this schema simply
+cannot be used for a non-diploid cohort.
 
 ### On-disk shape vs. in-memory shape
 
@@ -271,7 +321,7 @@ header order:
 | `sample_id` | Sample ID |
 | `missing_genotype_count` | Count of `nan` cells for this sample, any reason |
 | `missing_genotype_rate` | `missing_genotype_count / total_variants`, or `NA` if there are zero variants |
-| `non_standard_genotype_count` | Subset of `missing_genotype_count` caused by phased/non-diploid/non-biallelic-index calls specifically (excludes plain missing) |
+| `non_standard_genotype_count` | Subset of `missing_genotype_count` caused by non-diploid/non-biallelic-index calls specifically (excludes plain missing; a phased call is not "non-standard" by itself — see "Dosage encoding" above) |
 
 `cohort.gs_panel.variant_metadata.tsv` — one row per variant, in
 genomic-coordinate (file) order:
@@ -292,12 +342,14 @@ reconciles the full lineage:
 
 ```
 raw_all_records
-  -> normalized_records            (post bcftools norm -m- splitting)
+  -> normalized_records                 (post bcftools norm -m- splitting)
   -> classified_biallelic_snp_records   (post shape reclassification and duplicate-key exclusion)
   -> gs_pass_records                    (post GS-specific hard filtering)
-  -> final_matrix_variant_records       (should equal gs_pass_records)
+  -> matrix_variant_records / variant_metadata_records   (read directly; must equal gs_pass_records and each other)
 ```
 
+with sample counts reconciled the same way: `gs_pass_sample_count`,
+`matrix_sample_count`, and `sample_metadata_records` must all agree.
 `raw_all_records` and `normalized_records` are independently re-counted
 directly from their VCFs (not trusted from any other script's output),
 matching `bin/reconcile_variant_type_counts.py`'s established
@@ -305,14 +357,40 @@ matching `bin/reconcile_variant_type_counts.py`'s established
 is read from `classify_normalized_variants.py`'s own accounting rather
 than re-derived, since re-implementing its shape-classification and
 duplicate-key logic a second time would duplicate that logic rather than
-verify it.
+verify it. Critically, `matrix_variant_records` and `matrix_sample_count`
+are read directly from the genotype matrix file itself (its own header
+and row count), not derived from the metadata files that were supposed
+to describe it.
 
-`gs_hard_filter_excluded_records = classified_biallelic_snp_records -
-gs_pass_records` is expected to be `>= 0` (hard filtering only removes
-records); a negative value, or `final_matrix_variant_records` not
-matching `gs_pass_records`, is reported as a `WARNING` in the summary
-text rather than hidden — the same "never silently hide a surprising
-value" convention as `bin/reconcile_variant_type_counts.py`.
+**Every one of these cross-file checks is a hard error
+(`InconsistentGsPanelError`), not a warning: on any disagreement, the
+tool exits `1` and writes no output at all.** This is a deliberate
+departure from `bin/reconcile_variant_type_counts.py`'s convention of
+reporting a negative `records_not_selected` as a `WARNING` rather than
+failing the run. That warning is appropriate there because a negative
+value in the *primary* lineage has a real, understood, non-buggy cause
+(GATK's own multiallelic-record handling, documented in this repository's
+Issue #15 work) — it is surprising but scientifically real. Here, there
+is no equivalent legitimate scenario: hard filtering can only remove
+records, never add them, so a negative
+`gs_hard_filter_excluded_records` can only indicate a bug; and there is
+no valid reason the matrix, the PASS VCF it was built from, and the
+metadata files describing it should ever disagree on how many variants
+or samples they contain. Once one of the GS panel's own artifacts
+disagrees with its own source, none of the remaining numbers can be
+trusted either, so reporting a partial, possibly-wrong accounting
+alongside a "warning" would be worse than refusing to produce one.
+
+This replaces an earlier revision of this tool that derived
+`final_matrix_variant_records` from the variant metadata file's row
+count without ever opening the matrix itself — meaning a bug that
+corrupted only the matrix (a dropped row, a misaligned column, a
+truncated write) would have gone completely undetected as long as the
+metadata files still looked correct. The current tool also checks that
+every data row in the raw/all, normalized, and GS-eligible PASS VCFs has
+exactly as many sample fields as its own `#CHROM` header declares, which
+catches a truncated or otherwise malformed row that a plain
+field-count-only check would miss.
 
 ## Reproducibility manifest (concern 6)
 
@@ -335,12 +413,31 @@ stdlib-only Python instead.
   "pipeline_version": "0.2.0-dev",
   "git_commit": null,
   "containers": { "bcftools": "...", "gatk": "...", "python": "..." },
-  "parameters": { "snp_filter_qd_min": 2.0, "...": "..." },
+  "parameters": { "sample_ploidy": 2, "snp_filter_qd_min": 2.0, "...": "..." },
+  "genotype_encoding": {
+    "schema": "diploid_additive_dosage_v1",
+    "dosage_by_genotype": { "0/0": -1, "0/1_or_1/0": 0, "1/1": 1 },
+    "phasing": "ignored for dosage; 0|1 encodes identically to 0/1",
+    "missing_token": "nan",
+    "matrix_orientation": "variant_rows_by_sample_columns",
+    "ploidy": "diploid_only"
+  },
   "panel_status": "empty",
   "checksums": { "cohort.gs_panel.genotype_matrix.tsv.gz": "sha256:...", "...": "..." },
   "manifest_hash": "sha256:..."
 }
 ```
+
+`genotype_encoding` is a fixed, static description of this schema (see
+"Genotype matrix contract" above) recorded verbatim in every manifest, so
+a reader never has to cross-reference `bin/build_gs_panel.py`'s source or
+this document to know how to interpret the matrix. `checksums` covers not
+only the panel's own deliverables (matrix, sample/variant metadata,
+genotype-encoding accounting, record accounting) but also the inputs used
+to build them — the raw/all cohort VCF and the reference FASTA/FAI used
+for normalization — so a reader can reconstruct *which* inputs and
+reference a given panel came from, not only verify the panel's own
+outputs against themselves.
 
 Software versions are recorded as the pinned container image references
 already baked into each process's `container` directive — the ground
@@ -357,19 +454,42 @@ pipeline (`nextflow run owner/repo`); it is legitimately `null` for this
 repository's own documented `nextflow run .` local-directory invocation,
 and is reported as such honestly rather than worked around.
 
-**Checksum reproducibility, verified and limited:** the matrix, sample
-metadata, variant metadata, and record-accounting checksums are
-byte-for-byte reproducible across independent runs over identical input
-(`bin/build_gs_panel.py`'s matrix writer explicitly sets `mtime=0` on its
-gzip output for exactly this reason — verified directly by running the
-generated- and prebuilt-reference-index paths and diffing every
-`gs_panel/` artifact). The GS-eligible PASS VCF's own checksum
-(`cohort_gs.snp.pass.vcf.gz`) is **not** reproducible run-to-run: GATK
+**Checksum reproducibility, precisely scoped.** The manifest document
+itself (`cohort.gs_panel.manifest.json`) is **never** byte-for-byte
+reproducible across independent runs, by design: it embeds a fresh
+`run_id` and `generated_at` timestamp on every invocation, and — since it
+now also checksums the raw/all and GS-eligible PASS VCFs for provenance
+(see above) — it transitively embeds two checksums that are themselves
+run-dependent. "Reproducible" therefore never means "the manifest file
+matches"; it means a specific, named subset of the *checksums recorded
+inside it* match. That subset is exactly the seven files this pipeline
+writes purely from its own inputs and counts, with no embedded
+timestamp:
+
+- `cohort.gs_panel.genotype_matrix.tsv.gz`
+- `cohort.gs_panel.sample_metadata.tsv`
+- `cohort.gs_panel.variant_metadata.tsv`
+- `cohort.gs_panel.genotype_encoding_accounting.tsv` and its `.summary.txt`
+- `cohort.gs_panel.record_accounting.tsv` and its `.summary.txt`
+
+These are byte-for-byte reproducible across independent runs over
+identical input (`bin/build_gs_panel.py`'s matrix writer explicitly sets
+`mtime=0` on its gzip output for exactly this reason), verified directly
+by running the generated- and prebuilt-reference-index paths and diffing
+each of the seven files above.
+
+Every other checksum the manifest records —
+`cohort_gs.snp.pass.vcf.gz` (the GS-eligible PASS VCF) and
+`cohort.raw.vcf.gz` (raw/all) — is **not** reproducible run-to-run: GATK
 embeds the actual wall-clock run time in its `##GATKCommandLine` VCF
-header on every invocation, a property of every VCF this pipeline
-produces (not something introduced by, or fixable within, the GS panel
-work), so its checksum will legitimately differ between two runs even
-when every underlying record is identical.
+header on every invocation that touches a VCF, a property of every VCF
+this pipeline produces (not something introduced by, or fixable within,
+the GS panel work), so these checksums will legitimately differ between
+two runs even when every underlying record is identical. The reference
+FASTA/FAI checksums are reproducible in practice (the reference file
+itself does not change between runs against the same input), but that is
+a property of the input, not something this pipeline guarantees or
+verifies.
 
 ## Empty panel contract
 

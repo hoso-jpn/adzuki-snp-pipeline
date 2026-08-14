@@ -221,18 +221,18 @@ Not every annotation has a hard filter for every variant type: indels have no `S
 
 ### Genomic selection (GS) panel
 
-The workflow separately derives a genomic selection (GS) SNP panel from `raw/all`, normalizing and reclassifying multiallelic and `MIXED`-type records before re-applying the SNP hard filters on a distinct lineage (`cohort_gs.*`), so that the primary `raw`/`filtered`/`pass` outputs above are never touched by this process. The full data contract -- input/normalization/classification/eligibility rules, the dosage encoding and why `int8` was rejected, the missing/non-standard genotype policy, on-disk vs. in-memory matrix shape, and the empty-panel contract -- is documented in [`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md); only the output list is repeated here.
+The workflow separately derives a genomic selection (GS) SNP panel from `raw/all`, normalizing and reclassifying multiallelic and `MIXED`-type records before re-applying the SNP hard filters on a distinct lineage (`cohort_gs.*`), so that the primary `raw`/`filtered`/`pass` outputs above are never touched by this process. The dosage-matrix schema (v1) is diploid-only by design and fails fast (no output written) if `sample_ploidy` is not `2`, since every genotype call would otherwise be silently encoded as missing. The full data contract -- input/normalization/classification/eligibility rules, the dosage encoding and why `int8` was rejected, the missing/non-standard genotype policy, on-disk vs. in-memory matrix shape, and the empty-panel contract -- is documented in [`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md); only the output list is repeated here.
 
 | Output | Description |
 | --- | --- |
 | `gs_panel/cohort.gs_panel.genotype_matrix.tsv.gz` | Dosage matrix (variant rows x sample columns); `-1`/`0`/`+1`/`nan` |
 | `gs_panel/cohort.gs_panel.sample_metadata.tsv` | Per-sample missing/non-standard genotype counts and rates |
 | `gs_panel/cohort.gs_panel.variant_metadata.tsv` | Per-variant `CHROM`/`POS`/`REF`/`ALT`/`QUAL` and missingness |
-| `gs_panel/cohort.gs_panel.genotype_encoding_accounting.tsv` | Cohort-wide genotype classification counts (standard dosage vs. missing vs. phased vs. non-diploid vs. non-biallelic-index) |
+| `gs_panel/cohort.gs_panel.genotype_encoding_accounting.tsv` | Cohort-wide genotype classification counts (standard dosage vs. missing vs. non-diploid vs. non-biallelic-index, plus an independent phased-call count -- phasing alone never affects dosage) |
 | `gs_panel/cohort.gs_panel.genotype_encoding_accounting.summary.txt` | Human-readable genotype-encoding summary |
-| `gs_panel/cohort.gs_panel.record_accounting.tsv` | Full-lineage record reconciliation (`raw_all` -> `normalized` -> `classified` -> `gs_pass` -> matrix) and `panel_status` (`empty`/`populated`) |
+| `gs_panel/cohort.gs_panel.record_accounting.tsv` | Full-lineage record reconciliation (`raw_all` -> `normalized` -> `classified` -> `gs_pass` -> matrix/metadata, cross-checked against the matrix file itself) and `panel_status` (`empty`/`populated`); any disagreement is a hard error, not a warning -- no file is written at all in that case |
 | `gs_panel/cohort.gs_panel.record_accounting.summary.txt` | Human-readable record accounting summary |
-| `gs_panel/cohort.gs_panel.manifest.json` | Schema-versioned reproducibility manifest: run ID, container digests, hard-filter parameters, and artifact checksums |
+| `gs_panel/cohort.gs_panel.manifest.json` | Schema-versioned reproducibility manifest: run ID, container digests, `sample_ploidy` and the genotype-encoding schema, and checksums of every panel artifact plus the raw/all VCF and reference FASTA/FAI used to build it |
 
 A GS panel with zero eligible records is a normal outcome, not an error -- it is in fact what the pipeline's own default synthetic fixture produces today, since both synthetic SNPs fail `SNP_SOR_HIGH` (the same result as the primary lineage's `pass/snp` output). The matrix header (sample list) and sample metadata are still written in full; only the variant rows are absent, and `record_accounting.tsv`'s `panel_status` field says so explicitly.
 
@@ -288,7 +288,7 @@ When an optional index parameter is omitted, the workflow generates the correspo
 
 | Parameter | Default | Description |
 | --- | ---: | --- |
-| `sample_ploidy` | `2` | Positive integer passed to HaplotypeCaller as the expected sample ploidy |
+| `sample_ploidy` | `2` | Positive integer passed to HaplotypeCaller as the expected sample ploidy; the [GS panel](#genomic-selection-gs-panel)'s dosage-matrix schema (v1) is diploid-only and fails fast if this is not `2` |
 | `snp_filter_qd_min` | `2.0` | Mark SNPs with `QD` below this value as `SNP_QD_LOW` |
 | `snp_filter_qual_min` | `30.0` | Mark SNPs with `QUAL` below this value as `SNP_QUAL_LOW` |
 | `snp_filter_sor_max` | `3.0` | Mark SNPs with `SOR` above this value as `SNP_SOR_HIGH` |
