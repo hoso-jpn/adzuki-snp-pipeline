@@ -130,9 +130,14 @@ nextflow_pipeline {
             // end to end: 7 stage/type combinations x 4 files each,
             // and the exact metric values the genotype contract above
             // implies (0 missing genotypes for the raw cohort, "NA"
-            // missingness where 0 records exist).
+            // missingness where 0 records exist). 36 files from Issues
+            // #12/#15/#16, plus 2 more from Issue #18's
+            // classify_normalized_variants.py accounting (cohort_gs.
+            // classification_accounting.tsv/.summary.txt), which is
+            // published alongside the other variant-QC accounting
+            // files since it is the same kind of artifact.
             def qcFiles = new File("$outputDir/qc/variants").listFiles()
-            assert qcFiles.size() == 36
+            assert qcFiles.size() == 38
 
             def rawAllVariantQc = path("$outputDir/qc/variants/cohort.raw.all.variant_qc.tsv")
                 .readLines()
@@ -228,6 +233,78 @@ nextflow_pipeline {
             assert variantTypeAccounting["records_not_selected"] == "0"
             assert variantTypeAccounting["records_not_selected_is_negative"] == "false"
             assert variantTypeAccounting["snp_indel_duplicate_records"] == "0"
+
+            def gsClassificationAccounting = path("$outputDir/qc/variants/cohort_gs.classification_accounting.tsv")
+                .readLines()
+                .collectEntries { line ->
+                    def fields = line.split("\t")
+                    [(fields[1]): fields[2]]
+                }
+            assert gsClassificationAccounting["total_input_records"] == "2"
+            assert gsClassificationAccounting["snp_records"] == "2"
+            assert gsClassificationAccounting["mnp_records"] == "0"
+            assert gsClassificationAccounting["indel_records"] == "0"
+            assert gsClassificationAccounting["symbolic_or_star_records"] == "0"
+            assert gsClassificationAccounting["duplicate_key_records"] == "0"
+            assert gsClassificationAccounting["output_records"] == "2"
+
+            // Issue #18: the GS panel lineage re-evaluates the same two
+            // synthetic SNPs (normalized from raw/all, since that is
+            // the only stage that can still carry a MIXED record) under
+            // the same SNP hard filters. Both already fail
+            // SNP_SOR_HIGH in the primary lineage above, so the GS
+            // lineage's PASS VCF -- and therefore the panel itself --
+            // must end up empty too. This is the exact "empty PASS SNP
+            // VCF" contract Issue #18 requires be exercised against the
+            // pipeline's real default fixture, not just a hand-crafted
+            // unit-test fixture.
+            def gsPassData = path("$outputDir/variants/gs_pass/cohort_gs.snp.pass.vcf.gz")
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert gsPassData.size() == 0
+
+            def gsPanelFiles = new File("$outputDir/gs_panel").listFiles()
+            assert gsPanelFiles.size() == 8
+
+            def matrixLines = path("$outputDir/gs_panel/cohort.gs_panel.genotype_matrix.tsv.gz")
+                .linesGzip
+            assert matrixLines.size() == 1
+            assert matrixLines[0] == "variant_key\tsample_a\tsample_b"
+
+            def gsSampleMetadata = path("$outputDir/gs_panel/cohort.gs_panel.sample_metadata.tsv")
+                .readLines()
+            assert gsSampleMetadata.size() == 3
+            assert gsSampleMetadata.drop(1).every { line -> line.split("\t")[4] == "NA" }
+            assert gsSampleMetadata[1].split("\t")[2] == "sample_a"
+            assert gsSampleMetadata[2].split("\t")[2] == "sample_b"
+
+            def gsVariantMetadata = path("$outputDir/gs_panel/cohort.gs_panel.variant_metadata.tsv")
+                .readLines()
+            assert gsVariantMetadata.size() == 1
+
+            def gsRecordAccounting = path("$outputDir/gs_panel/cohort.gs_panel.record_accounting.tsv")
+                .readLines()
+                .collectEntries { line ->
+                    def fields = line.split("\t")
+                    [(fields[1]): fields[2]]
+                }
+            assert gsRecordAccounting["raw_all_records"] == "2"
+            assert gsRecordAccounting["normalized_records"] == "2"
+            assert gsRecordAccounting["classified_biallelic_snp_records"] == "2"
+            assert gsRecordAccounting["gs_hard_filter_excluded_records"] == "2"
+            assert gsRecordAccounting["gs_pass_records"] == "0"
+            assert gsRecordAccounting["final_matrix_variant_records"] == "0"
+            assert gsRecordAccounting["final_matrix_variant_count_matches_pass"] == "true"
+            assert gsRecordAccounting["final_matrix_sample_count"] == "2"
+            assert gsRecordAccounting["panel_status"] == "empty"
+
+            def manifestJson = new groovy.json.JsonSlurper().parse(
+                new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
+            )
+            assert manifestJson.schema_version == 1
+            assert manifestJson.panel_status == "empty"
+            assert manifestJson.cohort_id == "cohort"
+            assert manifestJson.checksums.size() == 5
         }
     }
 }
