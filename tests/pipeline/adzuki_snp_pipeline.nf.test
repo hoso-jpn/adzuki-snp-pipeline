@@ -213,8 +213,8 @@ nextflow_pipeline {
 
             // Issue #15: bin/reconcile_variant_type_counts.py cross-checks
             // raw/all against the raw/snp + raw/indel split. This fixture
-            // has no multiallelic or MNP/other records, so the split must
-            // reconcile cleanly (records_not_selected == 0, no overlap).
+            // has no MIXED/MNP/other records, so the split must reconcile
+            // cleanly (records_not_selected == 0, no duplicate records).
             def variantTypeAccounting = path("$outputDir/qc/variants/cohort.variant_type_accounting.tsv")
                 .readLines()
                 .drop(1)
@@ -227,7 +227,7 @@ nextflow_pipeline {
             assert variantTypeAccounting["raw_indel_records"] == "0"
             assert variantTypeAccounting["records_not_selected"] == "0"
             assert variantTypeAccounting["records_not_selected_is_negative"] == "false"
-            assert variantTypeAccounting["snp_indel_overlap_records"] == "0"
+            assert variantTypeAccounting["snp_indel_duplicate_records"] == "0"
         }
     }
 }
