@@ -63,6 +63,11 @@ class ClassifyVariantTests(unittest.TestCase):
         with self.assertRaises(classify_module.MalformedVcfError):
             classify_module.classify_variant("A", "G,C")
 
+    def test_no_alt_marker_is_not_miscounted_as_snp(self) -> None:
+        # "." and a single-base REF are the same string length, so this
+        # must be checked before the snp/mnp length comparison.
+        self.assertEqual(classify_module.classify_variant("A", "."), "no_alt")
+
 
 class ParseNormalizedVcfTests(unittest.TestCase):
     """Tests for parse_normalized_vcf: classification counts and eligibility."""
@@ -75,7 +80,7 @@ class ParseNormalizedVcfTests(unittest.TestCase):
         self.assertEqual(result.total_input_records, 5)
         self.assertEqual(
             result.class_counts,
-            {"snp": 2, "mnp": 1, "indel": 1, "symbolic_or_star": 1},
+            {"snp": 2, "mnp": 1, "indel": 1, "symbolic_or_star": 1, "no_alt": 0},
         )
         self.assertEqual(result.duplicate_key_records, 0)
         self.assertEqual(len(result.output_records), 2)
@@ -109,12 +114,21 @@ class ParseNormalizedVcfTests(unittest.TestCase):
         self.assertEqual(result.total_input_records, 0)
         self.assertEqual(
             result.class_counts,
-            {"snp": 0, "mnp": 0, "indel": 0, "symbolic_or_star": 0},
+            {"snp": 0, "mnp": 0, "indel": 0, "symbolic_or_star": 0, "no_alt": 0},
         )
         self.assertEqual(result.duplicate_key_records, 0)
         self.assertEqual(result.output_records, ())
         # the sample header must survive even with zero data rows
         self.assertEqual(result.header.sample_names, ("sample_a", "sample_b"))
+
+    def test_no_alt_fixture_excludes_no_alt_record_from_output(self) -> None:
+        result = classify_module.parse_normalized_vcf(FIXTURES_DIR / "classify_no_alt.vcf.gz")
+
+        self.assertEqual(result.total_input_records, 2)
+        self.assertEqual(result.class_counts["snp"], 1)
+        self.assertEqual(result.class_counts["no_alt"], 1)
+        self.assertEqual(len(result.output_records), 1)
+        self.assertEqual(result.output_records[0].key, ("chrTest", "100", "A", "G"))
 
     def test_still_multiallelic_row_raises_with_cause(self) -> None:
         with self.assertRaises(classify_module.MalformedVcfError) as raised:
@@ -194,6 +208,7 @@ class OutputContractTests(unittest.TestCase):
         self.assertEqual(metrics["mnp_records"], "0")
         self.assertEqual(metrics["indel_records"], "0")
         self.assertEqual(metrics["symbolic_or_star_records"], "0")
+        self.assertEqual(metrics["no_alt_records"], "0")
         self.assertEqual(metrics["duplicate_key_records"], "2")
         self.assertEqual(metrics["distinct_duplicate_keys"], "1")
         self.assertEqual(metrics["output_records"], "1")

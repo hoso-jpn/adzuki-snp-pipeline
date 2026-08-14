@@ -14,6 +14,10 @@ scratch by its own REF/ALT shape:
 - `indel`: REF and ALT differ in length.
 - `symbolic_or_star`: ALT contains symbolic/breakend syntax (`<`, `[`,
   `]`) or is the spanning-deletion marker `*`.
+- `no_alt`: ALT is the literal `.` (no alternate allele observed at
+  this site). Checked before the length comparison below, since a
+  single-base REF and `.` are otherwise the same string length and
+  would silently be miscounted as a `snp`.
 
 Only `snp`-classified rows are eligible for the GS panel. A row whose
 (CHROM, POS, REF, ALT) key is not unique after classification is
@@ -47,11 +51,12 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-VARIANT_CLASSES: tuple[str, ...] = ("snp", "mnp", "indel", "symbolic_or_star")
+VARIANT_CLASSES: tuple[str, ...] = ("snp", "mnp", "indel", "symbolic_or_star", "no_alt")
 ELIGIBLE_CLASS = "snp"
 RESET_FILTER_VALUE = "."
 SYMBOLIC_MARKERS = ("<", "[", "]")
 SPANNING_DELETION_ALLELE = "*"
+NO_ALT_ALLELE = "."
 
 ACCOUNTING_HEADER: tuple[str, ...] = ("cohort_id", "metric", "value")
 
@@ -103,6 +108,9 @@ class ClassificationResult:
 
 def classify_variant(ref: str, alt: str) -> str:
     """Classify one post-split (single-ALT) record by REF/ALT shape."""
+    if alt == NO_ALT_ALLELE:
+        return "no_alt"
+
     if any(marker in alt for marker in SYMBOLIC_MARKERS) or alt == SPANNING_DELETION_ALLELE:
         return "symbolic_or_star"
 
