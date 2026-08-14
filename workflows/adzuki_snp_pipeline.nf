@@ -90,6 +90,96 @@ include {
     RECONCILE_VARIANT_TYPE_COUNTS
 } from '../modules/local/reconcile_variant_type_counts'
 
+include {
+    GS_NORMALIZE_VARIANTS
+} from '../modules/local/gs_normalize_variants'
+
+include {
+    CLASSIFY_NORMALIZED_VARIANTS
+} from '../modules/local/classify_normalized_variants'
+
+include {
+    GS_INDEX_CLASSIFIED_VARIANTS
+} from '../modules/local/gs_index_classified_variants'
+
+include {
+    GATK_VARIANTFILTRATION as GATK_VARIANTFILTRATION_GS
+} from '../modules/local/gatk_variantfiltration'
+
+include {
+    GATK_SELECTPASSVARIANTS as GATK_SELECTPASSVARIANTS_GS
+} from '../modules/local/gatk_selectpassvariants'
+
+include {
+    BUILD_GS_PANEL
+} from '../modules/local/build_gs_panel'
+
+include {
+    RECONCILE_GS_PANEL_ACCOUNTING
+} from '../modules/local/reconcile_gs_panel_accounting'
+
+include {
+    BUILD_GS_PANEL_MANIFEST
+} from '../modules/local/build_gs_panel_manifest'
+
+// Hard-filter definitions shared by the primary SNP/indel filtering
+// lineage and the GS-panel-specific re-filtering lineage (see
+// GATK_VARIANTFILTRATION_GS below), so the configured thresholds are
+// never duplicated between the two call sites.
+def snpHardFilters() {
+    return [
+        [
+            name: 'SNP_QD_LOW',
+            expression: "QD < ${params.snp_filter_qd_min}",
+        ],
+        [
+            name: 'SNP_QUAL_LOW',
+            expression: "QUAL < ${params.snp_filter_qual_min}",
+        ],
+        [
+            name: 'SNP_SOR_HIGH',
+            expression: "SOR > ${params.snp_filter_sor_max}",
+        ],
+        [
+            name: 'SNP_FS_HIGH',
+            expression: "FS > ${params.snp_filter_fs_max}",
+        ],
+        [
+            name: 'SNP_MQ_LOW',
+            expression: "MQ < ${params.snp_filter_mq_min}",
+        ],
+        [
+            name: 'SNP_MQRANKSUM_LOW',
+            expression: "MQRankSum < ${params.snp_filter_mq_rank_sum_min}",
+        ],
+        [
+            name: 'SNP_READPOSRANKSUM_LOW',
+            expression: "ReadPosRankSum < ${params.snp_filter_read_pos_rank_sum_min}",
+        ],
+    ]
+}
+
+def indelHardFilters() {
+    return [
+        [
+            name: 'INDEL_QD_LOW',
+            expression: "QD < ${params.indel_filter_qd_min}",
+        ],
+        [
+            name: 'INDEL_QUAL_LOW',
+            expression: "QUAL < ${params.indel_filter_qual_min}",
+        ],
+        [
+            name: 'INDEL_FS_HIGH',
+            expression: "FS > ${params.indel_filter_fs_max}",
+        ],
+        [
+            name: 'INDEL_READPOSRANKSUM_LOW',
+            expression: "ReadPosRankSum < ${params.indel_filter_read_pos_rank_sum_min}",
+        ],
+    ]
+}
+
 workflow ADZUKI_SNP_PIPELINE {
     take:
     samples_ch
@@ -328,55 +418,9 @@ workflow ADZUKI_SNP_PIPELINE {
             def filters
 
             if (meta['variant_type'] == 'snp') {
-                filters = [
-                    [
-                        name: 'SNP_QD_LOW',
-                        expression: "QD < ${params.snp_filter_qd_min}",
-                    ],
-                    [
-                        name: 'SNP_QUAL_LOW',
-                        expression: "QUAL < ${params.snp_filter_qual_min}",
-                    ],
-                    [
-                        name: 'SNP_SOR_HIGH',
-                        expression: "SOR > ${params.snp_filter_sor_max}",
-                    ],
-                    [
-                        name: 'SNP_FS_HIGH',
-                        expression: "FS > ${params.snp_filter_fs_max}",
-                    ],
-                    [
-                        name: 'SNP_MQ_LOW',
-                        expression: "MQ < ${params.snp_filter_mq_min}",
-                    ],
-                    [
-                        name: 'SNP_MQRANKSUM_LOW',
-                        expression: "MQRankSum < ${params.snp_filter_mq_rank_sum_min}",
-                    ],
-                    [
-                        name: 'SNP_READPOSRANKSUM_LOW',
-                        expression: "ReadPosRankSum < ${params.snp_filter_read_pos_rank_sum_min}",
-                    ],
-                ]
+                filters = snpHardFilters()
             } else if (meta['variant_type'] == 'indel') {
-                filters = [
-                    [
-                        name: 'INDEL_QD_LOW',
-                        expression: "QD < ${params.indel_filter_qd_min}",
-                    ],
-                    [
-                        name: 'INDEL_QUAL_LOW',
-                        expression: "QUAL < ${params.indel_filter_qual_min}",
-                    ],
-                    [
-                        name: 'INDEL_FS_HIGH',
-                        expression: "FS > ${params.indel_filter_fs_max}",
-                    ],
-                    [
-                        name: 'INDEL_READPOSRANKSUM_LOW',
-                        expression: "ReadPosRankSum < ${params.indel_filter_read_pos_rank_sum_min}",
-                    ],
-                ]
+                filters = indelHardFilters()
             } else {
                 error(
                     "unsupported variant type: ${meta['variant_type']}"
@@ -457,6 +501,81 @@ workflow ADZUKI_SNP_PIPELINE {
         raw_all_variant_qc_ch,
     )
 
+    // GS panel: normalize raw/all (the only stage that can still contain
+    // a GATK-MIXED record, since GATK_SELECTVARIANTS above already
+    // excludes MIXED from both cohort.snp.vcf.gz and
+    // cohort.indel.vcf.gz), reclassify by post-split REF/ALT shape, and
+    // re-run the existing SNP hard filters on a distinct 'cohort_gs'
+    // lineage so the primary raw/filtered/pass outputs above are
+    // untouched.
+    gs_normalize_input_ch = GATK_GATHERVCFS.out.vcf
+        .map { meta, vcf, vcf_index -> tuple(meta + [id: 'cohort_gs'], vcf, vcf_index) }
+
+    GS_NORMALIZE_VARIANTS(
+        gs_normalize_input_ch,
+        reference_ch,
+        reference_fai_ch,
+    )
+
+    CLASSIFY_NORMALIZED_VARIANTS(GS_NORMALIZE_VARIANTS.out.vcf)
+    GS_INDEX_CLASSIFIED_VARIANTS(CLASSIFY_NORMALIZED_VARIANTS.out.vcf)
+
+    gs_hard_filter_inputs_ch = GS_INDEX_CLASSIFIED_VARIANTS.out.vcf
+        .map { meta, vcf, vcf_index ->
+            tuple(meta + [variant_type: 'snp'], vcf, vcf_index, snpHardFilters())
+        }
+
+    GATK_VARIANTFILTRATION_GS(gs_hard_filter_inputs_ch)
+    GATK_SELECTPASSVARIANTS_GS(GATK_VARIANTFILTRATION_GS.out.vcf)
+
+    // Revert meta.id from 'cohort_gs' back to 'cohort' now that the GS
+    // lineage's own provenance trail (normalized/classified/filtered)
+    // is complete, so the final panel deliverables use clean filenames
+    // (cohort.gs_panel.*) rather than a redundant cohort_gs.gs_panel.* .
+    gs_pass_for_panel_ch = GATK_SELECTPASSVARIANTS_GS.out.vcf
+        .map { meta, vcf, vcf_index -> tuple(meta + [id: 'cohort'], vcf, vcf_index) }
+
+    BUILD_GS_PANEL(gs_pass_for_panel_ch)
+
+    RECONCILE_GS_PANEL_ACCOUNTING(
+        GATK_GATHERVCFS.out.vcf,
+        GS_NORMALIZE_VARIANTS.out.vcf,
+        CLASSIFY_NORMALIZED_VARIANTS.out.accounting,
+        gs_pass_for_panel_ch,
+        BUILD_GS_PANEL.out.matrix,
+        BUILD_GS_PANEL.out.variant_metadata,
+        BUILD_GS_PANEL.out.sample_metadata,
+    )
+
+    // Keep these in sync with the `container` directives in
+    // modules/local/gs_normalize_variants.nf, gatk_variantfiltration.nf,
+    // and build_gs_panel.nf: Nextflow has no built-in way to introspect
+    // "which container did process X actually run in" from a sibling
+    // process, so the manifest records these as literal digests rather
+    // than shelling out to e.g. `bcftools --version` at run time (which
+    // would report the tool version, not the pinned image identity).
+    gs_panel_bcftools_container = 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
+    gs_panel_gatk_container = 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
+    gs_panel_python_container = 'python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7'
+
+    BUILD_GS_PANEL_MANIFEST(
+        RECONCILE_GS_PANEL_ACCOUNTING.out.accounting,
+        gs_pass_for_panel_ch,
+        BUILD_GS_PANEL.out.matrix.map { _meta, matrix -> matrix },
+        BUILD_GS_PANEL.out.sample_metadata,
+        BUILD_GS_PANEL.out.variant_metadata,
+        BUILD_GS_PANEL.out.genotype_accounting,
+        BUILD_GS_PANEL.out.genotype_accounting_summary,
+        GATK_GATHERVCFS.out.vcf,
+        reference_ch,
+        reference_fai_ch,
+        workflow.manifest.version,
+        workflow.commitId ?: '',
+        gs_panel_bcftools_container,
+        gs_panel_gatk_container,
+        gs_panel_python_container,
+    )
+
     emit:
     raw_fastqc_html = FASTQC_RAW.out.html
     raw_fastqc_zip = FASTQC_RAW.out.zip
@@ -478,6 +597,16 @@ workflow ADZUKI_SNP_PIPELINE {
     variant_qc = SUMMARIZE_VARIANT_QC.out.qc
     filter_qc = SUMMARIZE_FILTER_QC.out.qc
     variant_type_accounting = RECONCILE_VARIANT_TYPE_COUNTS.out.accounting
+    gs_normalized_vcf = GS_NORMALIZE_VARIANTS.out.vcf
+    gs_classified_vcf = GS_INDEX_CLASSIFIED_VARIANTS.out.vcf
+    gs_filtered_vcf = GATK_VARIANTFILTRATION_GS.out.vcf
+    gs_pass_vcf = GATK_SELECTPASSVARIANTS_GS.out.vcf
+    gs_panel_matrix = BUILD_GS_PANEL.out.matrix
+    gs_panel_sample_metadata = BUILD_GS_PANEL.out.sample_metadata
+    gs_panel_variant_metadata = BUILD_GS_PANEL.out.variant_metadata
+    gs_panel_genotype_accounting = BUILD_GS_PANEL.out.genotype_accounting
+    gs_panel_record_accounting = RECONCILE_GS_PANEL_ACCOUNTING.out.accounting
+    gs_panel_manifest = BUILD_GS_PANEL_MANIFEST.out.manifest
     flagstat = SAMTOOLS_QC.out.flagstat
     stats = SAMTOOLS_QC.out.stats
     idxstats = SAMTOOLS_QC.out.idxstats

@@ -1,0 +1,10 @@
+cohort_id	metric	value
+cohort	total_input_records	2
+cohort	snp_records	2
+cohort	mnp_records	0
+cohort	indel_records	0
+cohort	symbolic_or_star_records	0
+cohort	no_alt_records	0
+cohort	duplicate_key_records	0
+cohort	distinct_duplicate_keys	0
+cohort	output_records	2
