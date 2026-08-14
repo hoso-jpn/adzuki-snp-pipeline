@@ -24,6 +24,17 @@ nextflow_pipeline {
 
                 outdir = "$outputDir"
                 input = absoluteSamplesheet.toString()
+                // Issue #20 review (P1-1): set as a String, not a bare
+                // Groovy integer literal, to reproduce exactly what
+                // Nextflow's strict CLI parser hands `params` for a real
+                // `--sample_ploidy 2` invocation. This is the regression
+                // guard for the bug where `params.sample_ploidy != 2`
+                // compared a String "2" against the Integer 2 and was
+                // always true, incorrectly fail-fasting even for the
+                // correct, explicit default -- the previous version of
+                // this test left sample_ploidy unset and could not have
+                // caught it.
+                sample_ploidy = "2"
             }
         }
 
@@ -36,6 +47,20 @@ nextflow_pipeline {
             assert path("$outputDir/variants/gvcf/sample_b.g.vcf.gz").exists()
             assert path("$outputDir/variants/gvcf/sample_b.g.vcf.gz.tbi").exists()
 
+            // Issue #20 review (P1-2): the final genotype/AC/AN/AF
+            // contract below is satisfied whether or not --sample-ploidy
+            // is actually passed to HaplotypeCaller/GenotypeGVCFs (GATK
+            // 4.6.2.0 was measured to infer the correct ploidy from its
+            // GenomicsDB/gVCF input either way -- see the PR for the
+            // comparison). So it cannot, by itself, prove the explicit
+            // propagation added in this PR is actually wired up. Check
+            // the real GATKCommandLine header each tool embeds in its
+            // own output instead, which is unambiguous either way.
+            def gvcf_a_lines = path("$outputDir/variants/gvcf/sample_a.g.vcf.gz").linesGzip
+            def gvcf_a_commandline = gvcf_a_lines.find { line -> line.startsWith("##GATKCommandLine=<ID=HaplotypeCaller") }
+            assert gvcf_a_commandline != null: "no HaplotypeCaller ##GATKCommandLine header found in sample_a gVCF"
+            assert gvcf_a_commandline.contains("--sample-ploidy 2")
+
             // raw cohort VCF and index
             def raw_vcf = path("$outputDir/variants/raw/cohort.raw.vcf.gz")
             assert raw_vcf.exists()
@@ -45,6 +70,10 @@ nextflow_pipeline {
             def header = raw_lines.find { line -> line.startsWith("#CHROM") }
             def data_lines = raw_lines.findAll { line -> !line.startsWith("#") }
             def headerColumns = header.split("\t")
+
+            def raw_genotypegvcfs_commandline = raw_lines.find { line -> line.startsWith("##GATKCommandLine=<ID=GenotypeGVCFs") }
+            assert raw_genotypegvcfs_commandline != null: "no GenotypeGVCFs ##GATKCommandLine header found in raw cohort VCF"
+            assert raw_genotypegvcfs_commandline.contains("--sample-ploidy 2")
 
             // sample-column order and "no unexpected variant records"
             assert header == "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample_a\tsample_b"
@@ -342,8 +371,19 @@ nextflow_pipeline {
 
                 outdir = "$outputDir"
                 input = absoluteSamplesheet.toString()
-                sample_ploidy = 1
-                enable_gs_panel = false
+                // Issue #20 review (P1-2): both set as Strings, not bare
+                // Groovy literals, to reproduce exactly what Nextflow's
+                // strict CLI parser hands `params` for a real
+                // `--sample_ploidy 1 --enable_gs_panel false` invocation.
+                // With native Integer/Boolean literals here, this test
+                // would keep passing even if the `.toString().toInteger()`/
+                // `.toString().toBoolean()` coercions in main.nf and
+                // workflows/adzuki_snp_pipeline.nf were ever removed --
+                // Integer 1 != 2 and Boolean false are already correct
+                // without coercion, so only String inputs actually
+                // exercise (and regression-guard) that code path.
+                sample_ploidy = "1"
+                enable_gs_panel = "false"
             }
         }
 
@@ -360,6 +400,19 @@ nextflow_pipeline {
             assert path("$outputDir/variants/gvcf/sample_b.g.vcf.gz").exists()
             assert path("$outputDir/variants/gvcf/sample_b.g.vcf.gz.tbi").exists()
 
+            // Issue #20 review (P1-2): GATK 4.6.2.0 was measured to
+            // infer the correct ploidy from its GenomicsDB/gVCF input
+            // whether or not --sample-ploidy is passed explicitly (see
+            // the PR for the comparison), so the final genotype contract
+            // checked below cannot, by itself, prove this PR's explicit
+            // propagation is actually wired up. Check the real
+            // GATKCommandLine header each tool embeds in its own output
+            // instead.
+            def gvcf_a_lines = path("$outputDir/variants/gvcf/sample_a.g.vcf.gz").linesGzip
+            def gvcf_a_commandline = gvcf_a_lines.find { line -> line.startsWith("##GATKCommandLine=<ID=HaplotypeCaller") }
+            assert gvcf_a_commandline != null: "no HaplotypeCaller ##GATKCommandLine header found in sample_a gVCF"
+            assert gvcf_a_commandline.contains("--sample-ploidy 1")
+
             def raw_vcf = path("$outputDir/variants/raw/cohort.raw.vcf.gz")
             assert raw_vcf.exists()
             assert path("$outputDir/variants/raw/cohort.raw.vcf.gz.tbi").exists()
@@ -368,6 +421,10 @@ nextflow_pipeline {
             def header = raw_lines.find { line -> line.startsWith("#CHROM") }
             def data_lines = raw_lines.findAll { line -> !line.startsWith("#") }
             def headerColumns = header.split("\t")
+
+            def raw_genotypegvcfs_commandline = raw_lines.find { line -> line.startsWith("##GATKCommandLine=<ID=GenotypeGVCFs") }
+            assert raw_genotypegvcfs_commandline != null: "no GenotypeGVCFs ##GATKCommandLine header found in raw cohort VCF"
+            assert raw_genotypegvcfs_commandline.contains("--sample-ploidy 1")
 
             assert header == "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample_a\tsample_b"
             assert data_lines.size() == 2
@@ -455,7 +512,10 @@ nextflow_pipeline {
 
                 outdir = "$outputDir"
                 input = absoluteSamplesheet.toString()
-                sample_ploidy = 1
+                // String, not a bare Integer literal -- see the haploid
+                // test above for why this matters for Issue #20's CLI
+                // string-coercion regression guards.
+                sample_ploidy = "1"
                 // enable_gs_panel is left at its default (true): this is
                 // exactly the invalid combination Issue #20 requires be
                 // rejected before any process starts, since the GS panel
