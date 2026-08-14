@@ -1,0 +1,2 @@
+cohort_id	variant_index	variant_key	chrom	pos	ref	alt	qual	missing_genotype_count	missing_genotype_rate
+cohort	0	chrTest:100:A:G	chrTest	100	A	G	100	0	0.000000

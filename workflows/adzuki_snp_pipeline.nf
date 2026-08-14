@@ -110,6 +110,18 @@ include {
     GATK_SELECTPASSVARIANTS as GATK_SELECTPASSVARIANTS_GS
 } from '../modules/local/gatk_selectpassvariants'
 
+include {
+    BUILD_GS_PANEL
+} from '../modules/local/build_gs_panel'
+
+include {
+    RECONCILE_GS_PANEL_ACCOUNTING
+} from '../modules/local/reconcile_gs_panel_accounting'
+
+include {
+    BUILD_GS_PANEL_MANIFEST
+} from '../modules/local/build_gs_panel_manifest'
+
 // Hard-filter definitions shared by the primary SNP/indel filtering
 // lineage and the GS-panel-specific re-filtering lineage (see
 // GATK_VARIANTFILTRATION_GS below), so the configured thresholds are
@@ -516,6 +528,48 @@ workflow ADZUKI_SNP_PIPELINE {
     GATK_VARIANTFILTRATION_GS(gs_hard_filter_inputs_ch)
     GATK_SELECTPASSVARIANTS_GS(GATK_VARIANTFILTRATION_GS.out.vcf)
 
+    // Revert meta.id from 'cohort_gs' back to 'cohort' now that the GS
+    // lineage's own provenance trail (normalized/classified/filtered)
+    // is complete, so the final panel deliverables use clean filenames
+    // (cohort.gs_panel.*) rather than a redundant cohort_gs.gs_panel.* .
+    gs_pass_for_panel_ch = GATK_SELECTPASSVARIANTS_GS.out.vcf
+        .map { meta, vcf, vcf_index -> tuple(meta + [id: 'cohort'], vcf, vcf_index) }
+
+    BUILD_GS_PANEL(gs_pass_for_panel_ch)
+
+    RECONCILE_GS_PANEL_ACCOUNTING(
+        GATK_GATHERVCFS.out.vcf,
+        GS_NORMALIZE_VARIANTS.out.vcf,
+        CLASSIFY_NORMALIZED_VARIANTS.out.accounting,
+        gs_pass_for_panel_ch,
+        BUILD_GS_PANEL.out.variant_metadata,
+        BUILD_GS_PANEL.out.sample_metadata,
+    )
+
+    // Keep these in sync with the `container` directives in
+    // modules/local/gs_normalize_variants.nf, gatk_variantfiltration.nf,
+    // and build_gs_panel.nf: Nextflow has no built-in way to introspect
+    // "which container did process X actually run in" from a sibling
+    // process, so the manifest records these as literal digests rather
+    // than shelling out to e.g. `bcftools --version` at run time (which
+    // would report the tool version, not the pinned image identity).
+    gs_panel_bcftools_container = 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
+    gs_panel_gatk_container = 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
+    gs_panel_python_container = 'python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7'
+
+    BUILD_GS_PANEL_MANIFEST(
+        RECONCILE_GS_PANEL_ACCOUNTING.out.accounting,
+        gs_pass_for_panel_ch,
+        BUILD_GS_PANEL.out.matrix.map { _meta, matrix -> matrix },
+        BUILD_GS_PANEL.out.sample_metadata,
+        BUILD_GS_PANEL.out.variant_metadata,
+        workflow.manifest.version,
+        workflow.commitId ?: '',
+        gs_panel_bcftools_container,
+        gs_panel_gatk_container,
+        gs_panel_python_container,
+    )
+
     emit:
     raw_fastqc_html = FASTQC_RAW.out.html
     raw_fastqc_zip = FASTQC_RAW.out.zip
@@ -541,6 +595,12 @@ workflow ADZUKI_SNP_PIPELINE {
     gs_classified_vcf = GS_INDEX_CLASSIFIED_VARIANTS.out.vcf
     gs_filtered_vcf = GATK_VARIANTFILTRATION_GS.out.vcf
     gs_pass_vcf = GATK_SELECTPASSVARIANTS_GS.out.vcf
+    gs_panel_matrix = BUILD_GS_PANEL.out.matrix
+    gs_panel_sample_metadata = BUILD_GS_PANEL.out.sample_metadata
+    gs_panel_variant_metadata = BUILD_GS_PANEL.out.variant_metadata
+    gs_panel_genotype_accounting = BUILD_GS_PANEL.out.genotype_accounting
+    gs_panel_record_accounting = RECONCILE_GS_PANEL_ACCOUNTING.out.accounting
+    gs_panel_manifest = BUILD_GS_PANEL_MANIFEST.out.manifest
     flagstat = SAMTOOLS_QC.out.flagstat
     stats = SAMTOOLS_QC.out.stats
     idxstats = SAMTOOLS_QC.out.idxstats
