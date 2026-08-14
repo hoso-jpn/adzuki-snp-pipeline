@@ -82,6 +82,14 @@ include {
     SUMMARIZE_VARIANT_QC
 } from '../modules/local/summarize_variant_qc'
 
+include {
+    SUMMARIZE_FILTER_QC
+} from '../modules/local/summarize_filter_qc'
+
+include {
+    RECONCILE_VARIANT_TYPE_COUNTS
+} from '../modules/local/reconcile_variant_type_counts'
+
 workflow ADZUKI_SNP_PIPELINE {
     take:
     samples_ch
@@ -428,6 +436,27 @@ workflow ADZUKI_SNP_PIPELINE {
     BCFTOOLS_STATS(variant_qc_inputs_ch)
     SUMMARIZE_VARIANT_QC(BCFTOOLS_STATS.out.stats)
 
+    SUMMARIZE_FILTER_QC(GATK_VARIANTFILTRATION.out.vcf)
+
+    raw_snp_only_ch = GATK_SELECTVARIANTS.out.vcf
+        .filter { meta, _vcf, _vcf_index -> meta['variant_type'] == 'snp' }
+
+    raw_indel_only_ch = GATK_SELECTVARIANTS.out.vcf
+        .filter { meta, _vcf, _vcf_index -> meta['variant_type'] == 'indel' }
+
+    raw_all_variant_qc_ch = SUMMARIZE_VARIANT_QC.out.qc
+        .filter { meta, _variant_qc_tsv, _sample_qc_tsv, _summary_txt ->
+            meta['qc_stage'] == 'raw' && meta['variant_type'] == 'all'
+        }
+        .map { _meta, variant_qc_tsv, _sample_qc_tsv, _summary_txt -> variant_qc_tsv }
+
+    RECONCILE_VARIANT_TYPE_COUNTS(
+        GATK_GATHERVCFS.out.vcf,
+        raw_snp_only_ch,
+        raw_indel_only_ch,
+        raw_all_variant_qc_ch,
+    )
+
     emit:
     raw_fastqc_html = FASTQC_RAW.out.html
     raw_fastqc_zip = FASTQC_RAW.out.zip
@@ -447,6 +476,8 @@ workflow ADZUKI_SNP_PIPELINE {
     pass_vcfs = GATK_SELECTPASSVARIANTS.out.vcf
     bcftools_stats = BCFTOOLS_STATS.out.stats
     variant_qc = SUMMARIZE_VARIANT_QC.out.qc
+    filter_qc = SUMMARIZE_FILTER_QC.out.qc
+    variant_type_accounting = RECONCILE_VARIANT_TYPE_COUNTS.out.accounting
     flagstat = SAMTOOLS_QC.out.flagstat
     stats = SAMTOOLS_QC.out.stats
     idxstats = SAMTOOLS_QC.out.idxstats
