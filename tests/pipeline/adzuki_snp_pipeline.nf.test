@@ -245,6 +245,7 @@ nextflow_pipeline {
             assert gsClassificationAccounting["mnp_records"] == "0"
             assert gsClassificationAccounting["indel_records"] == "0"
             assert gsClassificationAccounting["symbolic_or_star_records"] == "0"
+            assert gsClassificationAccounting["no_alt_records"] == "0"
             assert gsClassificationAccounting["duplicate_key_records"] == "0"
             assert gsClassificationAccounting["output_records"] == "2"
 
@@ -293,9 +294,17 @@ nextflow_pipeline {
             assert gsRecordAccounting["classified_biallelic_snp_records"] == "2"
             assert gsRecordAccounting["gs_hard_filter_excluded_records"] == "2"
             assert gsRecordAccounting["gs_pass_records"] == "0"
-            assert gsRecordAccounting["final_matrix_variant_records"] == "0"
-            assert gsRecordAccounting["final_matrix_variant_count_matches_pass"] == "true"
-            assert gsRecordAccounting["final_matrix_sample_count"] == "2"
+            assert gsRecordAccounting["gs_pass_sample_count"] == "2"
+            // Issue #18 PR review (P1-3): these are read directly from
+            // the matrix and metadata files themselves, not derived
+            // from each other, and reconcile_gs_panel_accounting.py
+            // would have exited 1 (no output written at all) had any
+            // of them disagreed -- so their mutual agreement here is a
+            // property this file's mere existence already guarantees.
+            assert gsRecordAccounting["matrix_variant_records"] == "0"
+            assert gsRecordAccounting["matrix_sample_count"] == "2"
+            assert gsRecordAccounting["variant_metadata_records"] == "0"
+            assert gsRecordAccounting["sample_metadata_records"] == "2"
             assert gsRecordAccounting["panel_status"] == "empty"
 
             def manifestJson = new groovy.json.JsonSlurper().parse(
@@ -304,7 +313,14 @@ nextflow_pipeline {
             assert manifestJson.schema_version == 1
             assert manifestJson.panel_status == "empty"
             assert manifestJson.cohort_id == "cohort"
-            assert manifestJson.checksums.size() == 5
+            assert manifestJson.parameters.sample_ploidy == 2
+            assert manifestJson.genotype_encoding.ploidy == "diploid_only"
+            assert manifestJson.genotype_encoding.missing_token == "nan"
+            // gs_pass_vcf, matrix, sample_metadata, variant_metadata,
+            // genotype_accounting(+summary), record_accounting(+summary),
+            // raw_all_vcf, reference_fasta, reference_fai (Issue #18 PR
+            // review, P1-4: provenance, not just self-consistency).
+            assert manifestJson.checksums.size() == 11
         }
     }
 }
