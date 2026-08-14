@@ -267,15 +267,22 @@ haploid or polyploid call, so a cohort with `sample_ploidy != 2` would
 have *every* genotype fall into `non_diploid_calls_treated_as_missing`,
 producing a matrix that is entirely `nan` while still exiting `0` and
 looking, from the pipeline's own machine-readable status, like a normal
-completed run. `bin/build_gs_panel.py` and
-`bin/build_gs_panel_manifest.py` both therefore fail fast — exit `1`,
-before writing any output — whenever `--sample-ploidy` (wired from
-`params.sample_ploidy`) is not exactly `2`, and
-`cohort.gs_panel.manifest.json` records the configured `sample_ploidy`
-under `parameters` so a reader never has to guess which ploidy a given
-panel was built under. A generalized, ploidy-aware encoding is tracked as
-future work (see Issue #1's roadmap); until it exists, this schema simply
-cannot be used for a non-diploid cohort.
+completed run. `bin/build_gs_panel.py` and `bin/build_gs_panel_manifest.py` **each
+independently** fail fast — exit `1`, before writing any output —
+whenever `--sample-ploidy` (wired from `params.sample_ploidy`) is not
+exactly `2`. This check is deliberately duplicated rather than trusted
+to run only once: in the normal Nextflow pipeline `build_gs_panel.py`
+always runs first and would already have failed on a non-diploid input,
+but `build_gs_panel_manifest.py` has no way to know that when invoked on
+its own (e.g. directly, outside the pipeline), and a manifest recording
+`parameters.sample_ploidy` alongside `genotype_encoding.ploidy ==
+"diploid_only"` for a non-2 ploidy would itself be a self-contradictory
+provenance record. `cohort.gs_panel.manifest.json` records the
+configured `sample_ploidy` under `parameters` so a reader never has to
+guess which ploidy a given panel was built under. A generalized,
+ploidy-aware encoding is tracked as future work (see Issue #1's
+roadmap); until it exists, this schema simply cannot be used for a
+non-diploid cohort.
 
 ### On-disk shape vs. in-memory shape
 
@@ -362,6 +369,24 @@ are read directly from the genotype matrix file itself (its own header
 and row count), not derived from the metadata files that were supposed
 to describe it.
 
+**Counting alone is not enough.** Four artifacts can each report the
+same variant count while still disagreeing about *which* variant is in
+which row, or listing the same rows in a different order: a shuffled
+matrix sample column, a `variant_key` swapped for a different value, or
+`variant_metadata.tsv`'s rows written in a different order than the
+matrix. None of these change any count, so this tool compares the
+actual, ordered sequence of values, not just their lengths --
+`gs_pass_vcf.sample_ids == matrix.sample_ids == sample_metadata`'s own
+`sample_id` column, and `gs_pass_vcf.variant_keys ==
+matrix.variant_keys == variant_metadata`'s own `variant_key` column,
+both compared as ordered tuples. A tuple-equality check on identity
+subsumes the plain count check it replaced (two sequences cannot be
+equal without also being the same length). The genotype matrix's own
+row shape is checked too: every data row must have exactly
+`1 + sample_count` columns, which catches a row with a silently dropped
+or duplicated dosage column that a row-count-only check (the matrix
+summarizer's previous behavior) would never see.
+
 **Every one of these cross-file checks is a hard error
 (`InconsistentGsPanelError`), not a warning: on any disagreement, the
 tool exits `1` and writes no output at all.** This is a deliberate
@@ -381,16 +406,18 @@ disagrees with its own source, none of the remaining numbers can be
 trusted either, so reporting a partial, possibly-wrong accounting
 alongside a "warning" would be worse than refusing to produce one.
 
-This replaces an earlier revision of this tool that derived
+This replaces two earlier, narrower revisions of this tool: one derived
 `final_matrix_variant_records` from the variant metadata file's row
-count without ever opening the matrix itself — meaning a bug that
-corrupted only the matrix (a dropped row, a misaligned column, a
-truncated write) would have gone completely undetected as long as the
-metadata files still looked correct. The current tool also checks that
-every data row in the raw/all, normalized, and GS-eligible PASS VCFs has
-exactly as many sample fields as its own `#CHROM` header declares, which
-catches a truncated or otherwise malformed row that a plain
-field-count-only check would miss.
+count without ever opening the matrix itself, so a bug that corrupted
+only the matrix (a dropped row, a misaligned column, a truncated write)
+would have gone completely undetected as long as the metadata files
+still looked correct; a later revision opened the matrix but still only
+compared counts, so a shuffled sample column or a reordered metadata
+file would still have passed silently. The current tool also checks
+that every data row in the raw/all, normalized, and GS-eligible PASS
+VCFs has exactly as many sample fields as its own `#CHROM` header
+declares, which catches a truncated or otherwise malformed row that a
+plain field-count-only check would miss.
 
 ## Reproducibility manifest (concern 6)
 
