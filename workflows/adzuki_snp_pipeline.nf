@@ -501,80 +501,117 @@ workflow ADZUKI_SNP_PIPELINE {
         raw_all_variant_qc_ch,
     )
 
-    // GS panel: normalize raw/all (the only stage that can still contain
-    // a GATK-MIXED record, since GATK_SELECTVARIANTS above already
-    // excludes MIXED from both cohort.snp.vcf.gz and
-    // cohort.indel.vcf.gz), reclassify by post-split REF/ALT shape, and
-    // re-run the existing SNP hard filters on a distinct 'cohort_gs'
-    // lineage so the primary raw/filtered/pass outputs above are
-    // untouched.
-    gs_normalize_input_ch = GATK_GATHERVCFS.out.vcf
-        .map { meta, vcf, vcf_index -> tuple(meta + [id: 'cohort_gs'], vcf, vcf_index) }
+    // See main.nf for why this is `.toString().toBoolean()` rather than
+    // a bare truthiness check: a CLI-provided `--enable_gs_panel false`
+    // resolves to the String "false", which is truthy in Groovy.
+    gs_panel_enabled = params.enable_gs_panel.toString().toBoolean()
 
-    GS_NORMALIZE_VARIANTS(
-        gs_normalize_input_ch,
-        reference_ch,
-        reference_fai_ch,
-    )
+    if (gs_panel_enabled) {
+        // GS panel: normalize raw/all (the only stage that can still contain
+        // a GATK-MIXED record, since GATK_SELECTVARIANTS above already
+        // excludes MIXED from both cohort.snp.vcf.gz and
+        // cohort.indel.vcf.gz), reclassify by post-split REF/ALT shape, and
+        // re-run the existing SNP hard filters on a distinct 'cohort_gs'
+        // lineage so the primary raw/filtered/pass outputs above are
+        // untouched.
+        gs_normalize_input_ch = GATK_GATHERVCFS.out.vcf
+            .map { meta, vcf, vcf_index -> tuple(meta + [id: 'cohort_gs'], vcf, vcf_index) }
 
-    CLASSIFY_NORMALIZED_VARIANTS(GS_NORMALIZE_VARIANTS.out.vcf)
-    GS_INDEX_CLASSIFIED_VARIANTS(CLASSIFY_NORMALIZED_VARIANTS.out.vcf)
+        GS_NORMALIZE_VARIANTS(
+            gs_normalize_input_ch,
+            reference_ch,
+            reference_fai_ch,
+        )
 
-    gs_hard_filter_inputs_ch = GS_INDEX_CLASSIFIED_VARIANTS.out.vcf
-        .map { meta, vcf, vcf_index ->
-            tuple(meta + [variant_type: 'snp'], vcf, vcf_index, snpHardFilters())
-        }
+        CLASSIFY_NORMALIZED_VARIANTS(GS_NORMALIZE_VARIANTS.out.vcf)
+        GS_INDEX_CLASSIFIED_VARIANTS(CLASSIFY_NORMALIZED_VARIANTS.out.vcf)
 
-    GATK_VARIANTFILTRATION_GS(gs_hard_filter_inputs_ch)
-    GATK_SELECTPASSVARIANTS_GS(GATK_VARIANTFILTRATION_GS.out.vcf)
+        gs_hard_filter_inputs_ch = GS_INDEX_CLASSIFIED_VARIANTS.out.vcf
+            .map { meta, vcf, vcf_index ->
+                tuple(meta + [variant_type: 'snp'], vcf, vcf_index, snpHardFilters())
+            }
 
-    // Revert meta.id from 'cohort_gs' back to 'cohort' now that the GS
-    // lineage's own provenance trail (normalized/classified/filtered)
-    // is complete, so the final panel deliverables use clean filenames
-    // (cohort.gs_panel.*) rather than a redundant cohort_gs.gs_panel.* .
-    gs_pass_for_panel_ch = GATK_SELECTPASSVARIANTS_GS.out.vcf
-        .map { meta, vcf, vcf_index -> tuple(meta + [id: 'cohort'], vcf, vcf_index) }
+        GATK_VARIANTFILTRATION_GS(gs_hard_filter_inputs_ch)
+        GATK_SELECTPASSVARIANTS_GS(GATK_VARIANTFILTRATION_GS.out.vcf)
 
-    BUILD_GS_PANEL(gs_pass_for_panel_ch)
+        // Revert meta.id from 'cohort_gs' back to 'cohort' now that the GS
+        // lineage's own provenance trail (normalized/classified/filtered)
+        // is complete, so the final panel deliverables use clean filenames
+        // (cohort.gs_panel.*) rather than a redundant cohort_gs.gs_panel.* .
+        gs_pass_for_panel_ch = GATK_SELECTPASSVARIANTS_GS.out.vcf
+            .map { meta, vcf, vcf_index -> tuple(meta + [id: 'cohort'], vcf, vcf_index) }
 
-    RECONCILE_GS_PANEL_ACCOUNTING(
-        GATK_GATHERVCFS.out.vcf,
-        GS_NORMALIZE_VARIANTS.out.vcf,
-        CLASSIFY_NORMALIZED_VARIANTS.out.accounting,
-        gs_pass_for_panel_ch,
-        BUILD_GS_PANEL.out.matrix,
-        BUILD_GS_PANEL.out.variant_metadata,
-        BUILD_GS_PANEL.out.sample_metadata,
-    )
+        BUILD_GS_PANEL(gs_pass_for_panel_ch)
 
-    // Keep these in sync with the `container` directives in
-    // modules/local/gs_normalize_variants.nf, gatk_variantfiltration.nf,
-    // and build_gs_panel.nf: Nextflow has no built-in way to introspect
-    // "which container did process X actually run in" from a sibling
-    // process, so the manifest records these as literal digests rather
-    // than shelling out to e.g. `bcftools --version` at run time (which
-    // would report the tool version, not the pinned image identity).
-    gs_panel_bcftools_container = 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
-    gs_panel_gatk_container = 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
-    gs_panel_python_container = 'python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7'
+        RECONCILE_GS_PANEL_ACCOUNTING(
+            GATK_GATHERVCFS.out.vcf,
+            GS_NORMALIZE_VARIANTS.out.vcf,
+            CLASSIFY_NORMALIZED_VARIANTS.out.accounting,
+            gs_pass_for_panel_ch,
+            BUILD_GS_PANEL.out.matrix,
+            BUILD_GS_PANEL.out.variant_metadata,
+            BUILD_GS_PANEL.out.sample_metadata,
+        )
 
-    BUILD_GS_PANEL_MANIFEST(
-        RECONCILE_GS_PANEL_ACCOUNTING.out.accounting,
-        gs_pass_for_panel_ch,
-        BUILD_GS_PANEL.out.matrix.map { _meta, matrix -> matrix },
-        BUILD_GS_PANEL.out.sample_metadata,
-        BUILD_GS_PANEL.out.variant_metadata,
-        BUILD_GS_PANEL.out.genotype_accounting,
-        BUILD_GS_PANEL.out.genotype_accounting_summary,
-        GATK_GATHERVCFS.out.vcf,
-        reference_ch,
-        reference_fai_ch,
-        workflow.manifest.version,
-        workflow.commitId ?: '',
-        gs_panel_bcftools_container,
-        gs_panel_gatk_container,
-        gs_panel_python_container,
-    )
+        // Keep these in sync with the `container` directives in
+        // modules/local/gs_normalize_variants.nf, gatk_variantfiltration.nf,
+        // and build_gs_panel.nf: Nextflow has no built-in way to introspect
+        // "which container did process X actually run in" from a sibling
+        // process, so the manifest records these as literal digests rather
+        // than shelling out to e.g. `bcftools --version` at run time (which
+        // would report the tool version, not the pinned image identity).
+        gs_panel_bcftools_container = 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
+        gs_panel_gatk_container = 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
+        gs_panel_python_container = 'python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7'
+
+        BUILD_GS_PANEL_MANIFEST(
+            RECONCILE_GS_PANEL_ACCOUNTING.out.accounting,
+            gs_pass_for_panel_ch,
+            BUILD_GS_PANEL.out.matrix.map { _meta, matrix -> matrix },
+            BUILD_GS_PANEL.out.sample_metadata,
+            BUILD_GS_PANEL.out.variant_metadata,
+            BUILD_GS_PANEL.out.genotype_accounting,
+            BUILD_GS_PANEL.out.genotype_accounting_summary,
+            GATK_GATHERVCFS.out.vcf,
+            reference_ch,
+            reference_fai_ch,
+            workflow.manifest.version,
+            workflow.commitId ?: '',
+            gs_panel_bcftools_container,
+            gs_panel_gatk_container,
+            gs_panel_python_container,
+        )
+
+        gs_normalized_vcf_ch = GS_NORMALIZE_VARIANTS.out.vcf
+        gs_classified_vcf_ch = GS_INDEX_CLASSIFIED_VARIANTS.out.vcf
+        gs_filtered_vcf_ch = GATK_VARIANTFILTRATION_GS.out.vcf
+        gs_pass_vcf_ch = GATK_SELECTPASSVARIANTS_GS.out.vcf
+        gs_panel_matrix_ch = BUILD_GS_PANEL.out.matrix
+        gs_panel_sample_metadata_ch = BUILD_GS_PANEL.out.sample_metadata
+        gs_panel_variant_metadata_ch = BUILD_GS_PANEL.out.variant_metadata
+        gs_panel_genotype_accounting_ch = BUILD_GS_PANEL.out.genotype_accounting
+        gs_panel_record_accounting_ch = RECONCILE_GS_PANEL_ACCOUNTING.out.accounting
+        gs_panel_manifest_ch = BUILD_GS_PANEL_MANIFEST.out.manifest
+    } else {
+        // enable_gs_panel=false: skip the entire GS lineage (normalization
+        // through the reproducibility manifest) without starting a single
+        // one of its processes, so a non-diploid sample_ploidy can be
+        // exercised end to end without ever reaching the GS panel's own
+        // diploid-only fail-fast in bin/build_gs_panel.py. No
+        // variants/gs_*/gs_panel/ output directories are created, since
+        // Nextflow only creates a publishDir subdirectory when a process
+        // actually publishes into it.
+        gs_normalized_vcf_ch = channel.empty()
+        gs_classified_vcf_ch = channel.empty()
+        gs_filtered_vcf_ch = channel.empty()
+        gs_pass_vcf_ch = channel.empty()
+        gs_panel_matrix_ch = channel.empty()
+        gs_panel_sample_metadata_ch = channel.empty()
+        gs_panel_variant_metadata_ch = channel.empty()
+        gs_panel_genotype_accounting_ch = channel.empty()
+        gs_panel_record_accounting_ch = channel.empty()
+        gs_panel_manifest_ch = channel.empty()
+    }
 
     emit:
     raw_fastqc_html = FASTQC_RAW.out.html
@@ -597,16 +634,16 @@ workflow ADZUKI_SNP_PIPELINE {
     variant_qc = SUMMARIZE_VARIANT_QC.out.qc
     filter_qc = SUMMARIZE_FILTER_QC.out.qc
     variant_type_accounting = RECONCILE_VARIANT_TYPE_COUNTS.out.accounting
-    gs_normalized_vcf = GS_NORMALIZE_VARIANTS.out.vcf
-    gs_classified_vcf = GS_INDEX_CLASSIFIED_VARIANTS.out.vcf
-    gs_filtered_vcf = GATK_VARIANTFILTRATION_GS.out.vcf
-    gs_pass_vcf = GATK_SELECTPASSVARIANTS_GS.out.vcf
-    gs_panel_matrix = BUILD_GS_PANEL.out.matrix
-    gs_panel_sample_metadata = BUILD_GS_PANEL.out.sample_metadata
-    gs_panel_variant_metadata = BUILD_GS_PANEL.out.variant_metadata
-    gs_panel_genotype_accounting = BUILD_GS_PANEL.out.genotype_accounting
-    gs_panel_record_accounting = RECONCILE_GS_PANEL_ACCOUNTING.out.accounting
-    gs_panel_manifest = BUILD_GS_PANEL_MANIFEST.out.manifest
+    gs_normalized_vcf = gs_normalized_vcf_ch
+    gs_classified_vcf = gs_classified_vcf_ch
+    gs_filtered_vcf = gs_filtered_vcf_ch
+    gs_pass_vcf = gs_pass_vcf_ch
+    gs_panel_matrix = gs_panel_matrix_ch
+    gs_panel_sample_metadata = gs_panel_sample_metadata_ch
+    gs_panel_variant_metadata = gs_panel_variant_metadata_ch
+    gs_panel_genotype_accounting = gs_panel_genotype_accounting_ch
+    gs_panel_record_accounting = gs_panel_record_accounting_ch
+    gs_panel_manifest = gs_panel_manifest_ch
     flagstat = SAMTOOLS_QC.out.flagstat
     stats = SAMTOOLS_QC.out.stats
     idxstats = SAMTOOLS_QC.out.idxstats

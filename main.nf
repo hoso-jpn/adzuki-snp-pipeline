@@ -14,6 +14,25 @@ workflow {
     validateParameters()
     log.info paramsSummaryLog(workflow)
 
+    // `.toString().toBoolean()` (not a bare `if (params.enable_gs_panel)`)
+    // because Nextflow resolves a CLI-provided `--enable_gs_panel false`
+    // to the *String* "false", not the Groovy boolean `false` -- and a
+    // non-empty String, including the literal text "false", is truthy.
+    // Round-tripping through `.toString()` first makes this correct
+    // whether the value came from the CLI (String) or from
+    // nextflow.config's own `true` default (already a real Boolean).
+    def gsPanelEnabled = params.enable_gs_panel.toString().toBoolean()
+
+    if (gsPanelEnabled && params.sample_ploidy != 2) {
+        error(
+            "params.sample_ploidy is ${params.sample_ploidy}, but params.enable_gs_panel " +
+            'is true (the default). The GS panel schema (v1) is diploid-only and would ' +
+            'fail only after variant calling has already run, wasting that work. Set ' +
+            '--enable_gs_panel false to run non-diploid variant calling without the GS ' +
+            'panel, or leave sample_ploidy at its default (2) to keep the GS panel enabled.'
+        )
+    }
+
     sample_rows = samplesheetToList(
         params.input,
         'assets/schema_input.json'
