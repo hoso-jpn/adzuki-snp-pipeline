@@ -75,20 +75,25 @@ class ParseVcfSitesTests(unittest.TestCase):
         self.assertEqual(sites.variant_keys, Counter())
 
     def test_distinct_records_sharing_a_position_are_not_the_same_key(self) -> None:
-        # A real SNP and a real indel can legitimately share a
-        # coordinate without being the same record; (CHROM, POS) alone
-        # would conflate them, so identity must include REF/ALT too.
+        # A real SNP (G>A) and a real indel (G>GAA) at the identical
+        # chrTest:500 coordinate: (CHROM, POS) alone would treat these
+        # as the same key, but they are two distinct records (different
+        # REF/ALT), so identity must include REF/ALT too and the
+        # duplicate-detection intersection must stay empty.
         raw_snp = reconcile_module.parse_vcf_sites(
-            FIXTURES_DIR / "reconcile_duplicate_raw_snp.vcf.gz"
+            FIXTURES_DIR / "reconcile_same_position_raw_snp.vcf.gz"
         )
         raw_indel = reconcile_module.parse_vcf_sites(
-            FIXTURES_DIR / "reconcile_duplicate_raw_indel.vcf.gz"
+            FIXTURES_DIR / "reconcile_same_position_raw_indel.vcf.gz"
         )
 
         shared_positions = {key[:2] for key in raw_snp.variant_keys} & {
             key[:2] for key in raw_indel.variant_keys
         }
-        self.assertEqual(shared_positions, {("chrTest", "300")})
+        self.assertEqual(shared_positions, {("chrTest", "500")})
+
+        duplicate_records = sum((raw_snp.variant_keys & raw_indel.variant_keys).values())
+        self.assertEqual(duplicate_records, 0)
 
     def test_malformed_row_raises_with_file_and_cause(self) -> None:
         import gzip
