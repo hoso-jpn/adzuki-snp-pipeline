@@ -25,14 +25,17 @@
 // documented limitation of this specific choice, not an oversight --
 // see README. The BAM produced here has been confirmed, for this
 // pipeline's synthetic fixture, to carry the expected coordinate-sort
-// header and to produce byte-identical downstream variant-calling
-// output when fed to the 1.24-pinned stages -- but that is not
-// evidence that 1.22.1 and 1.24 are interchangeable in general (BGZF
-// interoperability does not imply identical sort-tie-break ordering,
-// compression, or bug fixes between versions; the SAM spec leaves
-// same-RNAME/POS record order unspecified). Any behavioral difference
-// on real data between these two samtools versions is unverified and
-// left to Phase 5 (real-reference profiling) to surface.
+// header, and the generated-index and prebuilt-index paths -- both
+// sorted by this same samtools 1.22.1 -- produce a byte-identical raw
+// cohort VCF once fed through the 1.24-pinned downstream stages; this
+// is not a comparison of samtools 1.22.1's own output against
+// samtools 1.24's. That is not evidence that 1.22.1 and 1.24 are
+// interchangeable in general (BGZF interoperability does not imply
+// identical sort-tie-break ordering, compression, or bug fixes
+// between versions; the SAM spec leaves same-RNAME/POS record order
+// unspecified). Any behavioral difference on real data between these
+// two samtools versions themselves is unverified and left to Phase 5
+// (real-reference profiling) to surface.
 process BWA_MEM2_MEM_SORT {
     tag "${meta.id}:${meta.read_group_id}"
     label 'process_mapping'
