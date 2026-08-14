@@ -67,7 +67,11 @@
     "sample_ploidy": {
       "type": "integer",
       "minimum": 1,
-      "description": "Sample ploidy passed to GATK HaplotypeCaller"
+      "description": "Global sample ploidy for the whole run, passed to both GATK HaplotypeCaller and GenotypeGVCFs; applies uniformly to every sample and contig, not per-sample or per-contig"
+    },
+    "enable_gs_panel": {
+      "type": "boolean",
+      "description": "Whether to run the GS (genomic selection) SNP panel lineage; its schema v1 is diploid-only, so this must be false whenever sample_ploidy is not 2"
     },
     "snp_filter_qd_min": {
       "type": "number",

@@ -10,7 +10,18 @@ given value does and does not mean.
 
 GS is a conditional, higher-level service on top of the variant-calling
 pipeline: it only produces a usable panel once per-individual genotype data
-has been called, filtered, and normalized. This document, and the panel
+has been called, filtered, and normalized. It is also conditional in a
+second, literal sense (Issue #20): the entire GS lineage — normalization
+through the reproducibility manifest — only runs at all when
+`params.enable_gs_panel` is `true` (the default). When it is `false`, no
+process in this lineage starts, and none of `variants/gs_normalized/`,
+`variants/gs_classified/`, `variants/gs_filtered/`, `variants/gs_pass/`,
+or `gs_panel/` is created; the primary `raw`/`filtered`/`pass`/QC lineage
+this document does not otherwise describe is unaffected either way. This
+exists specifically so that non-diploid variant calling — which this
+schema's diploid-only constraint (see "Diploid-only constraint" below)
+would otherwise always fail on — can be exercised end to end without
+reaching the GS panel at all. This document, and the panel
 itself, make no claim that:
 
 - the configured hard-filter thresholds are appropriate for a real adzuki
@@ -283,6 +294,16 @@ guess which ploidy a given panel was built under. A generalized,
 ploidy-aware encoding is tracked as future work (see Issue #1's
 roadmap); until it exists, this schema simply cannot be used for a
 non-diploid cohort.
+
+This per-script fail-fast is deliberately kept even though the pipeline
+also has a coarser, earlier gate: `main.nf` refuses to start *any*
+process at all when `params.enable_gs_panel` is `true` (the default)
+and `params.sample_ploidy` is not `2` (Issue #20; see "Scope and what
+this is not" above). That pipeline-level check exists to fail fast and
+cheaply, before wasting a full variant-calling run; it is not a
+replacement for the checks inside `bin/build_gs_panel.py` and
+`bin/build_gs_panel_manifest.py` themselves, which remain the only
+defense when either script is invoked directly, outside the pipeline.
 
 ### On-disk shape vs. in-memory shape
 
