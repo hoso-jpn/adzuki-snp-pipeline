@@ -163,4 +163,84 @@ nextflow_process {
             assert headerLines.find { line -> line.startsWith("@RG") }?.contains("ID:sample_b_L001")
         }
     }
+
+    // PR #25 review (P1-1): a previous version of this module clamped
+    // thread counts and the per-thread memory share to a floor of 1
+    // instead of validating task.cpus/task.memory, which let a small
+    // enough resource override silently break the CPU/memory contract
+    // this formula exists to enforce (e.g. task.memory=1024 MiB summed
+    // to 1025 MiB of reservations). These two tests reproduce that
+    // exact scenario via a `process_mapping`-overriding config fixture
+    // and confirm the task now fails fast with a diagnosable message
+    // instead.
+
+    test("fails fast with a diagnosable message when task.cpus is too small to run both tools concurrently") {
+
+        config "./fixtures/bwa_mem2_mem_sort_tiny_cpu.config"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [
+                        id: 'sample_a',
+                        read_group_id: 'sample_a_L001',
+                        library_id: 'lib_a',
+                        platform: 'ILLUMINA',
+                        platform_unit: 'flowcell1.L001.ATCACG',
+                    ],
+                    file("${projectDir}/tests/data/reads/sample_a_L001_R1.fastq.gz"),
+                    file("${projectDir}/tests/data/reads/sample_a_L001_R2.fastq.gz"),
+                ]
+                input[1] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa"),
+                ]
+                input[2] = BWA_MEM2_INDEX.out.indexes
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("task.cpus >= 2")
+            assert output.contains("task.cpus=1")
+        }
+    }
+
+    test("fails fast with a diagnosable message when task.memory is too small for sort's own threads") {
+
+        config "./fixtures/bwa_mem2_mem_sort_tiny_memory.config"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [
+                        id: 'sample_a',
+                        read_group_id: 'sample_a_L001',
+                        library_id: 'lib_a',
+                        platform: 'ILLUMINA',
+                        platform_unit: 'flowcell1.L001.ATCACG',
+                    ],
+                    file("${projectDir}/tests/data/reads/sample_a_L001_R1.fastq.gz"),
+                    file("${projectDir}/tests/data/reads/sample_a_L001_R2.fastq.gz"),
+                ]
+                input[1] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa"),
+                ]
+                input[2] = BWA_MEM2_INDEX.out.indexes
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("needs more memory")
+            assert output.contains("below the 1 MiB/thread floor")
+        }
+    }
 }

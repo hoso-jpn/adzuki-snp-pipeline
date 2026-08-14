@@ -23,9 +23,16 @@
 // this pipeline: SAMTOOLS_MERGE, SAMTOOLS_INDEX, SAMTOOLS_QC,
 // SAMTOOLS_FAIDX) was found; this 1.22.1-vs-1.24 gap is a deliberate,
 // documented limitation of this specific choice, not an oversight --
-// see README. samtools' BAM output format itself is not
-// version-specific, so this does not affect correctness of the
-// coordinate-sorted BAM consumed by the 1.24-pinned stages downstream.
+// see README. The BAM produced here has been confirmed, for this
+// pipeline's synthetic fixture, to carry the expected coordinate-sort
+// header and to produce byte-identical downstream variant-calling
+// output when fed to the 1.24-pinned stages -- but that is not
+// evidence that 1.22.1 and 1.24 are interchangeable in general (BGZF
+// interoperability does not imply identical sort-tie-break ordering,
+// compression, or bug fixes between versions; the SAM spec leaves
+// same-RNAME/POS record order unspecified). Any behavioral difference
+// on real data between these two samtools versions is unverified and
+// left to Phase 5 (real-reference profiling) to surface.
 process BWA_MEM2_MEM_SORT {
     tag "${meta.id}:${meta.read_group_id}"
     label 'process_mapping'
@@ -73,12 +80,35 @@ process BWA_MEM2_MEM_SORT {
     // dominates the pair's total CPU cost and scales close to linearly
     // with threads, so it gets the majority (80%); samtools sort's
     // speedup from additional threads is smaller past a handful, so it
-    // gets the remainder, floored at 1. This 80/20 split is a
-    // documented starting assumption, not a measurement -- Issue #8
-    // Phase 5 (real-reference profiling) is expected to confirm or
-    // retune it once real hardware and a real reference are available.
+    // gets the remainder. This 80/20 split is a documented starting
+    // assumption, not a measurement -- Issue #8 Phase 5 (real-reference
+    // profiling) is expected to confirm or retune it once real hardware
+    // and a real reference are available.
+    //
+    // PR #25 review (P1-1): a previous version of this script clamped
+    // both thread counts and the per-thread memory share to a floor of
+    // 1 instead of validating task.cpus/task.memory up front. On a
+    // small enough resource override, those floors silently violated
+    // the very budget this formula exists to respect -- e.g.
+    // task.cpus=1 gave bwa_threads=1 *and* sort_threads=1 (2 threads
+    // sharing a 1-CPU task), and task.memory=1024 MiB gave
+    // bwa_share_mib=512 + os_overhead_mib=512 + a memory-clamped
+    // sort_share_mib=1, summing to 1025 MiB against a 1024 MiB budget.
+    // Failing fast here, with a diagnosable message, is safer than a
+    // clamp that hides an already-broken allocation.
+    if (task.cpus < 2) {
+        error(
+            "BWA_MEM2_MEM_SORT (${meta.id}:${meta.read_group_id}) needs " +
+            "task.cpus >= 2 -- bwa-mem2 and samtools sort run " +
+            "concurrently in the same pipe and each need at least one " +
+            "thread of their own. Got task.cpus=${task.cpus} from the " +
+            "'process_mapping' resource label; increase its cpus in " +
+            'nextflow.config or the active profile config.'
+        )
+    }
+
     sort_threads = Math.max(1, (task.cpus * 0.2).intValue())
-    bwa_threads = Math.max(1, task.cpus - sort_threads)
+    bwa_threads = task.cpus - sort_threads
 
     // `samtools sort -m` is memory *per thread*. Omitting it defaults
     // to a fixed 768 MiB/thread regardless of what the task actually
@@ -89,24 +119,31 @@ process BWA_MEM2_MEM_SORT {
     // assumptions: half of task.memory is reserved for bwa-mem2 itself
     // (its footprint is dominated by the reference index, which scales
     // with genome size in a way this formula deliberately does not try
-    // to predict ahead of Phase 5's real measurement), a fixed 512 MiB
-    // is reserved for OS/tool overhead (page cache pressure, allocator
-    // fragmentation, samtools' own non-buffer bookkeeping), and
-    // whatever remains is divided evenly across sort's own threads --
-    // clamped so it can never go below 1 MiB/thread even on a
-    // pathologically small task.memory (e.g. a constrained test
-    // profile).
+    // to predict ahead of Phase 5's real measurement), and a fixed
+    // 512 MiB is reserved for OS/tool overhead (page cache pressure,
+    // allocator fragmentation, samtools' own non-buffer bookkeeping).
+    // Whatever remains is divided evenly across sort's own threads; if
+    // that would be below 1 MiB/thread, task.memory is too small for
+    // this task.cpus and the task fails fast rather than silently
+    // running sort under-provisioned.
     total_memory_mib = task.memory.toMega()
     os_overhead_mib = 512
     bwa_share_mib = Math.max(1, (total_memory_mib * 0.5).intValue())
-    sort_share_mib = Math.max(
-        1,
-        total_memory_mib - bwa_share_mib - os_overhead_mib
-    )
-    sort_mem_per_thread_mib = Math.max(
-        1,
-        (sort_share_mib / sort_threads).intValue()
-    )
+    sort_share_mib = total_memory_mib - bwa_share_mib - os_overhead_mib
+
+    if (sort_share_mib < sort_threads) {
+        error(
+            "BWA_MEM2_MEM_SORT (${meta.id}:${meta.read_group_id}) needs " +
+            "more memory: task.memory=${task.memory} splits into " +
+            "bwa_share_mib=${bwa_share_mib} + os_overhead_mib=${os_overhead_mib}, " +
+            "leaving only ${sort_share_mib} MiB for ${sort_threads} " +
+            "samtools-sort thread(s) -- below the 1 MiB/thread floor. " +
+            "Increase the 'process_mapping' resource label's memory in " +
+            'nextflow.config or the active profile config.'
+        )
+    }
+
+    sort_mem_per_thread_mib = (sort_share_mib / sort_threads).intValue()
 
     """
     set -o pipefail

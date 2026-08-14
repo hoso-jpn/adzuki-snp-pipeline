@@ -678,6 +678,14 @@ nextflow_pipeline {
         then {
             assert !workflow.success
 
+            // PR #25 review (P2-3): assert the failure is actually the
+            // optical_duplicate_pixel_distance range violation, not some
+            // other schema or initialization error that would also
+            // leave workflow.success false and no tasks/output behind.
+            def output = (workflow.stdout + workflow.stderr).join("\n")
+            assert output.contains("optical_duplicate_pixel_distance")
+            assert output.contains("less than 0")
+
             // no analysis process (mapping, MarkDuplicates, or
             // otherwise) may have started -- the failure must happen at
             // schema validation, before any work is done.
@@ -728,13 +736,69 @@ nextflow_pipeline {
             assert taskNames.every { name -> !name.contains("BWA_MEM2_INDEX") }
             assert taskNames.findAll { name -> name.contains("BWA_MEM2_MEM_SORT") }.size() == 3
 
-            // the same diploid genotype contract as the generated-index
-            // path above must still hold: a prebuilt index is not
-            // expected to, and does not, change alignment results for
-            // this fixture.
-            def raw_lines = path("$outputDir/variants/raw/cohort.raw.vcf.gz").linesGzip
+            // PR #25 review (P2-1): the same diploid genotype/annotation
+            // contract as the generated-index path above -- read from
+            // tests/data/variants/expected_variants.tsv and asserted as
+            // an exact match, not just a record count -- must still
+            // hold: a prebuilt index is not expected to, and does not,
+            // change alignment results for this fixture. A record-count
+            // check alone would still pass even if REF/ALT, sample
+            // order, GT, AC/AN/AF, or DP were wrong.
+            def raw_vcf = path("$outputDir/variants/raw/cohort.raw.vcf.gz")
+            def raw_lines = raw_vcf.linesGzip
+            def header = raw_lines.find { line -> line.startsWith("#CHROM") }
             def data_lines = raw_lines.findAll { line -> !line.startsWith("#") }
+            def headerColumns = header.split("\t")
+
+            assert header == "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample_a\tsample_b"
             assert data_lines.size() == 2
+
+            def parseInfo = { String infoField ->
+                infoField.split(";").collectEntries { entry ->
+                    def keyValue = entry.split("=", 2)
+                    [(keyValue[0]): (keyValue.size() > 1 ? keyValue[1] : "true")]
+                }
+            }
+            def parseSample = { String formatField, String sampleField ->
+                [formatField.split(":"), sampleField.split(":")]
+                    .transpose()
+                    .collectEntries { it }
+            }
+
+            def contractLines = file("${projectDir}/tests/data/variants/expected_variants.tsv")
+                .readLines()
+                .findAll { line -> !line.trim().isEmpty() }
+            def contractHeader = contractLines[0].split("\t")
+            def contract = contractLines.drop(1).collect { line ->
+                [contractHeader, line.split("\t")].transpose().collectEntries { it }
+            }
+            assert contract.size() == 2
+
+            contract.each { expected ->
+                def record = data_lines
+                    .find { line -> line.startsWith("${expected.contig}\t${expected.position}\t") }
+                    ?.split("\t")
+                assert record != null: "no raw VCF record found for ${expected.contig}:${expected.position}"
+
+                assert record[3] == expected.ref
+                assert record[4] == expected.alt
+
+                def info = parseInfo(record[7])
+                assert info["AC"] == expected.ac
+                assert info["AN"] == expected.an
+                assert info["AF"].toDouble() == expected.af.toDouble()
+                assert info["DP"] == expected.site_dp
+
+                def altColumn = headerColumns.findIndexOf { column -> column == expected.alt_sample_id }
+                def refColumn = headerColumns.findIndexOf { column -> column == expected.ref_sample_id }
+                def altSample = parseSample(record[8], record[altColumn])
+                def refSample = parseSample(record[8], record[refColumn])
+
+                assert altSample["GT"] == expected.alt_genotype
+                assert altSample["DP"] == expected.alt_sample_dp
+                assert refSample["GT"] == expected.ref_genotype
+                assert refSample["DP"] == expected.ref_sample_dp
+            }
         }
     }
 }
