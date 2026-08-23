@@ -1,0 +1,167 @@
+nextflow_process {
+
+    name "GATK_GENOMICSDBIMPORT single-input regression contract"
+    script "modules/local/gatk_genomicsdbimport.nf"
+    process "GATK_GENOMICSDBIMPORT"
+
+    // Real single-sample lineage (mapping -> merge -> markdup -> index ->
+    // HaplotypeCaller) built from existing fixtures only (sample_b has
+    // exactly one read group, so no hand-crafted gVCF is needed). This
+    // exists so the test below can wire GATK_HAPLOTYPECALLER.out.gvcf --
+    // a real channel that resolves to exactly one item -- straight into
+    // GATK_GENOMICSDBIMPORT's own `path(gvcfs)`/`path(gvcf_indexes)`
+    // inputs, the same way workflows/adzuki_snp_pipeline.nf does. This is
+    // what actually exercises Nextflow's single-element List/scalar
+    // collapse; assigning a hand-built `[oneFile]` Groovy List here would
+    // not, since an explicit List is already a List regardless of the
+    // fix under test.
+    setup {
+        run("BWA_MEM2_INDEX") {
+            script "modules/local/bwa_mem2_index.nf"
+            process {
+                """
+                input[0] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa"),
+                ]
+                """
+            }
+        }
+        run("BWA_MEM2_MEM_SORT") {
+            script "modules/local/bwa_mem2_mem_sort.nf"
+            process {
+                """
+                input[0] = [
+                    [
+                        id: 'sample_b',
+                        read_group_id: 'sample_b_L001',
+                        library_id: 'lib_b',
+                        platform: 'ILLUMINA',
+                        platform_unit: 'flowcell1.L001.CGATGT',
+                    ],
+                    file("${projectDir}/tests/data/reads/sample_b_L001_R1.fastq.gz"),
+                    file("${projectDir}/tests/data/reads/sample_b_L001_R2.fastq.gz"),
+                ]
+                input[1] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa"),
+                ]
+                input[2] = BWA_MEM2_INDEX.out.indexes
+                """
+            }
+        }
+        run("SAMTOOLS_MERGE") {
+            script "modules/local/samtools_merge.nf"
+            process {
+                """
+                input[0] = BWA_MEM2_MEM_SORT.out.bam.map { meta, bam -> tuple([ id: 'sample_b' ], [ bam ]) }
+                """
+            }
+        }
+        run("GATK_MARKDUPLICATES") {
+            script "modules/local/gatk_markduplicates.nf"
+            process {
+                """
+                input[0] = SAMTOOLS_MERGE.out.bam
+                """
+            }
+        }
+        run("SAMTOOLS_INDEX") {
+            script "modules/local/samtools_index.nf"
+            process {
+                """
+                input[0] = GATK_MARKDUPLICATES.out.bam
+                """
+            }
+        }
+        run("GATK_CREATE_SEQUENCE_DICTIONARY") {
+            script "modules/local/gatk_create_sequence_dictionary.nf"
+            process {
+                """
+                input[0] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa"),
+                ]
+                """
+            }
+        }
+        run("GATK_HAPLOTYPECALLER") {
+            script "modules/local/gatk_haplotypecaller.nf"
+            process {
+                """
+                input[0] = SAMTOOLS_INDEX.out.bam
+                input[1] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa"),
+                ]
+                input[2] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa.fai"),
+                ]
+                input[3] = GATK_CREATE_SEQUENCE_DICTIONARY.out.dict
+                """
+            }
+        }
+    }
+
+    test("a single gVCF/index from GATK_HAPLOTYPECALLER's own output channel is normalized as one input, not read as a byte count by File.size()") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'interval_000001_chrSynthetic1', rank: 0, contig: 'chrSynthetic1' ],
+                    'chrSynthetic1',
+                ]
+                input[1] = GATK_HAPLOTYPECALLER.out.gvcf.map { meta, gvcf, index -> gvcf }
+                input[2] = GATK_HAPLOTYPECALLER.out.gvcf.map { meta, gvcf, index -> index }
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // The exact real-run failure this regression guards against:
+            // gvcfs/gvcf_indexes each resolve to exactly one file here
+            // (GATK_HAPLOTYPECALLER.out.gvcf has exactly one tuple), so
+            // Nextflow binds `path(gvcfs)`/`path(gvcf_indexes)` as bare
+            // scalar Files, not Lists -- exactly the real-data condition
+            // that made the old code's `gvcfs.size()` return a byte
+            // count ("1176577035 gVCFs, 642455 indexes") instead of "1".
+            assert process.out.genomicsdb.size() == 1
+
+            def workspaceDir = path(process.out.genomicsdb[0][2]).toFile()
+            assert workspaceDir.exists()
+            assert workspaceDir.isDirectory()
+
+            // Read the real, fully rendered .command.sh sitting alongside
+            // the (root-owned, world-unreadable) GenomicsDB workspace --
+            // stat()-ing that sibling entry's existence needs no
+            // permission on the workspace directory itself, and this
+            // avoids ever recursing into it.
+            def commandScript = new File(workspaceDir.getParentFile(), ".command.sh").text
+
+            // Exactly one --variant, not merely "contains --variant":
+            // a List-vs-scalar confusion could otherwise still produce a
+            // single --variant flag by accident (e.g. if a bug silently
+            // dropped every gVCF but one), which a substring-only check
+            // would not catch.
+            def variantOccurrences = (commandScript =~ /--variant /).count
+            assert variantOccurrences == 1: "expected exactly one --variant flag, found ${variantOccurrences} in:\n${commandScript}"
+            assert commandScript.contains("--variant sample_b.g.vcf.gz")
+
+            assert commandScript.contains("--batch-size 50")
+            assert commandScript.contains("--reader-threads 2")
+
+            // conf/test.config's process_genomicsdb: cpus=2, memory='4 GB'.
+            // Derived here (not hardcoded) via the exact same formula as
+            // modules/local/gatk_genomicsdbimport.nf's own script block,
+            // so this assertion tracks that file rather than duplicating
+            // an opaque literal.
+            def testProfileMemoryMib = 4096
+            def expectedXmxMib = Math.floor(testProfileMemoryMib * 0.8).intValue()
+            assert commandScript.contains("-Xmx${expectedXmxMib}m")
+        }
+    }
+}

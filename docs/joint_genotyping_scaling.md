@@ -205,7 +205,18 @@ List-unwrap fix works against a genuine single-sample Nextflow channel (not just
 about in Groovy), `--batch-size` and the 80%-Xmx-ceiling formula both reach the real
 command line correctly, and GenomicsDBImport itself succeeds where it previously failed.
 
-**This remains one accession's evidence.** It does not exercise `GenomicsDBImport` with
+This real-data smoke was one-off evidence, not permanent CI coverage. The single-element
+`path`-input unwrap regression itself is now covered permanently by
+`tests/modules/gatk_genomicsdbimport.nf.test` and `tests/modules/gatk_gathervcfs.nf.test`:
+both build a real single-sample gVCF (respectively, wire a real single VCF) through the
+same `path(gvcfs)`/`path(vcfs)` input declarations production uses, and both were confirmed
+to reproduce the exact historical failure signature (`"<byte count> gVCFs/VCFs, <byte
+count> indexes"`) against the pre-fix code at commit `92743ec`, and to pass against the
+fix. Real-data evidence establishes that the fix works against genuine production-scale
+content; the committed module tests are what actually prevents this regression from
+returning in CI.
+
+**The real-data smoke test above remains one accession's evidence.** It does not exercise `GenomicsDBImport` with
 more than one sample, does not exercise `--batch-size` at a value where it would actually
 change import behavior (batching only matters once sample count exceeds the batch size),
 and says nothing about memory behavior once GenomicsDB workspaces hold tens or hundreds of

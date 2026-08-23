@@ -1,0 +1,66 @@
+nextflow_process {
+
+    name "GATK_GATHERVCFS single-input regression contract"
+    script "modules/local/gatk_gathervcfs.nf"
+    process "GATK_GATHERVCFS"
+
+    // Reuses tests/modules/fixtures/mixed_type_contract.vcf.gz (see
+    // tests/modules/gatk_selectvariants.nf.test for its exact contents:
+    // three real records at chrSynthetic1:1000/2000/3000) rather than
+    // adding a new fixture. Passed as bare `file(...)` values (not
+    // wrapped in a `[...]` Groovy List) for the `path(vcfs)`/
+    // `path(vcf_indexes)` inputs -- exactly one file resolves for each
+    // slot, which Nextflow stages the same way regardless of whether the
+    // upstream value was a bare scalar or a List with one element (this
+    // is the same real mechanism that broke GATK_GATHERVCFS's own
+    // production `cohort_vcfs_ch` construction in
+    // workflows/adzuki_snp_pipeline.nf when only one contig's
+    // GenotypeGVCFs output existed).
+    test("a single VCF/index is normalized as one input, not read as a byte count by File.size()") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort' ],
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.vcf.size() == 1
+
+            def workDir = path(process.out.vcf[0][1]).toFile().getParentFile()
+            def commandScript = new File(workDir, ".command.sh").text
+
+            // Exactly one --INPUT, not merely "contains --INPUT" -- the
+            // exact real-run failure mode this guards against
+            // (`vcfs.size()`/`vcf_indexes.size()` on a scalar File
+            // returning a byte count, e.g. "1176577035 VCFs, 642455
+            // indexes", instead of "1") never gets the chance to occur
+            // when there is genuinely only one --INPUT flag rendered.
+            def inputOccurrences = (commandScript =~ /--INPUT /).count
+            assert inputOccurrences == 1: "expected exactly one --INPUT flag, found ${inputOccurrences} in:\n${commandScript}"
+            assert commandScript.contains("--INPUT mixed_type_contract.vcf.gz")
+
+            // With exactly one input VCF, GatherVcfs has nothing to
+            // gather but that file's own records -- all three, unchanged
+            // (REF/ALT read directly, not just a record count).
+            def dataLines = path(process.out.vcf[0][1])
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert dataLines.size() == 3
+
+            def snpRecord = dataLines.find { line -> line.startsWith("chrSynthetic1\t1000\t") }
+            assert snpRecord != null
+            assert snpRecord.split("\t")[3] == "A"
+            assert snpRecord.split("\t")[4] == "G"
+
+            assert path(process.out.vcf[0][2]).exists()
+        }
+    }
+}
