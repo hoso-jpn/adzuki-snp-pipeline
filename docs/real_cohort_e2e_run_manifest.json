@@ -1,0 +1,172 @@
+{
+  "checksums": {
+    "SRR29909067.g.vcf.gz": "sha256:91960a53b09fd449592b1e8c4463e23afaedd585f855609448e6d6a9f884ea52",
+    "SRR29909069.g.vcf.gz": "sha256:d378ef2312e12a62ce25bb1c7c02e9bb4bda458ed301b87631aa67d1d72f18d3",
+    "SRR29909072.g.vcf.gz": "sha256:f2494ff2169fc26f33320ecd2acd25618c96e40873306c38d326a3cbdb9e8b92",
+    "SRR29909073.g.vcf.gz": "sha256:b6d0a2f2d79f9ba0fae17406b08f129d7cc9fad431169af875fa2bcf87b984e1",
+    "SRR29909135.g.vcf.gz": "sha256:8da14fed0bf4c4d39d1a9429b74682a58d43d1fe7982f283cb5580b8696432af",
+    "cohort.indel.pass.vcf.gz": "sha256:71d90ba2b6c6ad769b3a2cc47469bcb66e5bfc86d4c9e2e8d708673f66ad9d34",
+    "cohort.raw.vcf.gz": "sha256:3a46a54a1010970db16904742bc7d6245eff46490c1c248c111efd512f683a76",
+    "cohort.snp.pass.vcf.gz": "sha256:d34a75a94b754cce48f69575716df1f6e203a9fdd68e94ae59361ca5789884fb"
+  },
+  "cohort_accounting": {
+    "cohort_missing_genotypes": "3014668",
+    "cohort_missingness_rate": "0.108463",
+    "cohort_total_genotypes": "27794350",
+    "number_of_indels": "790151",
+    "number_of_mnps": "0",
+    "number_of_multiallelic_sites": "127602",
+    "number_of_others": "0",
+    "number_of_records": "5558870",
+    "number_of_samples": "5",
+    "number_of_snps": "4782166",
+    "sample_names": "SRR29909067,SRR29909069,SRR29909072,SRR29909073,SRR29909135",
+    "transition_transversion_ratio": "1.87",
+    "transitions": "3132510",
+    "transversions": "1679367"
+  },
+  "cohort_id": "cohort",
+  "containers": {
+    "bwa_mem2": "community.wave.seqera.io/library/bwa-mem2_htslib_samtools:db98f81f55b64113@sha256:5ebd1290d9680195817ce75915b79ae2e608834c017824b7e2bc7b141509b242",
+    "gatk": "broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb",
+    "python": "python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7",
+    "samtools": "quay.io/biocontainers/samtools:1.24--h9dcdb79_1@sha256:a130447589651ed09252aa95a5e4f4132942cdb54d835d81a04a9a930d656561"
+  },
+  "generated_at": "2026-08-23T22:08:28Z",
+  "git_commit": "49cb2f606407bcafead0eea29a3962ebff6f7733",
+  "gs_panel": {
+    "cohort_id": "cohort",
+    "manifest_hash": "sha256:ab3f41dadfc9fd31e330a98a760274ae025542eab73e83132a77711b87831812",
+    "panel_status": "populated",
+    "run_id": "20260823T174851Z-17bc089e",
+    "schema_version": 1
+  },
+  "manifest_hash": "sha256:67dc69eea2cb49ca706b6e13b96e2e9dc419ec4d3cb4b870bf2926fabe6a4d5b",
+  "nextflow_version": "26.04.6",
+  "parameters": {
+    "enable_gs_panel": true,
+    "genomicsdb_batch_size": 50,
+    "indel_filter_fs_max": 200.0,
+    "indel_filter_qd_min": 2.0,
+    "indel_filter_qual_min": 30.0,
+    "indel_filter_read_pos_rank_sum_min": -20.0,
+    "optical_duplicate_pixel_distance": 100,
+    "sample_ploidy": 2,
+    "snp_filter_fs_max": 60.0,
+    "snp_filter_mq_min": 40.0,
+    "snp_filter_mq_rank_sum_min": -12.5,
+    "snp_filter_qd_min": 2.0,
+    "snp_filter_qual_min": 30.0,
+    "snp_filter_read_pos_rank_sum_min": -8.0,
+    "snp_filter_sor_max": 3.0
+  },
+  "pipeline_version": "0.2.0-dev",
+  "reference": {
+    "dict": {
+      "checksum": "sha256:96317700a1e714dfc2816023ebb0aeeb5a7ee66c8aae05e52051e17b08e803a0",
+      "filename": "GCF_016808095.1_ASM1680809v1_genomic.dict"
+    },
+    "fai": {
+      "checksum": "sha256:c5db64484f1c2e8a14368ca68b51e3d4ce8a5afefd277b3780085bd9128ddde5",
+      "filename": "GCF_016808095.1_ASM1680809v1_genomic.fna.fai"
+    },
+    "fasta": {
+      "checksum": "sha256:e9838db1b048b54b21534285aaf95eae64cb3019d85af270b44e20b3d545f383",
+      "filename": "GCF_016808095.1_ASM1680809v1_genomic.fna"
+    },
+    "reference_accession": "GCF_016808095.1",
+    "reference_cultivar": "Longxiaodou 4",
+    "reference_id": "GCF_016808095.1",
+    "reference_species": "Vigna angularis"
+  },
+  "run_id": "20260823T220828Z-4171dbf3",
+  "samples": [
+    {
+      "fastq_1": {
+        "checksum": "sha256:fc8ace4190032559328559be25efcebf93778484f263e3d862fe46e60d821cc9",
+        "filename": "SRR29909135_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:ba9cf1f11dee32c586f9521d1c88474eaba713a3b7da182fb95adb58c6bbfef8",
+        "filename": "SRR29909135_2.fastq.gz"
+      },
+      "library_id": "AZ693",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3CWYDSXY.4",
+      "read_group_id": "SRR29909135_L004",
+      "sample_id": "SRR29909135"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:3bab2c53af8f0f8dc6f6dca48f6488eafdcf43338e8dfa77720bc8f028576ce0",
+        "filename": "SRR29909069_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:dabb7fe0e7d36ffc88b37214a36ffa959601d444f42c219546674ee93ed33506",
+        "filename": "SRR29909069_2.fastq.gz"
+      },
+      "library_id": "AZ648",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3CWYDSXY.4",
+      "read_group_id": "SRR29909069_L004",
+      "sample_id": "SRR29909069"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:41b02821a5eaa593edf3660375fd929241e01c6153b9c9b8887516b1a9388a4b",
+        "filename": "SRR29909072_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:f0d7ccf8bb6a3b7c6f2118175371f82231109c7b4de2b6ed79ab425e2da91013",
+        "filename": "SRR29909072_2.fastq.gz"
+      },
+      "library_id": "AZ636",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909072_L006",
+      "sample_id": "SRR29909072"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:5297c4d81b582be6ed080d31b887db7ab1d7932d5500c1a07fea0dbf66c1f97f",
+        "filename": "SRR29909067_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:cfd7d287ee2109938c7e7c0fed89af6effbb10eb33bd6d0af4770582038ee0df",
+        "filename": "SRR29909067_2.fastq.gz"
+      },
+      "library_id": "AZ702",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909067_L006",
+      "sample_id": "SRR29909067"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:f267eff8838b8671a7123773005eac6eae91a737f2b99e74fd77a0423a0e1942",
+        "filename": "SRR29909073_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:9a48198618fd1a9c38dcaf7bd8dd8f7abb04dc3e8257b316084b553c35db09a0",
+        "filename": "SRR29909073_2.fastq.gz"
+      },
+      "library_id": "AZ635",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909073_L006",
+      "sample_id": "SRR29909073"
+    }
+  ],
+  "schema_version": 1,
+  "variant_type_accounting": {
+    "raw_all_number_of_mnps": "0",
+    "raw_all_number_of_multiallelic_sites": "127602",
+    "raw_all_number_of_others": "0",
+    "raw_all_records": "5558870",
+    "raw_indel_records": "771867",
+    "raw_snp_records": "4768719",
+    "records_not_selected": "18284",
+    "records_not_selected_is_negative": "false",
+    "snp_indel_duplicate_records": "0"
+  }
+}
