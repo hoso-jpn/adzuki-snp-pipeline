@@ -39,9 +39,11 @@ nf-testスイートがJoint Genotyping fixture契約・GenomicsDBImportのbatch-
 | Base Quality Score Recalibration (BQSR) | 意図的に除外 | 検証済みのknown-sitesリソースが存在しない。[設計判断](#設計判断)を参照 |
 | 本番利用 | 非対応 | これは実験的な植物研究リポジトリである |
 
-本文書中の図と大規模なvariant件数は、単一サンプルpilotに由来する歴史的な結果であり、実行可能な
-ワークフローによって再現されたものではありません。synthetic fixtureを用いたワークフロー経路は、
-決定論的なexpected variantsを伴うクリーンなDocker smoke testを別途完了しています。
+[単一サンプルPilotの結果](#単一サンプルpilotの結果)に掲載する図とvariant件数は、当時の手動
+pilotに由来する歴史的な結果であり、その結果自体を現在の実行可能なワークフローで再現したもの
+ではありません。synthetic fixtureを用いたワークフロー経路は、決定論的なexpected variantsを
+伴うクリーンなDocker smoke testを別途完了しており、[実データコホートE2E検証](#実データコホートe2e検証issue-26)
+は5検体の実データによるvariant件数を実行可能なワークフローで直接生成しています。
 
 ---
 
@@ -1071,6 +1073,11 @@ Bootstrapped BQSRも、known-sites構築とそれが結果に与える影響が�
 
 生のWGSデータと完全な参照ゲノムbundleはこのリポジトリにcommitされません。それぞれの
 権威ある公開ソースから取得する必要があります。
+
+このリポジトリ自体はGitに何がcommitされるかを機械的に保証するものであり、実際の受託案件で
+顧客の実データを扱う際のデータ転送・保持期間・削除・外部AIサービス非送信に関する運用前提は、
+[`docs/customer_data_handling.md`](docs/customer_data_handling.md)に別途文書化しています
+(Issue #26)。
 
 ---
 
