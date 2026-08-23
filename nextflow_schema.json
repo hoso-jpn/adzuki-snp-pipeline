@@ -78,6 +78,11 @@
       "minimum": 0,
       "description": "Maximum pixel distance between read clusters for GATK MarkDuplicates to call them optical (rather than PCR/library) duplicates; the default (100) matches GATK's own unmodified default and is appropriate for unpatterned flowcells, but should be raised (commonly to ~2500) for patterned flowcells (e.g. HiSeq X, NovaSeq) per GATK/Picard guidance"
     },
+    "genomicsdb_batch_size": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Batch size passed to GATK GenomicsDBImport's --batch-size, controlling how many samples it opens concurrently while building the workspace; 50 is a current initial operational value carried over from GATK's own tooling conventions, not a value validated against this pipeline's target 327-sample cohort or any intermediate 20-30 sample scale"
+    },
     "snp_filter_qd_min": {
       "type": "number",
       "minimum": 0,
