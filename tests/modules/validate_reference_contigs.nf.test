@@ -1,0 +1,115 @@
+nextflow_process {
+
+    name "VALIDATE_REFERENCE_CONTIGS FAI/dict name+length+order contract"
+    script "modules/local/validate_reference_contigs.nf"
+    process "VALIDATE_REFERENCE_CONTIGS"
+
+    // Issue #11: these fixtures are plain hand-written text (a .fai and a
+    // .dict are both simple tab-separated formats -- see
+    // bin/validate_reference_contigs.py's own module docstring), not
+    // real GATK/samtools output. That is deliberate here: the point of
+    // this process is to catch exactly the input pairs a real reference
+    // build should never produce (mismatched name/length/order), so the
+    // negative fixtures need to encode a specific, controlled disagreement
+    // rather than whatever a real toolchain happens to emit.
+    test("a matching FAI/dict pair (same names, lengths, and order) passes through unchanged") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'matching' ],
+                    file("${projectDir}/tests/modules/fixtures/reference_contigs/matching.fai"),
+                ]
+                input[1] = [
+                    [ id: 'matching' ],
+                    file("${projectDir}/tests/modules/fixtures/reference_contigs/matching.dict"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.fai.size() == 1
+            assert process.out.dict.size() == 1
+        }
+    }
+
+    // The critical case a naive set-equality comparison would miss: the
+    // exact same three contigs, same lengths, but the dict lists the
+    // first two in swapped order.
+    test("the same contig set in a different order fails, not just a set-equality pass") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'wrong_order' ],
+                    file("${projectDir}/tests/modules/fixtures/reference_contigs/wrong_order.fai"),
+                ]
+                input[1] = [
+                    [ id: 'wrong_order' ],
+                    file("${projectDir}/tests/modules/fixtures/reference_contigs/wrong_order.dict"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("inconsistent")
+            assert output.contains("first mismatch at index 0")
+        }
+    }
+
+    test("identical names in the same order but a differing declared length fails") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'length_mismatch' ],
+                    file("${projectDir}/tests/modules/fixtures/reference_contigs/length_mismatch.fai"),
+                ]
+                input[1] = [
+                    [ id: 'length_mismatch' ],
+                    file("${projectDir}/tests/modules/fixtures/reference_contigs/length_mismatch.dict"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("inconsistent")
+            assert output.contains("Chr02")
+        }
+    }
+
+    test("a dict missing one of the FAI's contigs fails on a count mismatch, not silently") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'missing_contig' ],
+                    file("${projectDir}/tests/modules/fixtures/reference_contigs/missing_contig.fai"),
+                ]
+                input[1] = [
+                    [ id: 'missing_contig' ],
+                    file("${projectDir}/tests/modules/fixtures/reference_contigs/missing_contig.dict"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("contig count differs")
+        }
+    }
+}
