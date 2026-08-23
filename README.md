@@ -1,138 +1,250 @@
 # adzuki-snp-pipeline
 
-Research and development repository for building a reproducible SNP-calling pipeline for adzuki bean (*Vigna angularis*) from publicly available whole-genome sequencing data.
+公開のホールゲノムショットガンシーケンシング(WGS)データから、アズキ(*Vigna angularis*)の
+再現可能なSNPコーリングパイプラインを構築するための研究開発リポジトリです。
 
-The repository contains an executable Nextflow DSL2 workflow for paired-end WGS preprocessing, sample-level GVCF generation, multi-sample Joint Genotyping, configurable hard filtering, PASS extraction, and variant QC, together with a historical, manually executed single-sample SNP-calling pilot. A pipeline-level nf-test suite covers the Joint Genotyping fixture contract; MultiQC aggregation, comprehensive automated pipeline-test coverage, and real-data cohort validation remain under development and are tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
+このリポジトリには、ペアエンドWGSの前処理からサンプル単位のGVCF生成、複数サンプルの
+Joint Genotyping、設定可能なハードフィルタリング、PASS抽出、variant QC、そしてゲノミック
+セレクション(GS)パネル生成までを行う実行可能なNextflow DSL2ワークフローが含まれています。
+5検体の実データコホート(Issue #26)をSeedcore-01実機上で実行し、Joint Genotyping・
+GSパネルまでの一連のend-to-end動作と再現性証跡を確認しました(詳細は
+[実データコホートE2E検証](#実データコホートe2e検証issue-26)を参照)。あわせて、履歴として
+手動実行した単一サンプルのSNPコーリング試行(pilot)も残しています。パイプラインレベルの
+nf-testスイートがJoint Genotyping fixture契約・GenomicsDBImportのbatch-size/メモリ契約・
+参照ゲノムFAI/dict契約をカバーしています。MultiQC集約、全モジュールを網羅したnf-test、
+20〜30検体・327検体スケールでの検証は今後の課題として[Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1)
+で追跡しています。
 
-This work represents plant-genetics and bioinformatics research that informs the longer-term agricultural AI activities of Florigen AI. It does not imply a direct genomic-prediction-to-Physical-AI development path.
+この研究はFlorigen AIの長期的な農業AI活動を支える植物遺伝学・バイオインフォマティクス研究の
+一部です。ゲノム予測からPhysical AIへの直接的な開発パスを意味するものではありません。
 
 ---
 
-## Current Maturity
+## 現在の成熟度
 
-| Capability | Status | Evidence or limitation |
+| 能力 | 状態 | 根拠・制約 |
 | --- | --- | --- |
-| Manual single-sample SNP-calling pilot | Executed once | SRR29909135 was processed manually; the result has not yet been reproduced by an automated test |
-| Documented command sequence | Available | Commands are recorded below, but software versions and execution parameters are not yet fully locked |
-| Nextflow DSL2 workflow | Implemented through filtered cohort VCFs, variant QC, and a GS SNP panel | Strict-syntax-compatible preprocessing, mapping, duplicate marking, GVCF generation, Joint Genotyping, hard filtering, PASS extraction, QC processes, and GS panel normalization/matrix-building are available |
-| Variant calling and genotyping | Functionally validated with synthetic data | HaplotypeCaller, contig-level GenomicsDBImport and GenotypeGVCFs, and reference-order GatherVcfs are connected |
-| Variant filtering and QC | Functionally validated with synthetic data | SNPs and indels are separated, configurable hard filters are applied, PASS records are extracted, and raw, filtered, and PASS QC artifacts are generated; FILTER-value and per-annotation evaluable-rate accounting distinguish a missing annotation from a satisfied threshold, and a cohort-wide reconciliation reports where `raw/snp` + `raw/indel` diverges from `raw/all`; threshold suitability remains unvalidated on real cohorts |
-| GS panel (genomic selection) | Functionally validated with synthetic data | `raw/all` is normalized (`bcftools norm -m-`) and reclassified by post-split REF/ALT shape, re-filtered on a distinct lineage, and converted to a dosage matrix with sample/variant metadata, full-lineage record accounting, and a reproducibility manifest (see [`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md)); MAF/call-rate filtering, LD pruning, and imputation are out of scope, threshold suitability is unvalidated on real cohorts, and no downstream repository currently reads this panel |
-| Configurable reference bundle | Implemented | The workflow accepts compatible prebuilt indexes or generates FASTA, sequence-dictionary, and BWA-MEM2 indexes |
-| Multi-sample Joint Genotyping | Functionally validated with synthetic data | Two samples and two contigs complete GenomicsDBImport-based Joint Genotyping; both samples cover both contigs, so each deterministic SNP locus resolves to a non-missing `1/1`/`0/0` pair (`AC=2;AN=4;AF=0.5`) rather than a missing genotype; real-data cohorts remain unvalidated |
-| Read preprocessing and QC | Implemented without MultiQC | Raw and trimmed FastQC, paired-end fastp, mapping logs, duplicate metrics, and SAMtools QC are produced |
-| Pipeline-level tests | Partially implemented | A clean synthetic Docker smoke test validates three read groups, two sample GVCFs, two expected raw SNPs with confident `1/1`/`0/0` genotypes at both loci, hard-filter annotations, indexed PASS outputs, seven variant-QC tasks, 38 QC artifacts, and the GS panel's empty-panel contract; an [nf-test](https://www.nf-test.com/) pipeline-level test automates this contract (`tests/pipeline/adzuki_snp_pipeline.nf.test`), alongside two further pipeline-level tests (Issue #20) covering a haploid (`sample_ploidy=1`, `enable_gs_panel=false`) end-to-end genotype contract and the fail-fast rejection of `sample_ploidy=1` with the GS panel left enabled, and three more (Issue #8) covering exact mapping-task cardinality and duplicate-marking counts, fail-fast rejection of a negative `optical_duplicate_pixel_distance`, and a fully prebuilt BWA-MEM2 index path; module-level nf-tests separately confirm, against the real pinned containers, that `GATK_SELECTVARIANTS` excludes a `MIXED`-type record from both the SNP and indel selections (`tests/modules/gatk_selectvariants.nf.test`), that `GS_NORMALIZE_VARIANTS` splits a `MIXED` record with correctly recoded genotypes (`tests/modules/gs_normalize_variants.nf.test`), and that `BWA_MEM2_MEM_SORT` never writes an intermediate `.sam` and applies its documented CPU split (`tests/modules/bwa_mem2_mem_sort.nf.test`); broader nf-test coverage of every module remains planned (Issue #1 #G) |
-| Functional CI | Implemented for the synthetic fixture path | `.github/workflows/test.yml` runs `nextflow lint .` and a combined nf-test suite (pipeline-level plus the `GATK_SELECTVARIANTS`, `GS_NORMALIZE_VARIANTS`, and `BWA_MEM2_MEM_SORT` module-level tests, `-profile test,docker`) on every push and pull request against `main`; `.github/workflows/lint.yml` separately checks repository structure only; real-data cohort CI remains out of scope |
-| Base quality score recalibration (BQSR) | Intentionally excluded | No validated known-sites resource is available; see [Design Decisions](#design-decisions) |
-| Production use | Not supported | This is an experimental plant-research repository |
+| 手動単一サンプルSNPコーリング(pilot) | 1回実行済み | SRR29909135を手動で処理した結果であり、自動テストによる再現はまだ行っていない |
+| 手順の文書化 | 記録済み | コマンドは本文書に記録済みだが、ソフトウェアバージョンと実行パラメータは完全には固定されていない |
+| Nextflow DSL2ワークフロー | フィルタ済みコホートVCF・variant QC・GS SNPパネルまで実装済み | strict構文パーサ対応の前処理・マッピング・重複マーク・GVCF生成・Joint Genotyping・ハードフィルタリング・PASS抽出・QC処理・GSパネル正規化/行列構築が利用可能 |
+| Variant calling / genotyping | syntheticデータで機能検証済み、実データ5検体コホートで動作確認済み | HaplotypeCaller、contig単位のGenomicsDBImportとGenotypeGVCFs、reference順のGatherVcfsが接続済み。Issue #26で5検体・36contigの実データを通した(下記参照) |
+| Variant filtering / QC | syntheticデータで機能検証済み | SNPとindelを分離し、設定可能なハードフィルタを適用し、PASSレコードを抽出し、raw/filtered/PASSの各段階でQC成果物を生成する。FILTER値・annotation別のevaluable rate会計はannotation欠損としきい値未達を区別し、cohort全体のreconciliationは`raw/snp`+`raw/indel`が`raw/all`からどれだけ乖離しているかを報告する。しきい値の妥当性は実コホートでは未検証 |
+| GSパネル(genomic selection) | syntheticデータで機能検証済み、実データ5検体で動作確認済み | `raw/all`を正規化(`bcftools norm -m-`)し、split後のREF/ALT形状で再分類し、独立したlineageで再フィルタし、sample/variant metadataとfull-lineage record会計、再現性manifestを備えたdosage matrixへ変換する([`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md)参照)。MAF/コールレートフィルタ、LD pruning、imputationはスコープ外。しきい値の妥当性は実コホートでは未検証であり、現時点でこのパネルを読み込む下流リポジトリは存在しない |
+| 設定可能な参照ゲノムbundle | 実装済み | 互換性のあるprebuilt indexを受け付けるか、FASTA・sequence dictionary・BWA-MEM2 indexを生成する |
+| 複数サンプルJoint Genotyping | syntheticデータで機能検証済み、実データ5検体・36contigで動作確認済み(Issue #26) | syntheticでは2サンプル・2contigでGenomicsDBImportベースのJoint Genotypingが完了し、両サンプルが両contigをカバーするため各deterministic SNP locusは`1/1`/`0/0`の非欠損ペア(`AC=2;AN=4;AF=0.5`)に解決される。実データでは5サンプル・36contigのLongxiaodou 4参照ゲノムで動作を確認したが、20〜30検体・327検体規模の検証はまだ行っていない(Issue #26/#11) |
+| 読み取り前処理・QC | MultiQCなしで実装済み | raw/trimmed FastQC、ペアエンドfastp、mappingログ、重複metrics、SAMtools QCを生成する |
+| パイプラインレベルテスト | 部分実装 | syntheticなDocker smoke testが3リードグループ・2サンプルGVCF・両locusで確信度の高い`1/1`/`0/0`遺伝子型を持つ2つのraw SNP・ハードフィルタannotation・indexed PASS出力・7種のvariant QCタスク・38個のQC成果物・GSパネルのempty-panel契約を検証する。[nf-test](https://www.nf-test.com/)によるpipeline-level testがこの契約を自動化し(`tests/pipeline/adzuki_snp_pipeline.nf.test`)、haploid(`sample_ploidy=1`、`enable_gs_panel=false`)のend-to-end遺伝子型契約とGSパネル有効時の`sample_ploidy=1`拒否(Issue #20)、mappingタスク数と重複マーク件数の厳密一致・負の`optical_duplicate_pixel_distance`拒否・prebuilt BWA-MEM2 indexパス(Issue #8)、`genomicsdb_batch_size`の伝播とXmx比率・prebuilt/生成両方の参照bundle・contig順序不一致の拒否(Issue #11)を検証する追加testを含む。module-level nf-testは実際にpinされたcontainerに対して、`GATK_SELECTVARIANTS`がMIXED型レコードをSNP/indel双方の選択から除外すること(`tests/modules/gatk_selectvariants.nf.test`)、`GS_NORMALIZE_VARIANTS`がMIXEDレコードを正しい遺伝子型再割当てで分割すること(`tests/modules/gs_normalize_variants.nf.test`)、`BWA_MEM2_MEM_SORT`が中間`.sam`を生成せず文書化されたCPU分割を適用すること(`tests/modules/bwa_mem2_mem_sort.nf.test`)、`VALIDATE_REFERENCE_CONTIGS`がFAI/dictの名前・長さ・順序不一致を検出すること(`tests/modules/validate_reference_contigs.nf.test`)、`GATK_GENOMICSDBIMPORT`/`GATK_GATHERVCFS`が単一sample入力(Nextflowのpath入力がList→scalarへ暗黙変換される境界条件)を正しく扱うこと(`tests/modules/gatk_genomicsdbimport.nf.test`、`tests/modules/gatk_gathervcfs.nf.test`)を確認する。全モジュールを網羅するnf-testは[Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1) #Gで計画中 |
+| Functional CI | syntheticフィクスチャpathで実装済み | `.github/workflows/test.yml`が`nextflow lint .`と結合nf-testスイート(pipeline-level + module-level、`-profile test,docker`)をmain向けのpush/pull requestごとに実行する。`.github/workflows/lint.yml`はリポジトリ構造のみを個別に検査する。実データコホートのCIはスコープ外 |
+| 実データコホート検証(Issue #26) | 5検体E2E検証を実施 | 公開WGSデータ5検体(同一BioProject)をSeedcore-01実機でQC→mapping→重複マーク→gVCF→Joint Genotyping→hard filtering→variant QC→GSパネルまで通した。詳細は[実データコホートE2E検証](#実データコホートe2e検証issue-26)を参照。20〜30検体・327検体規模の拡張は未実施(意図的にスコープ外) |
+| Base Quality Score Recalibration (BQSR) | 意図的に除外 | 検証済みのknown-sitesリソースが存在しない。[設計判断](#設計判断)を参照 |
+| 本番利用 | 非対応 | これは実験的な植物研究リポジトリである |
 
-The figures and large-scale variant counts in this README remain historical results from the single-sample pilot and have not been reproduced by the executable workflow. The synthetic workflow path has separately completed a clean Docker smoke test with deterministic expected variants.
+本文書中の図と大規模なvariant件数は、単一サンプルpilotに由来する歴史的な結果であり、実行可能な
+ワークフローによって再現されたものではありません。synthetic fixtureを用いたワークフロー経路は、
+決定論的なexpected variantsを伴うクリーンなDocker smoke testを別途完了しています。
 
 ---
 
-## Data and Reference Sources
+## データと参照ゲノム
 
-### Sequencing data
+### シーケンシングデータ
 
-| Item | Detail |
+| 項目 | 詳細 |
 | --- | --- |
 | BioProject | [PRJNA1138464](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA1138464) |
-| Demonstration accession | SRR29909135 |
-| Associated publication | [Chien et al. 2025, *Science* 388: eads2871](https://doi.org/10.1126/science.ads2871) |
-| Public data described by the study | WGS resequencing of 327 accessions and DArT-seq data from 357 accessions |
-| Scope validated in this repository | One WGS accession only |
+| 単一サンプルpilotの検体 | SRR29909135 |
+| 実データコホート検証(Issue #26)で使用した検体 | SRR29909135、SRR29909069、SRR29909072、SRR29909067、SRR29909073(5検体、詳細は[実データコホートE2E検証](#実データコホートe2e検証issue-26)参照) |
+| 関連論文 | [Chien et al. 2025, *Science* 388: eads2871](https://doi.org/10.1126/science.ads2871) |
+| 論文が報告する公開データ | 327検体のWGS再シーケンシングと357検体のDArT-seqデータ |
+| このリポジトリで検証済みのスコープ | WGS 5検体(327検体中) |
 
-The associated study also reports DArT-seq data from 357 accessions. The current and planned variant-calling scope of this repository is WGS; no RAD-seq or DArT-seq workflow is implemented or evaluated here.
+同論文は357検体分のDArT-seqデータも報告していますが、このリポジトリの現在および計画中のvariant
+callingスコープはWGSのみであり、RAD-seq/DArT-seqワークフローは実装・評価していません。
 
-### Reference genome
+### 参照ゲノム
 
-The manual pilot used the following independent reference assembly:
+単一サンプルpilotおよびIssue #26の実データコホート検証は、いずれも以下の独立した参照アセンブリを
+使用しています。
 
-| Item | Detail |
+| 項目 | 詳細 |
 | --- | --- |
 | Accession | [GCF_016808095.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_016808095.1/) |
 | Assembly | ASM1680809v1 |
 | Cultivar | Longxiaodou 4 |
-| Assembly span | 447.8 Mb |
-| Publication | [Li et al. 2024, *Scientific Data* 11:1074](https://doi.org/10.1038/s41597-024-03911-y) |
+| Assembly span | 447.8 Mb(実測: 448,362,642 bp、contig 36本。内訳は[Joint Genotyping scale hardening](#joint-genotyping-scale-hardeningissue-11)参照) |
+| 論文 | [Li et al. 2024, *Scientific Data* 11:1074](https://doi.org/10.1038/s41597-024-03911-y) |
 
-The approximately 540 Mb figure often cited for adzuki bean is a k-mer-based genome-size estimate for the cultivar Shumari ([Sakai et al. 2015, *Scientific Reports* 5:16780](https://doi.org/10.1038/srep16780)). For Longxiaodou 4, Li et al. estimated a genome size of 464.9 Mb by 21-mer analysis; the 447.8 Mb assembly represents 96.32% of that estimate. These values differ by cultivar and estimation method and should not be treated as interchangeable.
+アズキでよく引用される約540 Mbという値は、cultivar Shumariのk-merベースのゲノムサイズ推定です
+([Sakai et al. 2015, *Scientific Reports* 5:16780](https://doi.org/10.1038/srep16780))。
+Longxiaodou 4についてLi et al.は21-mer解析により464.9 Mbと推定しており、447.8 Mbのアセンブリは
+その推定値の96.32%に相当します。これらの値はcultivarと推定手法が異なるため、互換なものとして
+扱ってはいけません。
 
-The sequencing data and reference assembly originate from different studies and genetic backgrounds. The executable workflow treats the reference genome as an explicit, configurable analysis input; results produced against different references must not be assumed to be interchangeable.
+シーケンシングデータと参照アセンブリは異なる研究・異なる遺伝的背景に由来します。実行可能な
+ワークフローは参照ゲノムを明示的な設定可能入力として扱っており、異なる参照ゲノムに対する結果を
+互換なものと仮定してはいけません。
 
 ---
 
-## Nextflow WGS Variant-Calling Workflow
+## Nextflow WGS Variant-Calling ワークフロー
 
-Issues [#4](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/4), [#6](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/6), [#9](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/9), and [#13](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/13) establish the input contracts and executable workflow from paired-end WGS reads through filtered cohort VCFs and variant QC.
+Issue [#4](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/4)、
+[#6](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/6)、
+[#9](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/9)、
+[#13](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/13)が、ペアエンドWGSリードから
+フィルタ済みコホートVCFとvariant QCまでの入力契約と実行可能ワークフローを確立しています。
 
-The current workflow performs the following actions:
+現在のワークフローは以下を行います。
 
-- validates pipeline parameters with `nf-schema` 2.8.0
-- validates samplesheet structure, required values, paths, and read-group uniqueness
-- rejects identical read 1/read 2 paths and FASTQ files reused across read groups
-- permits multiple read groups and sequencing lanes for one biological sample
-- runs FastQC before and after paired-end fastp trimming
-- generates or accepts compatible FASTA, sequence-dictionary, and BWA-MEM2 indexes
-- maps and coordinate-sorts each read group independently in a single piped `BWA_MEM2_MEM_SORT` task (BWA-MEM2's alignment stream is piped directly into `samtools sort`; no intermediate `.sam` file is ever written), preserving `ID`, `SM`, `LB`, `PL`, and optional `PU` metadata
-- merges a sample's read groups into its final BAM as soon as that sample's own expected read-group count is satisfied, independent of any other sample's mapping progress (see [Read-group-aware early merge](#read-group-aware-early-merge))
-- marks library-aware duplicates with GATK MarkDuplicates without removing duplicate records, with a configurable `optical_duplicate_pixel_distance`
-- creates BAM indexes and SAMtools flagstat, stats, and idxstats reports
-- generates one indexed GVCF per biological sample with GATK HaplotypeCaller
-- creates one GenomicsDB workspace per reference contig and jointly genotypes all sample GVCFs
-- gathers contig-level raw VCFs in reference-index order and creates an indexed raw cohort VCF
-- separates the cohort VCF into indexed SNP and indel VCFs
-- applies configurable SNP- and indel-specific hard filters with GATK VariantFiltration
-- extracts indexed PASS-only SNP and indel VCFs
-- runs `bcftools stats` for raw, filtered, and PASS stages and produces machine-readable cohort and per-sample QC tables plus human-readable summaries
-- reports FILTER-value and per-annotation evaluable-rate accounting for the filtered SNP and indel VCFs, and reconciles `raw/snp` and `raw/indel` record counts against `raw/all`
-- provides a redistributable synthetic functional-test dataset with deterministic expected SNPs
+- `nf-schema` 2.8.0でパイプラインパラメータを検証する
+- samplesheetの構造・必須値・パス・read group一意性を検証する
+- read 1/read 2に同一パスが指定された場合、およびFASTQファイルが複数read groupで再利用された場合に拒否する
+- 1つの生物学的サンプルに対して複数のread group・シーケンシングレーンを許可する
+- ペアエンドfastpトリミングの前後でFastQCを実行する
+- 互換性のあるFASTA・sequence dictionary・BWA-MEM2 indexを生成または受け付ける
+- 各read groupを単一のpiped `BWA_MEM2_MEM_SORT`タスクで独立にmapping・座標ソートする(BWA-MEM2のアラインメントストリームを`samtools sort`へ直接pipeし、中間`.sam`ファイルは一切生成しない)。`ID`・`SM`・`LB`・`PL`・オプションの`PU`メタデータを保持する
+- サンプル自身の期待read group数が揃った時点で、他サンプルの進捗を待たずにそのサンプルのread groupを最終BAMへmergeする([Read groupを意識した早期merge](#read-groupを意識した早期merge)参照)
+- 重複レコードを削除せずGATK MarkDuplicatesでlibrary単位の重複をマークする。`optical_duplicate_pixel_distance`は設定可能
+- BAM indexとSAMtools flagstat/stats/idxstatsレポートを生成する
+- GATK HaplotypeCallerで生物学的サンプルごとに1つのindexed GVCFを生成する
+- 参照ゲノムのcontigごとに1つのGenomicsDBワークスペースを作成し、全サンプルのGVCFを共同genotypingする
+- contig単位のraw VCFを参照ゲノムのindex順にgatherし、indexed raw cohort VCFを作成する
+- cohort VCFをindexedなSNP VCFとindel VCFに分離する
+- GATK VariantFiltrationで設定可能なSNP/indel別のハードフィルタを適用する
+- indexedなPASSのみのSNP/indel VCFを抽出する
+- raw/filtered/PASSの各段階で`bcftools stats`を実行し、機械可読なcohortおよびサンプル単位のQCテーブルと人間可読なサマリーを生成する
+- filtered SNP/indel VCFについてFILTER値・annotation別のevaluable rate会計を報告し、`raw/snp`と`raw/indel`のレコード数を`raw/all`に対してreconcileする
+- 決定論的なexpected SNPを伴う再配布可能なsynthetic functional-testデータセットを提供する
 
-It does **not** yet run MultiQC, automated nf-test coverage, genomic-selection panel generation, or real-data cohort validation.
+まだ実装していないのは、MultiQC実行、全モジュールを網羅したnf-test、そして20〜30検体・327検体
+規模でのコホート検証(Issue #26/#11で計画)です。5検体規模の実データE2E検証は完了しています。
 
-### Requirements
+### 必要要件
 
-- Bash 3.2 or later
-- Java 17 or later
+- Bash 3.2以降
+- Java 17以降
 - Nextflow 26.04.6
-- Docker for containerized process execution
+- コンテナ実行用のDocker
 
-Nextflow 26.04 and later use the strict syntax parser by default. The tested version can be selected without changing the globally installed launcher:
+Nextflow 26.04以降はデフォルトでstrict構文パーサを使用します。グローバルにインストールされた
+launcherを変更せずにテスト済みバージョンを選択できます。
 
 ```bash
 NXF_VER=26.04.6 nextflow -version
 ```
 
-The first run may download the pinned `nf-schema` plugin. The synthetic FASTQ and reference fixtures themselves are stored in this repository.
+初回実行時にpin済みの`nf-schema`プラグインをダウンロードする場合があります。synthetic FASTQと
+参照fixture自体はこのリポジトリに保存されています。
 
-Process containers are pinned by both image tag and manifest digest in the local modules. The BioConda BWA-MEM2 image (used only by the standalone `BWA_MEM2_INDEX` process) is tagged as version 2.3, while its bundled executable reports version 2.2.1 because the upstream 2.3 release retained the earlier internal version string. See the [BioConda recipe](https://github.com/bioconda/bioconda-recipes/blob/master/recipes/bwa-mem2/meta.yaml) and [upstream issue #283](https://github.com/bwa-mem2/bwa-mem2/issues/283).
+各processのcontainerはimage tagとmanifest digestの両方でpinされています。BioConda BWA-MEM2
+image(単独の`BWA_MEM2_INDEX`processでのみ使用)はversion 2.3としてtagされていますが、同梱の
+実行ファイルはversion 2.2.1を報告します。これは上流の2.3リリースが以前のinternal version
+stringを保持したままだったためです。
+([BioConda recipe](https://github.com/bioconda/bioconda-recipes/blob/master/recipes/bwa-mem2/meta.yaml)、
+[upstream issue #283](https://github.com/bwa-mem2/bwa-mem2/issues/283)参照)
 
-`BWA_MEM2_MEM_SORT` (mapping + sort) instead uses a combined [Seqera Wave](https://seqera.io/wave/) multi-package image, `community.wave.seqera.io/library/bwa-mem2_htslib_samtools:db98f81f55b64113`, pinned by both tag and digest, verified directly with `docker run ... bwa-mem2 version` / `samtools --version`: bwa-mem2 **2.2.1** (the same real binary already running under the 2.3-tagged image above) and samtools **1.22.1**. No mulled/Wave image combining bwa-mem2 with samtools **1.24** -- the version pinned everywhere else in this pipeline (`SAMTOOLS_MERGE`, `SAMTOOLS_INDEX`, `SAMTOOLS_QC`, `SAMTOOLS_FAIDX`) -- was found to exist; this 1.22.1-vs-1.24 gap is a deliberate, documented limitation of this container choice (Issue #8), not an oversight. This pipeline's synthetic fixture confirms the resulting BAM carries the expected coordinate-sort header, and that the generated-index and prebuilt-index paths -- both sorted by this same samtools 1.22.1 -- produce a byte-identical raw cohort VCF once fed through the 1.24-pinned downstream stages; this is not a comparison of samtools 1.22.1's own output against samtools 1.24's. BGZF interoperability between samtools versions does not by itself guarantee identical sort tie-break ordering, compression, or bug fixes, and the SAM spec leaves same-RNAME/POS record order unspecified, so any behavioral difference between 1.22.1 and 1.24 themselves on real data remains unverified: Issue #8 Phase 5's real-reference run (see [`docs/mapping_real_reference_profile.md`](docs/mapping_real_reference_profile.md)) reconfirmed the same `@PG` versions and a `samtools quickcheck`/`flagstat`-clean BAM on real WGS data, but did not itself compare 1.22.1's and 1.24's own sort output against each other. A combined image (rather than two separate containers) is required specifically because bwa-mem2 and samtools sort run *concurrently* inside one shell pipe and must share a single task's CPU/memory budget -- see below.
+`BWA_MEM2_MEM_SORT`(mapping + sort)は代わりに結合された
+[Seqera Wave](https://seqera.io/wave/)のmulti-package image、
+`community.wave.seqera.io/library/bwa-mem2_htslib_samtools:db98f81f55b64113`をtagとdigest両方で
+pinして使用しており、`docker run ... bwa-mem2 version` / `samtools --version`で直接検証済みです:
+bwa-mem2 **2.2.1**(上記2.3-tag imageと同じ実バイナリ)とsamtools **1.22.1**。このパイプラインの
+他所すべて(`SAMTOOLS_MERGE`、`SAMTOOLS_INDEX`、`SAMTOOLS_QC`、`SAMTOOLS_FAIDX`)でpinされている
+samtools **1.24**とbwa-mem2を組み合わせたmulled/Wave imageは見つかりませんでした。この
+1.22.1対1.24のギャップは意図的な、文書化されたこのcontainer選択の制約であり(Issue #8)、
+見落としではありません。このパイプラインのsynthetic fixtureは、生成されるBAMが期待通りの
+coordinate-sort headerを持つこと、そして生成/prebuiltの両indexパス(いずれも同じsamtools
+1.22.1でソート)が1.24でpinされた下流stageを通した後にbyte-identicalなraw cohort VCFを
+生成することを確認しています。これはsamtools 1.22.1自身の出力を1.24自身の出力と比較したもの
+ではありません。samtoolsバージョン間のBGZF相互運用性は、同一のsort tie-break順序・圧縮・
+バグ修正を保証するものではなく、SAM仕様は同一RNAME/POSのレコード順序を未規定のままにしている
+ため、実データにおける1.22.1と1.24自身の間の挙動差は未検証です。Issue #8 Phase 5の実参照ゲノム
+実行(詳細は[`docs/mapping_real_reference_profile.md`](docs/mapping_real_reference_profile.md))
+は実WGSデータ上で同じ`@PG`バージョンと`samtools quickcheck`/`flagstat`がクリーンなBAMを
+再確認しましたが、1.22.1と1.24自身のsort出力同士を比較したわけではありません。結合image
+(2つの独立したcontainerではなく)が必要な理由は、bwa-mem2とsamtools sortが1つのshell pipe内で
+*同時に*動作し、1タスク分のCPU/メモリ予算を共有する必要があるためです(下記参照)。
 
-### Mapping+sort resource contract
+### Mapping + sortのリソース契約
 
-Both tools in the `BWA_MEM2_MEM_SORT` pipe run concurrently and share one task's `cpus`/`memory` allocation (the `process_mapping` label), so neither can be handed the task's full budget without oversubscribing it:
+`BWA_MEM2_MEM_SORT`のpipe内の両ツールは同時に動作し、1タスク分の`cpus`/`memory`割り当て
+(`process_mapping`ラベル)を共有するため、どちらか一方にタスクの全予算を割り当てるとoversubscribe
+になってしまいます。
 
-- **CPU split**: bwa-mem2 gets 80% of `task.cpus` (floored at 1), samtools sort gets the remaining 20% (floored at 1). bwa-mem2's alignment/scoring work dominates the pair's total CPU cost and scales close to linearly with threads; samtools sort's speedup from additional threads is smaller past a handful. **Issue #8 Phase 5** measured this split against a real Longxiaodou 4 reference and a real ~19.3x-coverage WGS accession on one machine (Seedcore-01; see [`docs/mapping_real_reference_profile.md`](docs/mapping_real_reference_profile.md)): the unmodified 80/20 split completed successfully with no OOM or retry, and the task's overall CPU utilization was consistent with bwa-mem2 dominating the pair's cost. That single baseline run surfaced no bottleneck or failure, so it is **retained unchanged** -- this confirms 80/20 is *safe* for that one reference/accession/machine, not that it is provably *optimal*, and no comparative alternative-split benchmark has been run.
-- **Memory split**: `samtools sort -m` sets memory *per thread* (768 MiB/thread if omitted, regardless of what the task actually has available). The formula reserves 50% of `task.memory` for bwa-mem2 (its footprint scales with reference/index size, which this formula deliberately does not try to predict ahead of real measurement), a fixed 512 MiB for OS/tool overhead, and divides the remainder evenly across sort's own threads. Unlike an earlier version of this formula, a `task.memory`/`task.cpus` combination too small to leave at least 1 MiB/thread for sort (or to give both tools their own CPU thread) now fails the task fast with a diagnosable error instead of silently clamping the allocation and exceeding the task's actual memory budget (PR #25 review). The same Phase 5 run measured this formula at `task.memory=16 GiB`: peak RSS reached 12.9 GB (~19.4% headroom) for `BWA_MEM2_MEM_SORT` and 10 GB (37.5% headroom) for `BWA_MEM2_INDEX`, with no OOM on either -- positive margin in both cases, tighter for mapping+sort than for indexing. The formula and the `16.GB * task.attempt` default are **retained unchanged**; this one successful run is not grounds to raise or lower it.
+- **CPU分割**: bwa-mem2が`task.cpus`の80%(floor 1)、samtools sortが残り20%(floor 1)を得ます。
+  bwa-mem2のアラインメント/スコアリング処理がペア全体のCPUコストを支配し、スレッド数にほぼ線形に
+  スケールする一方、samtools sortのスレッド追加による高速化は数スレッドを超えると小さくなります。
+  **Issue #8 Phase 5**は、この分割を実際のLongxiaodou 4参照ゲノムと実際の約19.3xカバレッジの
+  WGS検体1件に対して1台のマシン(Seedcore-01、[`docs/mapping_real_reference_profile.md`](docs/mapping_real_reference_profile.md)参照)
+  上で測定しました: 変更を加えていない80/20分割はOOMやretryなく完走し、タスク全体のCPU使用率は
+  bwa-mem2がペア全体のコストを支配しているという説明と整合していました。この単一のベースライン
+  実行ではボトルネックや失敗は見つからなかったため、**変更せずに維持**しています。これは80/20が
+  その1つの参照ゲノム/検体/マシンにおいて*安全*であることを確認したものであり、*最適*であることを
+  証明したものではなく、比較対照となる別分割のベンチマークは行っていません。**Issue #26**では
+  この同じ80/20分割を5検体・36contigの実データコホートに対して適用し、OOMやretryなく完走する
+  ことを追加で確認しました(詳細は[実データコホートE2E検証](#実データコホートe2e検証issue-26)参照)。
+- **メモリ分割**: `samtools sort -m`は*スレッドあたり*のメモリを指定します(省略時はタスクが実際に
+  利用可能な量に関わらず768 MiB/スレッド)。この計算式は`task.memory`の50%をbwa-mem2用に確保し
+  (そのフットプリントは参照ゲノム/index sizeにスケールするため、この式は実測に先立ってそれを
+  予測しようとしません)、固定512 MiBをOS/ツールのオーバーヘッド用に確保し、残りをsort自身の
+  スレッドに均等に分配します。以前のバージョンのこの計算式と異なり、`task.memory`/`task.cpus`の
+  組み合わせがsortに最低1 MiB/スレッドを残せない(あるいは両ツールに各1スレッドを与えられない)
+  ほど小さい場合、割り当てを黙ってclampしてタスクの実際のメモリ予算を超過させる代わりに、診断
+  可能なエラーでタスクを即座に失敗させます(PR #25レビュー)。同じPhase 5実行はこの計算式を
+  `task.memory=16 GiB`で測定し、peak RSSは`BWA_MEM2_MEM_SORT`で12.9 GB(約19.4%の余裕)、
+  `BWA_MEM2_INDEX`で10 GB(37.5%の余裕)に達し、いずれもOOMは発生しませんでした。この計算式と
+  `16.GB * task.attempt`のデフォルトは**変更せずに維持**しています。この1回の成功実行は、それを
+  引き上げる・引き下げる根拠にはなりません。
 
-Both formulas are implemented and documented in-line in `modules/local/bwa_mem2_mem_sort.nf`. `BWA_MEM2_MEM_SORT` and `BWA_MEM2_INDEX` each have their own resource label (`process_mapping`, `process_bwa_index`), independent of `process_high` and of each other, so they can still be tuned separately if a future, larger, or differently-shaped real dataset (Issue #11/#26) surfaces a bottleneck this one run did not.
+両方の計算式は`modules/local/bwa_mem2_mem_sort.nf`にinline実装・文書化されています。
+`BWA_MEM2_MEM_SORT`と`BWA_MEM2_INDEX`はそれぞれ`process_high`とも互いとも独立した専用の
+resourceラベル(`process_mapping`、`process_bwa_index`)を持っており、より大規模あるいは異なる
+形状の実データセット(Issue #11/#26)が今回の1回の実行では見つからなかったボトルネックを
+明らかにした場合でも、個別にチューニングできます。
 
-`set -o pipefail` is set explicitly in the task script: bash's default `-e` alone does not check the exit code of an earlier stage in a shell pipe, so without it a bwa-mem2 failure (segfault, truncated input) could be masked by `samtools sort` exiting 0 over corrupt/truncated input.
+タスクスクリプトでは明示的に`set -o pipefail`を設定しています。bashのデフォルトの`-e`だけでは
+shell pipe内の前段のexit codeをチェックしないため、これがなければbwa-mem2の失敗(segfault、
+入力の破損)が、破損/切り詰められた入力に対して`samtools sort`がexit 0で終了することでマスク
+されてしまう可能性があります。
 
-Retries on an OOM-like exit code (137/140/143) now scale memory with `task.attempt` (e.g. `{ 16.GB * task.attempt }`) across every resource label, rather than retrying under the exact same memory limit that just failed -- a plain retry at unchanged memory cannot succeed if the first attempt was genuinely OOM-killed.
+OOM様のexit code(137/140/143)によるretryは、失敗した実行と全く同じメモリ制限で単純にretryする
+代わりに、すべてのresourceラベルにわたって`task.attempt`でメモリをスケールします(例:
+`{ 16.GB * task.attempt }`)。単純なretryでは、最初の試行が本当にOOM killされた場合に成功する
+ことはできません。
 
-### Read-group-aware early merge
+### Read groupを意識した早期merge
 
-Nextflow's `groupTuple()` without an explicit `size:` buffers every tuple until its *entire* upstream channel closes -- i.e. until every read group of every sample has finished mapping -- before emitting even one completed sample group, even if that sample's own read groups all finished mapping long ago. `main.nf` counts each sample's read groups directly from the materialized samplesheet (`read_group_counts_by_sample`, computed once, before any channel work begins) and passes that count into `groupKey(sample_id, expected_read_group_count)` (Nextflow's own documented pattern for this), so `groupTuple()` emits each sample's group -- and its `SAMTOOLS_MERGE` task -- as soon as that sample's own read groups are in, independent of any other sample's progress. `groupKey`'s own `.target` property recovers the original `sample_id` afterward. The existing deterministic BAM-name-order-before-merge contract is unchanged.
+Nextflowの`groupTuple()`は明示的な`size:`を指定しない場合、上流channel全体が閉じるまで
+(=全サンプルの全read groupのmappingが終わるまで)、たとえあるサンプルの全read groupが
+とっくにmapping済みであっても、完了した1つのサンプルグループすら出力せずにすべてのtupleを
+バッファします。`main.nf`はmaterializeされたsamplesheetから直接各サンプルのread group数を
+数え(`read_group_counts_by_sample`、channel処理が始まる前に一度だけ計算)、その数を
+`groupKey(sample_id, expected_read_group_count)`(Nextflow自身が文書化しているこの
+パターン)へ渡します。これにより`groupTuple()`は、他のサンプルの進捗に関わらず、そのサンプル
+自身のread groupが揃い次第、そのサンプルのグループと`SAMTOOLS_MERGE`タスクを出力します。
+`groupKey`自身の`.target`プロパティが後から元の`sample_id`を復元します。既存の決定論的な
+BAM名順序でのmerge契約は変更されていません。
 
-### Read-name format for optical-duplicate detection
+### Optical duplicate検出のためのread-name形式
 
-The synthetic FASTQ read names now follow a CASAVA 1.8-style, 7-colon-field Illumina format (`SIM:1:FC1:<lane>:<tile>:<x>:<y>`) instead of the previous `<read_group_id>_<contig>_<number>` scheme. GATK MarkDuplicates' default `READ_NAME_REGEX` expects exactly this shape to extract tile/x/y for optical-vs-PCR duplicate subclassification; the previous names caused a real, confirmed `MarkDuplicates` warning (`did not start with a parsable number`) and always reported 0 optical duplicate clusters, silently degrading that subclassification (library-size estimation) without affecting the underlying PCR/library duplicate FLAG itself, which is coordinate/CIGAR-based. Lane is parsed from the read group's own `_L<NNN>` suffix; tile and the x/y baselines are derived from stable hashes of `read_group_id` and contig name, so that two read groups sharing a lane number but belonging to different samples (e.g. `sample_a_L001` and `sample_b_L001`, realistically multiplexed on one physical lane) land on different simulated tiles, matching the fact that two samples' DNA can never occupy the same physical cluster. See `tests/scripts/generate_synthetic_data.py`'s `casava_read_name()` for the exact derivation.
+synthetic FASTQのread nameは、以前の`<read_group_id>_<contig>_<number>`方式ではなく、CASAVA
+1.8スタイルの7コロンフィールドIllumina形式(`SIM:1:FC1:<lane>:<tile>:<x>:<y>`)に従っています。
+GATK MarkDuplicatesのデフォルト`READ_NAME_REGEX`は、optical対PCR重複の下位分類のためtile/x/yを
+抽出するために正確にこの形式を期待しています。以前の名前は実際に確認されたMarkDuplicatesの
+警告(`did not start with a parsable number`)を引き起こし、optical duplicate clusterを常に
+0件と報告していました。これは基盤となるPCR/library重複FLAG自体(座標/CIGARベース)には影響
+しませんが、その下位分類(library size推定)を黙って劣化させていました。laneはread group自身の
+`_L<NNN>`接尾辞から解析され、tileとx/yのベースラインは`read_group_id`とcontig名の安定した
+ハッシュから導出されます。これにより、laneの番号を共有するが異なるサンプルに属する2つの
+read group(例: 現実的に1本の物理レーンへ多重化される`sample_a_L001`と`sample_b_L001`)が
+異なる模擬tileへ配置され、2つのサンプルのDNAが同一の物理クラスタを占有することは決してない
+という事実と整合します。正確な導出方法は`tests/scripts/generate_synthetic_data.py`の
+`casava_read_name()`を参照してください。
 
-### Validate and run the workflow
+### ワークフローの検証と実行
 
-The pinned containers currently target Linux AMD64. Use `docker` on native Linux AMD64 or `docker_amd64` for functional testing through Docker emulation on Apple Silicon. The emulated profile is not intended for performance benchmarking.
+pin済みcontainerは現時点でLinux AMD64を対象としています。ネイティブLinux AMD64では`docker`を、
+Apple SiliconでのDocker emulationによる機能テストでは`docker_amd64`を使用してください。emulation
+profileはパフォーマンスベンチマーク用ではありません。
 
 ```bash
 NXF_VER=26.04.6 nextflow lint .
@@ -142,7 +254,7 @@ NXF_VER=26.04.6 \
   -profile test,docker
 ```
 
-On Apple Silicon:
+Apple Siliconでは:
 
 ```bash
 NXF_VER=26.04.6 \
@@ -150,27 +262,88 @@ NXF_VER=26.04.6 \
   -profile test,docker_amd64
 ```
 
-The synthetic dataset contains two 5 kb contigs, two biological samples, and three read groups. Both `sample_a` and `sample_b` carry reads on both contigs: each sample supplies the alternate allele at its own deterministic SNP locus and reference-supporting reads at the other sample's locus, so Joint Genotyping produces a non-reference call and a reference call at the same site instead of a missing genotype (see [Issue #12](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/12)). The two `sample_a` read groups share `library_id=lib_a` and contain intentional cross-lane duplicate fragments on `chrSynthetic1`. A successful run retains all 40 `sample_a` reads while marking four reads as duplicates; the 24 `sample_b` reads contain no intended duplicates.
+synthetic datasetには2本の5 kb contig、2つの生物学的サンプル、3つのread groupが含まれています。
+`sample_a`と`sample_b`はいずれも両方のcontig上にリードを持ち、各サンプルは自身のdeterministic
+SNP locusにalternate alleleを、もう一方のサンプルのlocusにreference支持リードを供給するため、
+Joint Genotypingは欠損遺伝子型ではなく同一site上でnon-referenceコールとreferenceコールの両方を
+生成します([Issue #12](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/12)参照)。
+2つの`sample_a`のread groupは`library_id=lib_a`を共有し、`chrSynthetic1`上に意図的な
+cross-lane重複フラグメントを含みます。成功した実行では`sample_a`の40リードすべてが保持され、
+うち4リードが重複としてマークされます。`sample_b`の24リードには意図的な重複は含まれません。
 
-The fixtures also encode deterministic SNPs at `chrSynthetic1:1501 C>G` for `sample_a` and `chrSynthetic2:1601 A>C` for `sample_b`. At each locus the carrier sample is called `1/1` and the other sample is called `0/0` (not `./.`), giving `AC=2;AN=4;AF=0.500` in the two-sample cohort. The expected ref/alt alleles, genotypes, exact per-sample and site depth, and `AC`/`AN`/`AF` are recorded in `tests/data/variants/expected_variants.tsv`, the canonical contract that the nf-test suite below reads and asserts exactly (not as a lower bound). A clean Docker smoke run produces exactly these two raw SNP records, in `sample_a`, `sample_b` sample-column order, and no unexpected variant records.
+fixtureはさらに`sample_a`用の`chrSynthetic1:1501 C>G`と`sample_b`用の
+`chrSynthetic2:1601 A>C`にdeterministic SNPを符号化しています。各locusでキャリアサンプルは
+`1/1`、もう一方のサンプルは(`./.`ではなく)`0/0`とコールされ、2サンプルcohortで
+`AC=2;AN=4;AF=0.500`となります。期待されるref/alt allele、遺伝子型、正確なサンプル単位/site
+depth、`AC`/`AN`/`AF`は`tests/data/variants/expected_variants.tsv`に記録されており、これが
+下記のnf-testスイートが直接読み込んで(下限値としてではなく)厳密一致で検証する正規の契約です。
+クリーンなDocker smoke実行は、`sample_a`、`sample_b`のサンプル列順で、これら2つのraw SNP
+レコードのみを、想定外のvariantレコードなしに生成します。
 
-With the default `snp_filter_sor_max=3.0`, both synthetic SNPs still receive the `SNP_SOR_HIGH` filter because their SOR values are greater than 3.0 (`SOR=4.407` at `chrSynthetic1:1501`, `SOR=3.912` at `chrSynthetic2:1601`). The resulting default PASS SNP VCF is therefore valid but empty, and a separate permissive smoke run with `--snp_filter_sor_max 10.0` retains both SNPs as PASS, exactly as before this fixture was strengthened. Adding reference-supporting reads for the other sample at each locus changed `AC`, `AN`, `AF`, and per-sample/site `DP` as expected, and dropped the raw-cohort genotype-missingness rate from `0.5` to `0.0`, but left `SOR`, `FS`, `MQ`, and `QD` numerically unchanged; these particular annotations appear to be computed from the alternate-carrying sample's own reads rather than the full cohort pileup, so adding a homozygous-reference sample at the same site did not shift them. This behavior validates filter labeling, PASS extraction, and empty-VCF handling; it is not evidence that either threshold is biologically appropriate, and the SOR/FS/MQ/QD invariance above is an empirical observation about this GATK version's annotation behavior, not a documented guarantee to rely on elsewhere.
+デフォルトの`snp_filter_sor_max=3.0`では、両方のsynthetic SNPともSOR値が3.0を超えるため
+(`chrSynthetic1:1501`で`SOR=4.407`、`chrSynthetic2:1601`で`SOR=3.912`)、`SNP_SOR_HIGH`
+フィルタを受けます。そのためデフォルトのPASS SNP VCFは有効だが空であり、`--snp_filter_sor_max 10.0`
+を指定した別途の許容的なsmoke実行では、このfixtureが強化される前と同様に両SNPがPASSとして
+保持されます。もう一方のサンプルの各locusにreference支持リードを追加したことで、期待通り
+`AC`、`AN`、`AF`、サンプル単位/site `DP`が変化し、raw cohortの遺伝子型欠損率は`0.5`から`0.0`へ
+低下しましたが、`SOR`、`FS`、`MQ`、`QD`は数値上変化しませんでした。これらのannotationは
+cohort全体のpileupではなくalternate保持サンプル自身のリードから計算されているように見え、
+そのため同一site上にhomozygous referenceサンプルを追加してもこれらの値はシフトしませんでした。
+この挙動はfilterラベリング・PASS抽出・空VCF処理を検証するものであり、どちらのしきい値が
+生物学的に適切であることの証拠ではなく、上記のSOR/FS/MQ/QD不変性はこのGATKバージョンの
+annotation挙動に関する経験的観察であり、他所で頼るべき文書化された保証ではありません。
 
-These fixtures test workflow behavior, read-group-aware duplicate marking, GVCF generation, Joint Genotyping, hard-filter mechanics, and variant-QC generation. They do not constitute biological or production validation. Both samples now receive a confident, non-missing genotype at both deterministic SNP loci, closing the reference-versus-alternate genotype gap previously tracked in [Issue #12](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/12).
+これらのfixtureはワークフローの挙動、read-groupを意識した重複マーク、GVCF生成、Joint
+Genotyping、hard filterの仕組み、variant-QC生成をテストするものであり、生物学的または本番
+環境での検証を構成するものではありません。両サンプルとも、両方のdeterministic SNP locusで
+確信度の高い非欠損遺伝子型を受け取るようになり、以前
+[Issue #12](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/12)で追跡していた
+reference対alternate遺伝子型のギャップを解消しました。
 
-The deterministic fixtures can be regenerated with:
+deterministic fixtureは以下で再生成できます。
 
 ```bash
 python3 tests/scripts/generate_synthetic_data.py
 ```
 
-### Automated pipeline-level testing
+### 自動化されたパイプラインレベルテスト
 
-A pipeline-level [nf-test](https://www.nf-test.com/) reads `tests/data/variants/expected_variants.tsv` directly and asserts the genotype and annotation contract above end to end: gVCF and raw-cohort-VCF existence, exactly two raw SNP records with no unexpected variants, sample-column order, and an exact match (not a lower bound) on `GT`, `REF`/`ALT`, `AC`, `AN`, `AF`, and per-sample and site `DP` at both loci, plus the PR #14 filtering/QC regression guards (default `SNP_SOR_HIGH` filtering, an empty default PASS SNP VCF, and an empty indel VCF). It also asserts the variant-QC output contract (36 `qc/variants` artifacts, cohort missingness metrics for the raw cohort, `NA` per-sample missingness where a stage has zero records, the FILTER-value breakdown and annotation-coverage contract, and the type-level record accounting). Reading the contract file directly, rather than duplicating its values as literals in the test, keeps the fixture and its test from drifting apart.
+パイプラインレベルの[nf-test](https://www.nf-test.com/)は`tests/data/variants/expected_variants.tsv`
+を直接読み込み、上記の遺伝子型・annotation契約をend-to-endで検証します: gVCFとraw cohort VCFの
+存在、想定外のvariantなしの正確に2つのraw SNPレコード、サンプル列順、そして両locusでの
+`GT`、`REF`/`ALT`、`AC`、`AN`、`AF`、サンプル単位/site `DP`の(下限値ではなく)厳密一致、加えて
+PR #14のfiltering/QC回帰guard(デフォルトの`SNP_SOR_HIGH`フィルタリング、空のデフォルトPASS
+SNP VCF、空のindel VCF)。またvariant-QC出力契約(36個の`qc/variants`成果物、raw cohortの
+欠損率metrics、あるstageのレコード数が0の場合のサンプル単位欠損率`NA`、FILTER値の内訳と
+annotationカバレッジ契約、type単位のレコード会計)も検証します。契約ファイルを文字列として
+テスト内に複製せず直接読み込むことで、fixtureとそのtestが乖離することを防いでいます。
 
-Two further pipeline-level tests (Issue #20) exercise `sample_ploidy`/`enable_gs_panel` against the same synthetic fixture, re-run with `--sample_ploidy 1`. One asserts that `enable_gs_panel=false` still resolves correct haploid genotypes (`GT`, `AC`, `AN`, `AF` -- read from the dedicated `tests/data/variants/expected_variants_haploid.tsv` contract, not the diploid one) end to end, with no `variants/gs_*`/`gs_panel/` output produced. The other asserts that the invalid default combination (`sample_ploidy=1` with `enable_gs_panel` left at its default `true`) fails before any process starts at all (`workflow.trace.tasks()` is empty) with a diagnosable error message, and that no output directory is created.
+さらに2つのpipeline-level test(Issue #20)が同じsynthetic fixtureに対して`--sample_ploidy 1`で
+再実行し、`sample_ploidy`/`enable_gs_panel`を検証します。1つは`enable_gs_panel=false`が
+end-to-endで正しいhaploid遺伝子型(`GT`、`AC`、`AN`、`AF` -- diploidのものではなく専用の
+`tests/data/variants/expected_variants_haploid.tsv`契約から読み込む)を解決し、
+`variants/gs_*`/`gs_panel/`出力が一切生成されないことを検証します。もう1つは、無効な
+デフォルトの組み合わせ(`sample_ploidy=1`で`enable_gs_panel`をデフォルトの`true`のまま)が
+どのprocessも開始する前に(`workflow.trace.tasks()`が空)診断可能なエラーメッセージで失敗し、
+出力ディレクトリが作成されないことを検証します。
 
-The main genotype-contract test also asserts the Issue #8 mapping/duplicate-marking hardening: exactly 3 `BWA_MEM2_MEM_SORT` tasks and no `SAMTOOLS_SORT` task at all (`workflow.trace.tasks()`); each final BAM's `@HD`/`@RG` lines (decoded directly from the real BGZF-compressed BAM via `java.util.zip.GZIPInputStream`, with no dependency on a `samtools` binary being present on the test runner); `sample_a`'s 40 retained reads with 4 duplicate-flagged and `sample_b`'s 24 retained reads with 0; MarkDuplicates metrics-file existence; and, with a CLI-equivalent String `optical_duplicate_pixel_distance="2500"`, that the value reaches the real GATK command line (read from the metrics file's own embedded command-line header). Two further tests cover a negative `optical_duplicate_pixel_distance` failing fast before any process runs (mirroring the Issue #20 negative test), and a fully prebuilt (non-generated) BWA-MEM2 index completing the whole pipeline while skipping `BWA_MEM2_INDEX` entirely. A dedicated module-level nf-test (`tests/modules/bwa_mem2_mem_sort.nf.test`) additionally confirms, against the real pinned combined container, that no `.sam` file is ever created in the task's own work directory and that bwa-mem2/samtools sort each receive the documented, non-oversubscribed thread counts (read from their own `@PG` header lines), for both a freshly generated and a prebuilt index.
+メインの遺伝子型契約testはさらにIssue #8のmapping/重複マークhardeningを検証します: 正確に3つの
+`BWA_MEM2_MEM_SORT`タスクと`SAMTOOLS_SORT`タスクが皆無であること(`workflow.trace.tasks()`)、
+各最終BAMの`@HD`/`@RG`行(実際のBGZF圧縮BAMから`java.util.zip.GZIPInputStream`で直接decode、
+テストランナーに`samtools`バイナリが存在することへの依存なし)、`sample_a`の40保持リードのうち
+4件が重複フラグ付き、`sample_b`の24保持リードのうち0件、MarkDuplicates metricsファイルの存在、
+そしてCLI相当のString `optical_duplicate_pixel_distance="2500"`で、その値が実際のGATKコマンド
+ライン(metricsファイル自身に埋め込まれたコマンドラインheaderから読み込む)に到達すること。
+さらに2つのtestが、負の`optical_duplicate_pixel_distance`がどのprocess実行前にも即座に失敗する
+こと(Issue #20の負のtestを反映)と、完全にprebuilt(非生成)のBWA-MEM2 indexが`BWA_MEM2_INDEX`
+を完全にスキップしながらパイプライン全体を完走することを検証します。専用のmodule-level
+nf-test(`tests/modules/bwa_mem2_mem_sort.nf.test`)は、実際にpinされた結合containerに対して
+`.sam`ファイルがタスク自身の作業ディレクトリに一切作成されないこと、そしてbwa-mem2/samtools
+sortが(それぞれ自身の`@PG` headerから読み込んだ)文書化された非oversubscribeスレッド数を、
+新規生成/prebuiltの両方のindexで受け取ることを追加で確認します。
+
+Issue #11の`GATK_GENOMICSDBIMPORT`/`GATK_GATHERVCFS`のsingle-input回帰guardは
+[Joint Genotyping scale hardening](#joint-genotyping-scale-hardeningissue-11)で詳述します。
 
 ```bash
 curl -fsSL https://code.askimed.com/install/nf-test | bash
@@ -178,7 +351,7 @@ curl -fsSL https://code.askimed.com/install/nf-test | bash
 NXF_VER=26.04.6 ./nf-test test tests/pipeline/adzuki_snp_pipeline.nf.test
 ```
 
-On Apple Silicon, override the profile declared in `nf-test.config` to use Docker emulation:
+Apple Siliconでは、`nf-test.config`で宣言されたprofileをDocker emulationへ上書きしてください。
 
 ```bash
 NXF_VER=26.04.6 \
@@ -186,104 +359,207 @@ NXF_VER=26.04.6 \
   --profile "test,docker_amd64"
 ```
 
-GitHub Actions runs the same nf-test suite, plus the variant QC summarizer's own unit tests below, the `GATK_SELECTVARIANTS` module-level nf-test described under [Filter and annotation-coverage QC](#filter-and-annotation-coverage-qc), the `GS_NORMALIZE_VARIANTS` module-level nf-test, and the `BWA_MEM2_MEM_SORT` module-level nf-test (Issue #8), with the native `docker` profile on every push and pull request against `main` (`.github/workflows/test.yml`); `.github/workflows/lint.yml` separately checks repository structure only. This nf-test suite is scoped to the Joint Genotyping fixture contract validated for Issue #12, the variant QC output contract validated for Issue #16, the FILTER/annotation-coverage/type-accounting contract validated for Issue #15, and the mapping/duplicate-marking hardening contract validated for Issue #8; broader nf-test coverage of every module and a functional-CI overhaul remain tracked in Issue #1's #G.
+GitHub Actionsは同じnf-testスイートに加え、下記のvariant QC summarizer自身のunit test、
+[Filter and annotation-coverage QC](#filterとannotationカバレッジqc)で説明する
+`GATK_SELECTVARIANTS`module-level nf-test、`GS_NORMALIZE_VARIANTS`module-level nf-test、
+`BWA_MEM2_MEM_SORT`module-level nf-test(Issue #8)、`VALIDATE_REFERENCE_CONTIGS`・
+`GATK_GENOMICSDBIMPORT`・`GATK_GATHERVCFS`のmodule-level nf-test(Issue #11)を、
+mainへのすべてのpush/pull requestに対してネイティブの`docker` profileで実行します
+(`.github/workflows/test.yml`)。`.github/workflows/lint.yml`はリポジトリ構造のみを個別に
+検査します。このnf-testスイートはIssue #12で検証したJoint Genotyping fixture契約、Issue #16で
+検証したvariant QC出力契約、Issue #15で検証したFILTER/annotationカバレッジ/type会計契約、
+Issue #8で検証したmapping/重複マークhardening契約、Issue #11で検証したJoint Genotyping
+scale hardening契約にスコープされています。全モジュールを網羅するより広範なnf-testとfunctional
+CIの見直しは[Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1) #Gで
+引き続き追跡しています。
 
 ### Variant QC summarizer
 
-`bin/summarize_variant_qc.py` turns one `bcftools stats` report into the `variant_qc.tsv`, `sample_qc.tsv`, and `summary.txt` files described below. It replaced an embedded, roughly 230-line AWK script inside `modules/local/bcftools_stats.nf` (Issue #16) so the aggregation logic can be unit tested independently of Nextflow, Groovy, and shell escaping.
+`bin/summarize_variant_qc.py`は1つの`bcftools stats`レポートを、下記の`variant_qc.tsv`、
+`sample_qc.tsv`、`summary.txt`へ変換します。これは`modules/local/bcftools_stats.nf`に
+組み込まれていた約230行のAWKスクリプトを置き換えたもので(Issue #16)、集約ロジックを
+Nextflow・Groovy・shellエスケープから独立して単体テストできるようにするためです。
 
-The pinned `bcftools:1.24` container has no Python interpreter, and reusing the GATK container's bundled `bcftools` would have silently downgraded the pinned bcftools version from 1.24 to the 1.13 it ships. Rather than accept either, variant QC now runs as two Nextflow processes: `BCFTOOLS_STATS` (unchanged, runs `bcftools stats` only) followed by `SUMMARIZE_VARIANT_QC` (runs `bin/summarize_variant_qc.py` in a dedicated, digest-pinned `python:3.12` container). The seven stage/type combinations and 28 published QC artifacts are unchanged, but this QC step now accounts for 14 task executions in the Nextflow trace rather than 7. The full (non-`-slim`) Python image is used because Nextflow shells out to `ps` inside the task container to collect resource-usage metrics whenever a run is traced, as nf-test and `-with-trace` both do; `python:3.12-slim` does not include it.
+pin済みの`bcftools:1.24` containerにはPython interpreterが含まれておらず、GATK containerに
+同梱の`bcftools`を再利用するとpin済みのbcftoolsバージョンが1.24から同梱の1.13へ黙って
+ダウングレードしてしまいます。どちらも受け入れる代わりに、variant QCは今や2つのNextflow
+processとして実行されます: `BCFTOOLS_STATS`(変更なし、`bcftools stats`のみ実行)に続いて
+`SUMMARIZE_VARIANT_QC`(専用のdigest-pin済み`python:3.12` container内で`bin/summarize_variant_qc.py`
+を実行)。7つのstage/type組み合わせと28個の公開QC成果物は変更されていませんが、このQCステップは
+Nextflow traceにおいて7ではなく14のタスク実行としてカウントされるようになりました。フル
+(非`-slim`)のPython imageを使用しているのは、traceが有効な実行(nf-testと`-with-trace`は
+いずれもこれに該当)ではNextflowがresource使用量metricsを収集するためtaskコンテナ内で`ps`を
+shell outするためです。`python:3.12-slim`にはこれが含まれていません。
 
-Run the summarizer's unit tests with the standard library only, no extra dependencies required:
+summarizerのunit testは標準ライブラリのみで、追加の依存なしに実行できます。
 
 ```bash
 python3 -m unittest discover -s tests/bin -v
 ```
 
-The refactor's output was verified against the previous AWK implementation by running a clean synthetic Docker smoke test before and after the change and diffing every file under `qc/variants/`: all 28 artifacts across all seven stage/type combinations were byte-identical.
+このrefactorの出力は、変更前後でクリーンなsynthetic Docker smoke testを実行し、
+`qc/variants/`配下の全ファイルをdiffすることで以前のAWK実装と照合済みです: 7つのstage/type
+組み合わせすべてにわたる28個の成果物すべてがbyte-identicalでした。
 
-### Variant outputs
+### Variant出力
 
-| Output | Description |
+| 出力 | 説明 |
 | --- | --- |
-| `variants/gvcf/<sample_id>.g.vcf.gz` | Sample-level GVCF generated by HaplotypeCaller |
-| `variants/gvcf/<sample_id>.g.vcf.gz.tbi` | Tabix index for the sample GVCF |
-| `variants/raw/cohort.raw.vcf.gz` | Unfiltered multi-sample cohort VCF gathered in reference-contig order |
-| `variants/raw/cohort.raw.vcf.gz.tbi` | Tabix index for the raw cohort VCF |
-| `variants/by_type/cohort.snp.vcf.gz` | Raw cohort records selected as SNPs |
-| `variants/by_type/cohort.indel.vcf.gz` | Raw cohort records selected as indels |
-| `variants/filtered/cohort.<snp-or-indel>.filtered.vcf.gz` | Variant-type VCF with hard-filter labels applied |
-| `variants/pass/cohort.<snp-or-indel>.pass.vcf.gz` | Records whose FILTER value passes all configured hard filters |
-| `qc/variants/cohort.<stage>.<type>.bcftools.stats.tsv` | Complete `bcftools stats` output |
-| `qc/variants/cohort.<stage>.<type>.variant_qc.tsv` | Machine-readable cohort and variant-level QC metrics |
-| `qc/variants/cohort.<stage>.<type>.sample_qc.tsv` | Machine-readable per-sample genotype and missingness metrics |
-| `qc/variants/cohort.<stage>.<type>.summary.txt` | Human-readable QC summary |
-| `qc/variants/cohort.filtered.<type>.filter_breakdown.tsv` | FILTER-value accounting for the filtered VCF: total/PASS/non-PASS, per-combination and per-tag record counts, and multi-tag record count |
-| `qc/variants/cohort.filtered.<type>.annotation_qc.tsv` | Per-annotation presence and filter-hit accounting for `QD`, `QUAL`, `SOR`, `FS`, `MQ`, `MQRankSum`, and `ReadPosRankSum` |
-| `qc/variants/cohort.filtered.<type>.filter_qc.summary.txt` | Human-readable FILTER and annotation-coverage summary |
-| `qc/variants/cohort.variant_type_accounting.tsv` | Cohort-wide reconciliation of `raw/all` against the `raw/snp` and `raw/indel` selections |
-| `qc/variants/cohort.variant_type_accounting.summary.txt` | Human-readable variant-type accounting summary |
-| `variants/gs_normalized/cohort_gs.normalized.vcf.gz` | `raw/all`, left-normalized and multiallelic-split (`bcftools norm -m-`); still contains every variant type |
-| `qc/variants/cohort_gs.classification_accounting.tsv` | Post-split REF/ALT-shape classification and duplicate-key accounting for the GS lineage |
-| `qc/variants/cohort_gs.classification_accounting.summary.txt` | Human-readable classification accounting summary |
-| `variants/gs_classified/cohort_gs.classified.vcf.gz` | Biallelic-SNP-only subset of the normalized VCF, FILTER reset to `.` |
-| `variants/gs_filtered/cohort_gs.snp.filtered.vcf.gz` | The classified VCF with the same SNP hard filters re-applied |
-| `variants/gs_pass/cohort_gs.snp.pass.vcf.gz` | GS-eligible PASS records; the source VCF for the GS panel itself |
+| `variants/gvcf/<sample_id>.g.vcf.gz` | HaplotypeCallerが生成するサンプル単位のGVCF |
+| `variants/gvcf/<sample_id>.g.vcf.gz.tbi` | サンプルGVCFのTabix index |
+| `variants/raw/cohort.raw.vcf.gz` | 参照ゲノムのcontig順でgatherされた未フィルタの複数サンプルcohort VCF |
+| `variants/raw/cohort.raw.vcf.gz.tbi` | raw cohort VCFのTabix index |
+| `variants/by_type/cohort.snp.vcf.gz` | SNPとして選択されたrawコホートレコード |
+| `variants/by_type/cohort.indel.vcf.gz` | indelとして選択されたrawコホートレコード |
+| `variants/filtered/cohort.<snp-or-indel>.filtered.vcf.gz` | ハードフィルタラベルを適用したvariant type別VCF |
+| `variants/pass/cohort.<snp-or-indel>.pass.vcf.gz` | 設定済みハードフィルタすべてをFILTER値がPASSしたレコード |
+| `qc/variants/cohort.<stage>.<type>.bcftools.stats.tsv` | 完全な`bcftools stats`出力 |
+| `qc/variants/cohort.<stage>.<type>.variant_qc.tsv` | 機械可読なcohortおよびvariant単位のQC指標 |
+| `qc/variants/cohort.<stage>.<type>.sample_qc.tsv` | 機械可読なサンプル単位の遺伝子型・欠損率指標 |
+| `qc/variants/cohort.<stage>.<type>.summary.txt` | 人間可読なQCサマリー |
+| `qc/variants/cohort.filtered.<type>.filter_breakdown.tsv` | filtered VCFのFILTER値会計: 全体/PASS/非PASS、組み合わせ別・タグ別レコード数、複数タグレコード数 |
+| `qc/variants/cohort.filtered.<type>.annotation_qc.tsv` | `QD`、`QUAL`、`SOR`、`FS`、`MQ`、`MQRankSum`、`ReadPosRankSum`のannotation別存在・フィルタヒット会計 |
+| `qc/variants/cohort.filtered.<type>.filter_qc.summary.txt` | 人間可読なFILTER・annotationカバレッジサマリー |
+| `qc/variants/cohort.variant_type_accounting.tsv` | `raw/all`を`raw/snp`・`raw/indel`選択に対してreconcileしたcohort全体の会計 |
+| `qc/variants/cohort.variant_type_accounting.summary.txt` | 人間可読なvariant type会計サマリー |
+| `variants/gs_normalized/cohort_gs.normalized.vcf.gz` | `raw/all`をleft-normalize・multiallelic分割したもの(`bcftools norm -m-`)。すべてのvariant typeをまだ含む |
+| `qc/variants/cohort_gs.classification_accounting.tsv` | GS lineageのsplit後REF/ALT形状分類と重複key会計 |
+| `qc/variants/cohort_gs.classification_accounting.summary.txt` | 人間可読な分類会計サマリー |
+| `variants/gs_classified/cohort_gs.classified.vcf.gz` | 正規化VCFのbiallelic SNPのみの部分集合、FILTERを`.`へリセット |
+| `variants/gs_filtered/cohort_gs.snp.filtered.vcf.gz` | 同じSNPハードフィルタを再適用したclassified VCF |
+| `variants/gs_pass/cohort_gs.snp.pass.vcf.gz` | GS対象のPASSレコード。GSパネル自体のsource VCF |
 
-Every compressed VCF listed above is accompanied by a `.tbi` index. Variant QC is generated for seven stage/type combinations: `raw/all`, `raw/snp`, `raw/indel`, `filtered/snp`, `filtered/indel`, `pass/snp`, and `pass/indel`. The FILTER/annotation-coverage files above are generated once per variant type from the `filtered` VCF only (`raw` FILTER values are always unset and `pass` FILTER values are always `PASS` by construction, so neither stage has a meaningful FILTER breakdown), and the variant-type accounting file is generated once per cohort.
+上記の圧縮VCFにはすべて`.tbi` indexが付随します。Variant QCは7つのstage/type組み合わせ
+(`raw/all`、`raw/snp`、`raw/indel`、`filtered/snp`、`filtered/indel`、`pass/snp`、
+`pass/indel`)について生成されます。上記のFILTER/annotationカバレッジファイルは
+variant typeごとに`filtered` VCFからのみ生成されます(`raw`のFILTER値は常に未設定、`pass`の
+FILTER値は構造上常に`PASS`であるため、どちらのstageも意味のあるFILTER内訳を持ちません)。
+variant type会計ファイルはcohortごとに1回生成されます。
 
-The cohort QC table reports sample and record counts, variant-type counts, multiallelic-site counts, transitions, transversions, Ti/Tv, cohort missing-genotype counts and rates, and the sample list. The per-sample table reports reference-homozygous, non-reference-homozygous, heterozygous, and missing genotype counts, missingness rate, average depth, and singleton count.
+cohort QCテーブルはサンプル数・レコード数・variant type数・multiallelic site数、
+transition/transversion/Ti-Tv比、cohortの遺伝子型欠損数・欠損率、サンプル一覧を報告します。
+サンプル単位テーブルはreference-homozygous・非reference-homozygous・heterozygous・欠損
+遺伝子型数、欠損率、平均depth、singleton数を報告します。
 
-The raw, filtered, and PASS VCFs remain intermediate scientific results. The presence of a PASS label means only that a record passed the configured rules; it must not be interpreted as an analysis-ready SNP panel or as evidence that the thresholds are suitable for a biological cohort. `VariantFiltration` never removes a record: the `filtered` VCF holds the exact same records as its `raw`-stage, type-selected input, each carrying a `FILTER` label rather than being excluded, and downstream steps (`PASS` extraction, the FILTER/annotation-coverage QC above) read that label rather than a smaller record set.
+raw/filtered/PASSのVCFは中間的な科学的結果のままです。PASSラベルの存在は、そのレコードが
+設定済みのルールを通過したことのみを意味し、解析可能なSNPパネルであるとか、しきい値が
+生物学的コホートに適していることの証拠であると解釈してはいけません。`VariantFiltration`は
+レコードを一切削除しません: `filtered` VCFはそのraw stage・type選択後の入力と全く同じレコードを
+保持しており、それぞれが除外されるのではなくFILTERラベルを付与されます。下流のステップ
+(`PASS`抽出、上記のFILTER/annotationカバレッジQC)はそのより小さいレコード集合ではなく
+このラベルを読み取ります。
 
-### Filter and annotation-coverage QC
+### FilterとAnnotationカバレッジQC
 
-A record's `FILTER` column can legitimately be empty of a given tag for two very different reasons: the corresponding annotation was evaluated and satisfied the threshold, or the annotation was **missing** from that record and the filter expression was never evaluated at all. `MQRankSum` and `ReadPosRankSum` in particular are omitted by GATK whenever there is no comparable reference-supporting and alternate-supporting read population to compare (for example, every synthetic-fixture record in this repository currently has both annotations missing); a missing `MQRankSum`/`ReadPosRankSum` does not mean the corresponding `SNP_MQRANKSUM_LOW`/`SNP_READPOSRANKSUM_LOW` (or `INDEL_READPOSRANKSUM_LOW`) filter was satisfied, only that it could not be evaluated. `annotation_qc.tsv`'s `evaluable_rate` (present/total) and `filter_hit_rate` (tagged/present, reported as `NA` rather than `0` when zero records are present) exist specifically to keep these two situations distinguishable; do not read a low or zero `filter_hit_rate` as evidence that a threshold is well-calibrated without also checking `evaluable_rate`.
+レコードの`FILTER`列が特定のタグを欠いている理由は、全く異なる2つの場合があり得ます:
+該当annotationが評価されてしきい値を満たした場合と、そのannotationがそのレコードに
+**存在せず**フィルタ式が全く評価されなかった場合です。特に`MQRankSum`と`ReadPosRankSum`は、
+比較可能なreference支持リード集団とalternate支持リード集団が存在しない場合にGATKによって
+省略されます(たとえばこのリポジトリの現在のsynthetic fixtureのすべてのレコードは、両
+annotationとも欠損しています)。`MQRankSum`/`ReadPosRankSum`の欠損は、対応する
+`SNP_MQRANKSUM_LOW`/`SNP_READPOSRANKSUM_LOW`(または`INDEL_READPOSRANKSUM_LOW`)フィルタが
+満たされたことを意味せず、単に評価できなかったことを意味します。`annotation_qc.tsv`の
+`evaluable_rate`(存在数/全体数)と`filter_hit_rate`(タグ付き数/存在数、レコード0件の場合は
+`0`ではなく`NA`として報告)は、まさにこの2つの状況を区別可能にするために存在します。
+`evaluable_rate`も確認せずに、低いまたは0の`filter_hit_rate`をしきい値が適切に較正されている
+証拠として読んではいけません。
 
-`QUAL` is the VCF's own fixed QUAL column, not an INFO annotation, and its magnitude scales with cohort size and depth: a fixed `snp_filter_qual_min`/`indel_filter_qual_min` threshold does not carry the same discriminative meaning across cohorts of different size or sequencing depth, and `annotation_qc.tsv` tracks it using the same present/missing convention as the INFO-derived annotations for consistency, not because it is computed the same way.
+`QUAL`はVCF自身の固定QUAL列であり、INFO annotationではなく、その大きさはコホートサイズと
+depthにスケールします: 固定の`snp_filter_qual_min`/`indel_filter_qual_min`しきい値は、
+サイズやシーケンシングdepthが異なるコホート間で同じ判別的意味を持ちません。
+`annotation_qc.tsv`は一貫性のためINFO由来のannotationと同じ存在/欠損の慣例でこれを追跡
+しますが、同じ方法で計算されているからではありません。
 
-Not every annotation has a hard filter for every variant type: indels have no `SOR`, `MQ`, or `MQRankSum` filter (see the parameter table below), so `annotation_qc.tsv` reports `filter_tag`, `filter_tagged_records`, and `filter_hit_rate` as `NA` for those three rows under `variant_type=indel` -- this means the annotation's filtering is out of scope for that variant type, which is a different situation from "missing" (still reported via `present_records`/`missing_records`) and from "evaluated but zero hits".
+すべてのannotationがすべてのvariant typeにハードフィルタを持つわけではありません: indelには
+`SOR`、`MQ`、`MQRankSum`フィルタがありません(下記パラメータ表参照)。そのため
+`annotation_qc.tsv`は`variant_type=indel`のこれら3行について`filter_tag`、
+`filter_tagged_records`、`filter_hit_rate`を`NA`として報告します。これはそのvariant typeに
+対してそのannotationのフィルタリングがスコープ外であることを意味し、「欠損」
+(`present_records`/`missing_records`で別途報告)や「評価されたがヒット0件」とは異なる状況です。
 
-`GATK SelectVariants`'s `--select-type-to-include` classifies each record as a whole into exactly one overall type (SNP, INDEL, MIXED, MNP, ...) and selects it only on an exact match against that single type -- confirmed against the pinned GATK 4.6.2.0 container in `tests/modules/gatk_selectvariants.nf.test`. A `MIXED`-type record (one site carrying both a SNP-type and an indel-type ALT allele) therefore does not match `SNP` and does not match `INDEL`, and is excluded from **both** `cohort.snp.vcf.gz` and `cohort.indel.vcf.gz` -- it is never selected into both. `records_not_selected` (`raw_all_records - raw_snp_records - raw_indel_records`, in `variant_type_accounting.tsv`) is expected to be `>= 0` in normal operation: it counts `MIXED`/MNP/symbolic/other-typed records present in `raw/all` but excluded from both type-specific selections, so `raw/snp` and `raw/indel` are not guaranteed to partition `raw/all`. Note that a multiallelic site whose ALT alleles are all the same elementary type (for example two SNP alleles) is still classified as pure `SNP` or `INDEL` and is not part of `records_not_selected`; only `MIXED`-typed sites are excluded from both selections, so `number_of_multiallelic_sites` and `records_not_selected` are not expected to match exactly. `records_not_selected` can still go negative if `raw/snp` and `raw/indel` are not actually disjoint; `variant_type_accounting.tsv` always reports the value as computed (never hidden or clamped) and flags it as a warning, alongside `snp_indel_duplicate_records` (records with an identical `CHROM`/`POS`/`REF`/`ALT` present in both selections) as the direct diagnostic for a genuine duplicated output record -- which is the only way this invariant could legitimately be violated.
+`GATK SelectVariants`の`--select-type-to-include`は各レコード全体を1つの overall type
+(SNP、INDEL、MIXED、MNP、...)へ分類し、その単一typeとの完全一致でのみ選択します
+(pin済みGATK 4.6.2.0 containerに対して`tests/modules/gatk_selectvariants.nf.test`で確認済み)。
+そのためMIXED型のレコード(SNP型とindel型の両方のALT alleleを持つ1つのsite)は`SNP`にも
+`INDEL`にもマッチせず、`cohort.snp.vcf.gz`と`cohort.indel.vcf.gz`の**両方**から除外されます。
+両方に選択されることはありません。`records_not_selected`
+(`variant_type_accounting.tsv`内の`raw_all_records - raw_snp_records - raw_indel_records`)は
+通常運用では`>= 0`であることが期待されます。これは`raw/all`に存在するがtype別選択の両方から
+除外されたMIXED/MNP/symbolic/その他のtypeのレコードをカウントするもので、`raw/snp`と
+`raw/indel`が`raw/all`をpartitionすることは保証されていません。すべてのALT alleleが同じ
+elementary type(たとえば2つのSNP allele)であるmultiallelic siteは、純粋な`SNP`または
+`INDEL`として分類され、`records_not_selected`には含まれない点に注意してください。MIXED型の
+siteのみが両選択から除外されるため、`number_of_multiallelic_sites`と`records_not_selected`は
+正確に一致することが期待されているわけではありません。`raw/snp`と`raw/indel`が実際には
+disjointでない場合、`records_not_selected`は負になり得ます。`variant_type_accounting.tsv`は
+計算された値を常にそのまま報告し(隠したりclampしたりしない)、これをwarningとしてフラグ
+します。あわせて`snp_indel_duplicate_records`(同一の`CHROM`/`POS`/`REF`/`ALT`が両方の選択に
+存在するレコード)を、この不変条件が実際に破られ得る唯一の方法である、真に重複した出力
+レコードの直接的な診断として報告します。
 
-### Genomic selection (GS) panel
+### ゲノミックセレクション(GS)パネル
 
-The workflow separately derives a genomic selection (GS) SNP panel from `raw/all`, normalizing and reclassifying multiallelic and `MIXED`-type records before re-applying the SNP hard filters on a distinct lineage (`cohort_gs.*`), so that the primary `raw`/`filtered`/`pass` outputs above are never touched by this process. The dosage-matrix schema (v1) is diploid-only by design and fails fast (no output written) if `sample_ploidy` is not `2`, since every genotype call would otherwise be silently encoded as missing. The full data contract -- input/normalization/classification/eligibility rules, the dosage encoding and why `int8` was rejected, the missing/non-standard genotype policy, on-disk vs. in-memory matrix shape, and the empty-panel contract -- is documented in [`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md); only the output list is repeated here.
+このワークフローは`raw/all`から独立してゲノミックセレクション(GS) SNPパネルを導出します。
+multiallelicおよびMIXED型のレコードを正規化・再分類してから、独立したlineage(`cohort_gs.*`)で
+SNPハードフィルタを再適用するため、上記の主要な`raw`/`filtered`/`pass`出力はこのプロセスに
+一切触れられません。dosage matrixスキーマ(v1)は設計上diploid専用であり、`sample_ploidy`が
+`2`でない場合は(そうでなければすべての遺伝子型コールが黙って欠損として符号化されてしまうため)
+即座に失敗します(出力なし)。完全なデータ契約 -- 入力/正規化/分類/対象選定ルール、dosage
+符号化と`int8`が却下された理由、欠損/非標準遺伝子型ポリシー、ディスク上/メモリ内matrix形状、
+空panel契約 -- は[`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md)に
+文書化されており、ここでは出力一覧のみを繰り返します。
 
-The GS lineage runs by default (`enable_gs_panel = true`) but can be turned off entirely with `--enable_gs_panel false` (Issue #20). This exists specifically to let non-diploid variant calling run end to end: `sample_ploidy != 2` combined with `enable_gs_panel = true` (the default) fails fast, before any process starts, rather than running the full variant-calling lineage only to fail once the GS panel's own diploid-only check is reached. With `enable_gs_panel = false`, no `variants/gs_*` or `gs_panel/` output is produced at all; the primary `raw`/`filtered`/`pass`/QC lineage is unaffected either way. A non-diploid run completing successfully is not, by itself, evidence that the hard-filter thresholds are biologically appropriate for that ploidy -- see [Variant-calling and filtering parameters](#variant-calling-and-filtering-parameters) below.
+GS lineageはデフォルトで実行されます(`enable_gs_panel = true`)が、`--enable_gs_panel false`
+で完全に無効化できます(Issue #20)。これは特に非diploidのvariant callingをend-to-endで実行
+できるようにするために存在します: `sample_ploidy != 2`と(デフォルトの)`enable_gs_panel = true`
+の組み合わせは、variant calling lineage全体を実行してGSパネル自身のdiploid専用チェックに
+到達してから失敗する代わりに、どのprocess開始前にも即座に失敗します。`enable_gs_panel = false`
+では、`variants/gs_*`や`gs_panel/`出力は一切生成されません。主要な`raw`/`filtered`/`pass`/QC
+lineageはどちらの場合も影響を受けません。非diploidの実行が成功したこと自体は、ハード
+フィルタしきい値がそのploidyに対して生物学的に適切であることの証拠ではありません --
+[Variant callingおよびfilteringパラメータ](#variant-callingおよびfilteringパラメータ)参照。
 
-| Output | Description |
+| 出力 | 説明 |
 | --- | --- |
-| `gs_panel/cohort.gs_panel.genotype_matrix.tsv.gz` | Dosage matrix (variant rows x sample columns); `-1`/`0`/`+1`/`nan` |
-| `gs_panel/cohort.gs_panel.sample_metadata.tsv` | Per-sample missing/non-standard genotype counts and rates |
-| `gs_panel/cohort.gs_panel.variant_metadata.tsv` | Per-variant `CHROM`/`POS`/`REF`/`ALT`/`QUAL` and missingness |
-| `gs_panel/cohort.gs_panel.genotype_encoding_accounting.tsv` | Cohort-wide genotype classification counts (standard dosage vs. missing vs. non-diploid vs. non-biallelic-index, plus an independent phased-call count -- phasing alone never affects dosage) |
-| `gs_panel/cohort.gs_panel.genotype_encoding_accounting.summary.txt` | Human-readable genotype-encoding summary |
-| `gs_panel/cohort.gs_panel.record_accounting.tsv` | Full-lineage record reconciliation (`raw_all` -> `normalized` -> `classified` -> `gs_pass` -> matrix/metadata, cross-checked against the matrix file itself) and `panel_status` (`empty`/`populated`); any disagreement is a hard error, not a warning -- no file is written at all in that case |
-| `gs_panel/cohort.gs_panel.record_accounting.summary.txt` | Human-readable record accounting summary |
-| `gs_panel/cohort.gs_panel.manifest.json` | Schema-versioned reproducibility manifest: run ID, container digests, `sample_ploidy` and the genotype-encoding schema, and checksums of every panel artifact plus the raw/all VCF and reference FASTA/FAI used to build it |
+| `gs_panel/cohort.gs_panel.genotype_matrix.tsv.gz` | Dosage matrix(variant行 x sample列)。`-1`/`0`/`+1`/`nan` |
+| `gs_panel/cohort.gs_panel.sample_metadata.tsv` | サンプル単位の欠損/非標準遺伝子型数と率 |
+| `gs_panel/cohort.gs_panel.variant_metadata.tsv` | Variant単位の`CHROM`/`POS`/`REF`/`ALT`/`QUAL`と欠損率 |
+| `gs_panel/cohort.gs_panel.genotype_encoding_accounting.tsv` | Cohort全体の遺伝子型分類件数(標準dosage対欠損対非diploid対非biallelic-index、および独立したphased-call件数 -- phasingそれ自体はdosageに影響しない) |
+| `gs_panel/cohort.gs_panel.genotype_encoding_accounting.summary.txt` | 人間可読な遺伝子型符号化サマリー |
+| `gs_panel/cohort.gs_panel.record_accounting.tsv` | full-lineageのレコードreconciliation(`raw_all` -> `normalized` -> `classified` -> `gs_pass` -> matrix/metadata、matrixファイル自体との相互チェック)と`panel_status`(`empty`/`populated`)。不一致はwarningではなくhard errorであり、その場合ファイルは一切書き込まれない |
+| `gs_panel/cohort.gs_panel.record_accounting.summary.txt` | 人間可読なレコード会計サマリー |
+| `gs_panel/cohort.gs_panel.manifest.json` | スキーマversion付きの再現性manifest: run ID、container digest、`sample_ploidy`と遺伝子型符号化スキーマ、そしてパネル成果物すべてとそれを構築したraw/all VCF・参照FASTA/FAIのchecksum |
 
-A GS panel with zero eligible records is a normal outcome, not an error -- it is in fact what the pipeline's own default synthetic fixture produces today, since both synthetic SNPs fail `SNP_SOR_HIGH` (the same result as the primary lineage's `pass/snp` output). The matrix header (sample list) and sample metadata are still written in full; only the variant rows are absent, and `record_accounting.tsv`'s `panel_status` field says so explicitly.
+0件の対象レコードを持つGSパネルは正常な結果であり、エラーではありません -- 実際、このパイプ
+ラインのデフォルトsynthetic fixtureが現在生成しているものです。両方のsynthetic SNPが
+`SNP_SOR_HIGH`で失敗するためです(主要lineageの`pass/snp`出力と同じ結果)。matrix header
+(サンプル一覧)とサンプルmetadataは完全に書き込まれます。欠けているのはvariant行のみで、
+`record_accounting.tsv`の`panel_status`フィールドが明示的にそう述べます。
 
-As of this writing, [`genomic-prediction-resnet-hybrid`](https://github.com/hoso-jpn/genomic-prediction-resnet-hybrid) has no adzuki- or VCF-specific ingestion code; the panel's conventions (dosage encoding, dtype, on-disk shape, manifest structure) were chosen to match that repository's own tested SoyNAM-loading conventions so that a future loader there has a well-specified contract to build against, not because a matching loader already exists there.
+本文書執筆時点で、[`genomic-prediction-resnet-hybrid`](https://github.com/hoso-jpn/genomic-prediction-resnet-hybrid)
+にはアズキ固有・VCF固有のingestionコードはありません。このパネルの規約(dosage符号化、dtype、
+ディスク上の形状、manifest構造)は、その規約に合わせて構築できるよう、そのリポジトリ自身の
+テスト済みSoyNAMロード規約に合わせて選択されたものであり、対応するloaderが既に存在するから
+ではありません。
 
-### Samplesheet contract
+### Samplesheet契約
 
-The input must be a CSV file.
+入力はCSVファイルである必要があります。
 
-| Column | Required | Description |
+| 列 | 必須 | 説明 |
 | --- | --- | --- |
-| `sample_id` | Yes | Biological sample identifier; repeated values are allowed for multiple read groups |
-| `read_group_id` | Yes | Identifier that must be unique across the samplesheet |
-| `fastq_1` | Yes | Existing read 1 file ending in `.fq.gz` or `.fastq.gz` |
-| `fastq_2` | Yes | Existing read 2 file ending in `.fq.gz` or `.fastq.gz` |
-| `library_id` | Yes | Sequencing library identifier |
-| `platform` | Yes | Sequencing platform; the initial contract accepts `ILLUMINA` |
-| `platform_unit` | No | Flowcell, lane, and sample-barcode identifier |
+| `sample_id` | Yes | 生物学的サンプル識別子。複数read groupのために値の重複が許容される |
+| `read_group_id` | Yes | samplesheet全体で一意でなければならない識別子 |
+| `fastq_1` | Yes | `.fq.gz`または`.fastq.gz`で終わる実在のread 1ファイル |
+| `fastq_2` | Yes | `.fq.gz`または`.fastq.gz`で終わる実在のread 2ファイル |
+| `library_id` | Yes | シーケンシングlibrary識別子 |
+| `platform` | Yes | シーケンシングplatform。初期契約は`ILLUMINA`を受け付ける |
+| `platform_unit` | No | Flowcell・lane・sample barcode識別子 |
 
-When supplied, `platform_unit` should distinguish read groups using a value such as `FLOWCELL.LANE.SAMPLE_BARCODE`. It should not be reused across distinct read groups.
+`platform_unit`を指定する場合、`FLOWCELL.LANE.SAMPLE_BARCODE`のような値でread groupを区別
+すべきです。異なるread group間で再利用すべきではありません。
 
-Example:
+例:
 
 ```csv
 sample_id,read_group_id,fastq_1,fastq_2,library_id,platform,platform_unit
@@ -291,57 +567,82 @@ sample_a,sample_a_L001,reads/a_L001_R1.fastq.gz,reads/a_L001_R2.fastq.gz,lib_a,I
 sample_a,sample_a_L002,reads/a_L002_R1.fastq.gz,reads/a_L002_R2.fastq.gz,lib_a,ILLUMINA,flowcell1.L002.ATCACG
 ```
 
-Unexpected columns, duplicate `read_group_id` values, missing files, identical read 1/read 2 paths, and FASTQ files reused across read groups are rejected before analysis processes start.
+想定外の列、重複する`read_group_id`値、存在しないファイル、read 1/read 2の同一パス、複数
+read groupで再利用されたFASTQファイルは、解析processが開始する前に拒否されます。
 
-### Reference bundle contract
+### 参照ゲノムBundle契約
 
-The following parameters define the reference bundle.
+以下のパラメータが参照ゲノムbundleを定義します。
 
-| Parameter | Required | Description |
+| パラメータ | 必須 | 説明 |
 | --- | --- | --- |
-| `reference_id` | Yes | Stable identifier for the reference bundle |
-| `reference_name` | Yes | Human-readable assembly name |
-| `reference_fasta` | Yes | Existing uncompressed reference FASTA |
-| `reference_accession` | No | Public database accession |
-| `reference_species` | No | Species represented by the reference |
-| `reference_cultivar` | No | Cultivar represented by the reference |
-| `reference_fai` | No | Compatible prebuilt FASTA index named `<reference_fasta>.fai` |
-| `reference_dict` | No | Compatible prebuilt sequence dictionary named `<reference_basename>.dict` |
-| `bwa_index_prefix` | No | Compatible prebuilt BWA-MEM2 index prefix whose basename matches `reference_fasta` |
+| `reference_id` | Yes | 参照ゲノムbundleの安定した識別子 |
+| `reference_name` | Yes | 人間可読なassembly名 |
+| `reference_fasta` | Yes | 実在の非圧縮参照FASTA |
+| `reference_accession` | No | 公開データベースaccession |
+| `reference_species` | No | 参照ゲノムが表す種 |
+| `reference_cultivar` | No | 参照ゲノムが表すcultivar |
+| `reference_fai` | No | `<reference_fasta>.fai`と命名された互換prebuilt FASTA index |
+| `reference_dict` | No | `<reference_basename>.dict`と命名された互換prebuilt sequence dictionary |
+| `bwa_index_prefix` | No | basenameが`reference_fasta`と一致する互換prebuilt BWA-MEM2 index prefix |
 
-The synthetic test settings are defined in `conf/test.config`. An example for Longxiaodou 4 is provided in `conf/references/longxiaodou4.config.example`.
+synthetic test設定は`conf/test.config`で定義されています。Longxiaodou 4の例は
+`conf/references/longxiaodou4.config.example`にあります。
 
-When an optional index parameter is omitted, the workflow generates the corresponding index with SAMtools, GATK, or BWA-MEM2. When supplied, index paths and expected filenames are validated before process execution.
+オプションのindexパラメータを省略すると、ワークフローはSAMtools・GATK・BWA-MEM2で対応する
+indexを生成します。指定した場合、indexパスと期待されるファイル名はprocess実行前に検証
+されます。
 
-### Variant-calling and filtering parameters
+Issue #11で、生成/prebuilt両方の参照ゲノムパスに対して、`.fai`と`.dict`が実際に同じcontigを
+同じ順序・同じ長さで記述していることを検証するゲートが追加されました。詳細は
+[Joint Genotyping scale hardening](#joint-genotyping-scale-hardeningissue-11)を参照してください。
 
-| Parameter | Default | Description |
+### Variant-callingおよびFilteringパラメータ
+
+| パラメータ | デフォルト | 説明 |
 | --- | ---: | --- |
-| `sample_ploidy` | `2` | Positive integer: the **global** ploidy for the entire run, passed to both HaplotypeCaller and GenotypeGVCFs. Applies uniformly to every sample and every contig; this pipeline does not support mixed ploidy within one run. The [GS panel](#genomic-selection-gs-panel)'s dosage-matrix schema (v1) is diploid-only and fails fast if this is not `2` and `enable_gs_panel` is `true` (the default) -- see below |
-| `enable_gs_panel` | `true` | Whether to run the GS panel lineage at all; must be set to `false` for any `sample_ploidy` other than `2` (Issue #20) |
-| `optical_duplicate_pixel_distance` | `100` | Non-negative integer: passed to GATK MarkDuplicates' `--OPTICAL_DUPLICATE_PIXEL_DISTANCE`, the maximum pixel distance between read clusters for two duplicates to be called optical (rather than PCR/library) duplicates. `100` matches GATK's own unmodified default and is appropriate for unpatterned flowcells (e.g. HiSeq 2500). Patterned flowcells (e.g. HiSeq X, NovaSeq) pack clusters much more densely and commonly need a larger value (often ~2500) per GATK/Picard guidance; this only affects the optical-vs-PCR duplicate *subclassification* used for library-size estimation, never the underlying duplicate FLAG itself, which is coordinate/CIGAR-based (Issue #8) |
-| `genomicsdb_batch_size` | `50` | Positive integer: passed to GATK GenomicsDBImport's `--batch-size`, controlling how many samples it opens concurrently while building each per-contig workspace. `50` is a **current initial operational value**, not a value validated as optimal for this pipeline's target 327-sample cohort or any intermediate 20-30 sample scale (Issue #11) -- see [`docs/joint_genotyping_scaling.md`](docs/joint_genotyping_scaling.md) |
-| `snp_filter_qd_min` | `2.0` | Mark SNPs with `QD` below this value as `SNP_QD_LOW` |
-| `snp_filter_qual_min` | `30.0` | Mark SNPs with `QUAL` below this value as `SNP_QUAL_LOW` |
-| `snp_filter_sor_max` | `3.0` | Mark SNPs with `SOR` above this value as `SNP_SOR_HIGH` |
-| `snp_filter_fs_max` | `60.0` | Mark SNPs with `FS` above this value as `SNP_FS_HIGH` |
-| `snp_filter_mq_min` | `40.0` | Mark SNPs with `MQ` below this value as `SNP_MQ_LOW` |
-| `snp_filter_mq_rank_sum_min` | `-12.5` | Mark SNPs with `MQRankSum` below this value as `SNP_MQRANKSUM_LOW` |
-| `snp_filter_read_pos_rank_sum_min` | `-8.0` | Mark SNPs with `ReadPosRankSum` below this value as `SNP_READPOSRANKSUM_LOW` |
-| `indel_filter_qd_min` | `2.0` | Mark indels with `QD` below this value as `INDEL_QD_LOW` |
-| `indel_filter_qual_min` | `30.0` | Mark indels with `QUAL` below this value as `INDEL_QUAL_LOW` |
-| `indel_filter_fs_max` | `200.0` | Mark indels with `FS` above this value as `INDEL_FS_HIGH` |
-| `indel_filter_read_pos_rank_sum_min` | `-20.0` | Mark indels with `ReadPosRankSum` below this value as `INDEL_READPOSRANKSUM_LOW` |
+| `sample_ploidy` | `2` | 正の整数: run全体の**global**なploidyで、HaplotypeCallerとGenotypeGVCFsの両方に渡される。すべてのサンプル・すべてのcontigに一様に適用され、このパイプラインは1回のrun内でのmixed ploidyをサポートしない。[GSパネル](#ゲノミックセレクションgsパネル)のdosage matrixスキーマ(v1)はdiploid専用であり、これが`2`でなく`enable_gs_panel`が`true`(デフォルト)の場合は即座に失敗する -- 下記参照 |
+| `enable_gs_panel` | `true` | GS panel lineageを実行するかどうか。`sample_ploidy`が`2`以外の場合は`false`にする必要がある(Issue #20) |
+| `optical_duplicate_pixel_distance` | `100` | 非負整数: GATK MarkDuplicatesの`--OPTICAL_DUPLICATE_PIXEL_DISTANCE`へ渡す、2つの重複がoptical(PCR/library重複ではなく)重複と呼ばれるための、readクラスタ間の最大pixel距離。`100`はGATK自身の未変更デフォルトと一致し、unpatterned flowcell(例: HiSeq 2500)に適している。Patterned flowcell(例: HiSeq X、NovaSeq)はクラスタをはるかに密に詰め込むため、GATK/Picardのガイダンスに従いより大きな値(しばしば約2500)を必要とすることが多い。これはlibrary size推定に用いるoptical対PCR重複の*下位分類*にのみ影響し、座標/CIGARベースの基盤となる重複FLAG自体には影響しない(Issue #8) |
+| `genomicsdb_batch_size` | `50` | 正の整数: GATK GenomicsDBImportの`--batch-size`へ渡す。各contig単位workspaceを構築する際に同時に開くサンプル数を制御する。`50`は**現時点の初期運用値**であり、このパイプラインの目標である327検体コホートや20〜30検体規模での最適値として検証された値ではない(Issue #11)。5検体規模での実データ動作は確認済み(Issue #26) -- [`docs/joint_genotyping_scaling.md`](docs/joint_genotyping_scaling.md)参照 |
+| `snp_filter_qd_min` | `2.0` | `QD`がこの値未満のSNPを`SNP_QD_LOW`としてマークする |
+| `snp_filter_qual_min` | `30.0` | `QUAL`がこの値未満のSNPを`SNP_QUAL_LOW`としてマークする |
+| `snp_filter_sor_max` | `3.0` | `SOR`がこの値を超えるSNPを`SNP_SOR_HIGH`としてマークする |
+| `snp_filter_fs_max` | `60.0` | `FS`がこの値を超えるSNPを`SNP_FS_HIGH`としてマークする |
+| `snp_filter_mq_min` | `40.0` | `MQ`がこの値未満のSNPを`SNP_MQ_LOW`としてマークする |
+| `snp_filter_mq_rank_sum_min` | `-12.5` | `MQRankSum`がこの値未満のSNPを`SNP_MQRANKSUM_LOW`としてマークする |
+| `snp_filter_read_pos_rank_sum_min` | `-8.0` | `ReadPosRankSum`がこの値未満のSNPを`SNP_READPOSRANKSUM_LOW`としてマークする |
+| `indel_filter_qd_min` | `2.0` | `QD`がこの値未満のindelを`INDEL_QD_LOW`としてマークする |
+| `indel_filter_qual_min` | `30.0` | `QUAL`がこの値未満のindelを`INDEL_QUAL_LOW`としてマークする |
+| `indel_filter_fs_max` | `200.0` | `FS`がこの値を超えるindelを`INDEL_FS_HIGH`としてマークする |
+| `indel_filter_read_pos_rank_sum_min` | `-20.0` | `ReadPosRankSum`がこの値未満のindelを`INDEL_READPOSRANKSUM_LOW`としてマークする |
 
-Ploidy is applied consistently to every biological sample and contig in one pipeline run; mixed-ploidy cohorts are not currently supported, and there is no per-sample or per-contig ploidy override.
+Ploidyは1回のpipeline runにおいて、すべての生物学的サンプル・すべてのcontigに一貫して適用
+されます。mixed-ploidyコホートは現在サポートされておらず、サンプル単位・contig単位のploidy
+上書きもありません。
 
-`--sample-ploidy` is passed explicitly to both HaplotypeCaller and GenotypeGVCFs (Issue #20). This is a contract-strengthening change, not a bug fix: against the pinned GATK 4.6.2.0 container, omitting `--sample-ploidy` from GenotypeGVCFs and passing it explicitly (verified with `--sample-ploidy 1` against an identical GenomicsDB workspace built from real haploid gVCFs) produced byte-identical output on every field compared -- `CHROM`/`POS`/`REF`/`ALT`, sample order, `GT`, `AC`, `AN`, `AF`, and `PL`. GenotypeGVCFs already derives the correct ploidy from its GenomicsDB/gVCF input on its own. Passing `--sample-ploidy` explicitly anyway makes the pipeline's intent auditable from the command line itself, rather than depending on GATK's own (correct, but here unenforced-by-us) inference behavior, which could change in a future GATK version without warning.
+`--sample-ploidy`はHaplotypeCallerとGenotypeGVCFsの両方に明示的に渡されます(Issue #20)。
+これはバグ修正ではなく契約強化です: pin済みGATK 4.6.2.0 containerに対して、GenotypeGVCFsから
+`--sample-ploidy`を省略した場合と明示的に渡した場合(実際のhaploid gVCFから構築した同一の
+GenomicsDBワークスペースに対して`--sample-ploidy 1`で検証)は、比較したすべてのfield --
+`CHROM`/`POS`/`REF`/`ALT`、サンプル順、`GT`、`AC`、`AN`、`AF`、`PL` -- でbyte-identicalな
+出力を生成しました。GenotypeGVCFsは自身のGenomicsDB/gVCF入力から正しいploidyを既に自力で
+導出します。それでも`--sample-ploidy`を明示的に渡すのは、GATK自身の(ここでは正しいが
+私たちが強制していない)推論挙動 -- 将来のGATKバージョンで警告なく変わり得る -- に依存する
+のではなく、コマンドライン自体からパイプラインの意図を監査可能にするためです。
 
-A non-diploid run completing successfully -- including passing the haploid end-to-end nf-test in this repository -- validates that ploidy propagates correctly and that the pipeline mechanics work. It is not evidence that the SNP/indel hard-filter thresholds above are biologically appropriate for a non-diploid sample; those thresholds have only ever been exercised against this repository's diploid synthetic fixture.
+非diploidのrunが成功したこと -- このリポジトリのhaploid end-to-end nf-testに合格することを
+含む -- は、ploidyが正しく伝播しパイプラインの機構が動作することを検証するものです。上記の
+SNP/indelハードフィルタしきい値が非diploidサンプルに対して生物学的に適切であることの証拠
+ではありません。これらのしきい値はこのリポジトリのdiploid synthetic fixtureに対してのみ
+検証されてきました。
 
-The filtering defaults are configurable operational starting points. They extend the historical pilot rules with QUAL, SOR, and indel-specific filters, but their suitability across references, accessions, sequencing depths, and cohort sizes has not been validated. Changing a threshold changes the scientific output and should be recorded with the run parameters.
+フィルタリングのデフォルト値は設定可能な運用上の出発点です。QUAL・SOR・indel固有のフィルタで
+歴史的pilotのルールを拡張していますが、参照ゲノム・検体・シーケンシングdepth・コホートサイズに
+わたる妥当性は検証されていません。しきい値を変更することは科学的出力を変更することを意味し、
+run parameterと共に記録すべきです。
 
-### Workflow layout
+### ワークフローの構成
 
 ```text
 main.nf
@@ -365,19 +666,87 @@ tests/nextflow.config
 
 ---
 
+## Joint Genotyping Scale Hardening(Issue #11)
+
+Issue #8 Phase 5がSeedcore-01実機に残していた、実際のLongxiaodou 4参照ゲノムとSRR29909135
+検体の単一accession runは、`GATK_GENOMICSDBIMPORT`で失敗していました。根本原因は、Nextflowの
+`path` input qualifierが、そのchannel slotに対して解決されるファイルがちょうど1つの場合に
+single-element Listを裸のscalar `Path`/`File`へ暗黙的にunwrapするという、文書化された
+Nextflowの挙動でした(このパイプライン固有のバグではありません)。表示されたエラー
+(`"1176577035 gVCFs, 642455 indexes"`)は、実際にはgVCFファイルとその`.tbi` indexファイルの
+byte単位のサイズそのものでした(`.size()`をscalar `File`に対して呼び出すとbyte長が返り、
+"1"は返らないため)。このリポジトリのすべてのsynthetic fixtureは2サンプル以上を使用するため、
+実際の単一accession runがこれに遭遇するまで、この問題は表面化していませんでした。
+
+この発見をもとに、以下を実施しました。
+
+- **List-safety修正**: `GATK_GENOMICSDBIMPORT`と、同じ実データ証跡から発見された同一パターンを
+  持つ`GATK_GATHERVCFS`の両方で、`gvcfs`/`gvcf_indexes`(および`vcfs`/`vcf_indexes`)を
+  `.size()`や`.collect{}`を呼び出す前にListへ正規化するようにした。
+- **メモリ契約**: `GenomicsDBImport`のJVM heapを、`task.memory`の安全な80%(GiB丸めではなく
+  MiB単位で計算)へ上限設定した。以前の固定1GiB予約は、既存の16GiB割り当てにおいて
+  GenomicsDBImportのnative TileDBストレージ層にわずか6.25%の余裕しか残していなかった。
+  必要な20%以上のnative層余裕はこの80%上限から自動的に導かれるものであり、別途assertされた
+  数値ではない。専用の`process_genomicsdb`resourceラベルを追加し、値は`process_high`から
+  変更せず引き継いだ(`cpus=8`、`memory = 16.GB * task.attempt`、`time='24h'`)。
+  `task.attempt`ベースのOOM retryスケーリングは維持されており、80%比率はすべてのretry
+  attemptで`task.memory`から新たに計算し直される。
+- **`genomicsdb_batch_size`パラメータ**: 新規追加(デフォルト`50`、最小値`1`)。詳細は
+  上記の[Variant-callingおよびFilteringパラメータ](#variant-callingおよびfilteringパラメータ)
+  を参照。
+- **参照ゲノム契約**: `bin/validate_reference_contigs.py`が、`.fai`と`.dict`のcontig名・長さ・
+  **順序**を位置ベース(setベースではなく)で比較する。同一contig集合だが順序が異なる組は
+  naive setベースの比較では見逃されるが、これは明示的にrequiredかつ合格しているnegative test
+  ケースであり、module levelとpipeline levelの両方でカバーされている。`modules/local/validate_reference_contigs.nf`
+  がpass-throughゲートとして`workflows/adzuki_snp_pipeline.nf`に組み込まれており、生成・
+  prebuilt両方の参照ゲノムパスが収束した直後に位置する。不一致はどのGATK processが開始
+  する前にも、不一致の最初の位置を示すactionableなメッセージで実行全体を失敗させる。
+
+`--consolidate`は意図的に有効化しておらず、新たな`genomicsdb_consolidate`パラメータも
+追加していません。再評価すべき具体的な条件を含む完全な文書は
+[`docs/joint_genotyping_scaling.md`](docs/joint_genotyping_scaling.md)にあります。
+
+実データによるターゲットsmoke test(Issue #8 Phase 5から得た同じ実gVCFを再利用し、
+FASTQ→mapping→HaplotypeCallerの再実行は行わなかった)では、修正後のコードが実際の
+染色体規模contig(`NC_068970.1`、65.4 Mb)と小さなunplaced scaffold(`NW_026294847.1`、
+2,353 bp)の両方で成功することを確認しました。これは1検体分の証跡であり、複数サンプルや
+コホート規模での検証ではありません -- Issue #26がこれを5検体規模まで拡張しています
+(下記参照)。
+
+---
+
+## 実データコホートE2E検証(Issue #26)
+
+<!-- 実行結果は進行中: Seedcore-01での実行完了後にこのセクションを更新する -->
+
+Issue #8(mapping hardening)とIssue #11(Joint Genotyping scale hardening)が完了した後、
+Issue #26はSeedcore-01実機上で、公開WGSデータを用いた複数サンプルのSNPコーリングを段階的に
+検証し、受託解析で必要となるVCF・QC・遺伝子型行列・処理時間・メモリ使用量・再現性証跡を
+確認するものです。327検体のフル実行はこのIssueのスコープ外であり、3〜5検体規模の検証結果を
+もとに20〜30検体への拡張条件を評価します。
+
+このセクションの実行結果は現在準備中です。最新の内容は
+[`docs/real_cohort_e2e.md`](docs/real_cohort_e2e.md)を参照してください。
+
+---
+
 ## Pilot Workflow
 
 ![Manual pilot workflow](docs/workflow.png)
 
-The following commands document the historical single-sample pilot. They are retained as technical evidence and historical context for the executable Nextflow implementation.
+以下のコマンドは、歴史的な単一サンプルpilotを文書化したものです。実行可能なNextflow実装の
+技術的証跡・歴史的背景として保持しています。
 
-They are **not yet a clean-environment reproduction procedure** because dependency versions, checksums, resource requirements, and all intermediate validation steps have not been fixed.
+依存関係のバージョン、checksum、resource要件、すべての中間検証ステップが固定されていないため、
+これらは**クリーンな環境での再現手順ではまだありません**。
 
-For readability and shell correctness, the recorded commands have been lightly edited to add output-directory creation, quote the reference path, and correct the long-option spelling for `--native-pair-hmm-threads`. These edits do not indicate that the complete procedure was rerun for this documentation update.
+可読性とshellの正しさのため、記録されたコマンドには出力ディレクトリ作成の追加、参照パスの
+quote、`--native-pair-hmm-threads`の長いoption名の綴り修正といった軽微な編集を加えています。
+これらの編集は、この文書更新のために完全な手順を再実行したことを意味しません。
 
 ---
 
-## Historical Environment Setup
+## 歴史的な環境構築
 
 ```bash
 conda create -n bioinfo -c conda-forge -c bioconda \
@@ -387,9 +756,9 @@ conda activate bioinfo
 
 ---
 
-## Historical Single-Sample Procedure
+## 歴史的な単一サンプル手順
 
-### 1. Download the reference genome
+### 1. 参照ゲノムのダウンロード
 
 ```bash
 datasets download genome accession GCF_016808095.1 \
@@ -401,7 +770,7 @@ unzip adzuki_reference.zip -d adzuki_reference
 REF=adzuki_reference/ncbi_dataset/data/GCF_016808095.1/GCF_016808095.1_ASM1680809v1_genomic.fna
 ```
 
-### 2. Index the reference genome
+### 2. 参照ゲノムのIndex作成
 
 ```bash
 bwa index "$REF"
@@ -409,7 +778,7 @@ gatk CreateSequenceDictionary -R "$REF"
 samtools faidx "$REF"
 ```
 
-### 3. Download the demonstration WGS data
+### 3. デモンストレーション用WGSデータのダウンロード
 
 ```bash
 prefetch SRR29909135 --output-directory ./raw_data
@@ -420,7 +789,7 @@ fasterq-dump ./raw_data/SRR29909135/SRR29909135.sra \
   --progress
 ```
 
-### 4. Perform initial quality control
+### 4. 初期品質管理
 
 ```bash
 mkdir -p fastqc_results
@@ -432,9 +801,10 @@ fastqc \
   --threads 4
 ```
 
-This historical procedure performs inspection with FastQC but does not perform read trimming. The executable Nextflow workflow now performs paired-end fastp trimming and FastQC before and after trimming.
+この歴史的手順はFastQCによる検査を行いますが、readのtrimmingは行いません。実行可能な
+Nextflowワークフローは現在、trimming前後のFastQCとペアエンドfastp trimmingを実行します。
 
-### 5. Map reads
+### 5. Mapping
 
 ```bash
 bwa mem -t 4 \
@@ -447,9 +817,13 @@ bwa mem -t 4 \
 samtools index SRR29909135.bam
 ```
 
-### 6. Remove duplicates in the historical pilot
+### 6. 歴史的pilotでの重複除去
 
-The historical command used `samtools markdup -r -d 2500`. The `-r` option removed duplicate reads rather than only setting the duplicate flag. This irreversible behavior is retained here solely as a record of the pilot procedure. The executable Nextflow workflow instead uses GATK MarkDuplicates with `REMOVE_DUPLICATES=false`, preserving duplicate records with the DUP flag so downstream tools can exclude them without destroying the original evidence.
+歴史的なコマンドは`samtools markdup -r -d 2500`を使用していました。`-r`オプションは重複
+リードを単にフラグ設定するのではなく削除していました。この不可逆な挙動は、pilot手順の記録
+としてのみここに保持しています。実行可能なNextflowワークフローは代わりに
+`REMOVE_DUPLICATES=false`のGATK MarkDuplicatesを使用し、重複レコードをDUPフラグ付きで
+保持することで、下流のツールが元の証跡を破壊せずにそれらを除外できるようにしています。
 
 ```bash
 samtools sort -n -@ 4 \
@@ -471,7 +845,7 @@ samtools markdup -r -d 2500 -@ 4 \
 samtools index SRR29909135.markdup.bam
 ```
 
-### 7. Call variants in GVCF mode
+### 7. GVCFモードでのVariant Calling
 
 ```bash
 gatk HaplotypeCaller \
@@ -483,7 +857,7 @@ gatk HaplotypeCaller \
   --native-pair-hmm-threads 4
 ```
 
-### 8. Genotype the demonstration sample
+### 8. デモンストレーションサンプルのGenotyping
 
 ```bash
 gatk GenotypeGVCFs \
@@ -492,9 +866,12 @@ gatk GenotypeGVCFs \
   -O SRR29909135.vcf.gz
 ```
 
-This command was used only for the single-sample pilot. The executable multi-sample pipeline uses HaplotypeCaller GVCFs followed by GenomicsDBImport and GenotypeGVCFs for Joint Genotyping. Joint Genotyping is the default for a multi-sample cohort rather than being conditional on a 30-sample threshold.
+このコマンドは単一サンプルpilotでのみ使用されました。実行可能な複数サンプルpipelineは
+HaplotypeCaller gVCFに続いてGenomicsDBImportとGenotypeGVCFsをJoint Genotypingに使用します。
+Joint Genotypingは30検体しきい値に条件付けられるのではなく、複数サンプルコホートの
+デフォルトです。
 
-### 9. Select and filter SNPs
+### 9. SNPの選択とフィルタリング
 
 ```bash
 gatk SelectVariants \
@@ -522,139 +899,204 @@ gatk SelectVariants \
   -O SRR29909135.snp.pass.vcf.gz
 ```
 
-The hard-filter thresholds above document the historical pilot. Their suitability across references, accessions, and cohort sizes has not yet been validated.
+上記のハードフィルタしきい値は歴史的pilotを文書化したものです。参照ゲノム・検体・コホート
+サイズにわたる妥当性はまだ検証されていません。
 
 ---
 
-## Design Decisions
+## 設計判断
 
-### Base quality score recalibration (BQSR)
+### Base Quality Score Recalibration (BQSR)
 
-BQSR is intentionally excluded from both the documented historical procedure and the executable workflow. GATK BaseRecalibrator uses a known-sites VCF to distinguish known polymorphisms from mismatches used to model sequencing errors. This repository has not identified or validated an appropriate known-sites resource for the Longxiaodou 4 reference bundle.
+BQSRは文書化された歴史的手順と実行可能なワークフローの両方から意図的に除外されています。
+GATK BaseRecalibratorはknown-sites VCFを使用して、既知の多型とシーケンシングエラーモデル化に
+使うミスマッチを区別します。このリポジトリは、Longxiaodou 4参照ゲノムbundleに対して適切な
+known-sitesリソースを特定・検証していません。
 
-Bootstrapped BQSR is also outside the current scope because its known-sites construction and effect on the resulting calls have not been validated here. This is a deliberate design decision rather than an omitted implementation step. See the [GATK BaseRecalibrator documentation](https://gatk.broadinstitute.org/hc/en-us/articles/360036898312-BaseRecalibrator).
+Bootstrapped BQSRも、known-sites構築とそれが結果に与える影響がここでは検証されていないため、
+現在のスコープ外です。これは実装漏れではなく意図的な設計判断です。
+[GATK BaseRecalibratorの文書](https://gatk.broadinstitute.org/hc/en-us/articles/360036898312-BaseRecalibrator)
+を参照してください。
 
-### Reference bundle policy
+### 参照ゲノムBundleポリシー
 
-The reference assembly is an explicit pipeline input. Results generated against different cultivars or assemblies must not be treated as directly interchangeable without separate validation. Longxiaodou 4 is retained as a documented real-data example, while the test profile uses a small synthetic reference that is safe to redistribute.
+参照アセンブリは明示的なpipeline入力です。異なるcultivarやassemblyに対して生成された結果を、
+別途の検証なしに直接互換なものとして扱ってはいけません。Longxiaodou 4は文書化された実データの
+例として保持し、test profileは再配布に安全な小さなsynthetic参照ゲノムを使用します。
 
 ---
 
-## Single-Sample Pilot Results
+## 単一サンプルPilotの結果
 
 ![Mapping statistics from the single-sample pilot](docs/mapping_stats.png)
 
-| Step | Count | Note |
+| ステップ | 件数 | 備考 |
 | --- | ---: | --- |
 | Total reads | 57,597,756 | Paired-end, 150 bp |
-| Mapping rate | 99.35% | BWA-MEM against GCF_016808095.1 |
-| Properly paired | 93.59% | Single-sample pilot |
-| Duplicate rate | ~10% | Historical run |
-| Total variants | 783,836 | SNPs and indels |
-| SNPs extracted | 678,212 | After SelectVariants |
-| PASS SNPs | 610,790 | After the documented hard filters |
+| Mapping rate | 99.35% | GCF_016808095.1に対するBWA-MEM |
+| Properly paired | 93.59% | 単一サンプルpilot |
+| Duplicate rate | 約10% | 歴史的run |
+| Total variants | 783,836 | SNPとindel |
+| SNPs extracted | 678,212 | SelectVariants後 |
+| PASS SNPs | 610,790 | 文書化されたハードフィルタ後 |
 
 ![Variant counts from the single-sample pilot](docs/variant_counts.png)
 
 ![SNP summary from the single-sample pilot](docs/snp_summary.png)
 
-These values describe one historical execution for SRR29909135. They are not estimates for the complete 327-accession cohort and do not demonstrate SNP-calling accuracy or superiority over another workflow.
+これらの値はSRR29909135に対する1回の歴史的実行を記述したものです。327検体のフルコホートに
+対する推定値ではなく、他のワークフローに対するSNPコーリング精度や優位性を実証するもの
+でもありません。
 
 ---
 
-## Implementation Roadmap
+## 実装ロードマップ
 
-The implementation roadmap is tracked in [Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1).
+実装ロードマップは[Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1)で
+追跡しています。
 
-The following foundation, analysis, and QC capabilities are implemented:
+以下の基盤・解析・QC機能を実装済みです。
 
-- Nextflow DSL2 workflow compatible with the strict syntax parser
-- parameter and samplesheet validation
-- configurable reference bundles with index generation or reuse
-- raw and trimmed FastQC plus paired-end fastp trimming
-- read-group-aware BWA-MEM2 mapping and coordinate sorting
-- sample-level read-group merging
-- library-aware GATK duplicate marking without removing duplicate records
-- BAM indexing and SAMtools flagstat, stats, and idxstats reports
-- sample-level GATK HaplotypeCaller GVCF generation
-- contig-level GenomicsDBImport and GenotypeGVCFs
-- reference-order gathering into an indexed raw cohort VCF
-- SNP and indel separation with indexed variant-type outputs
-- configurable GATK hard filtering and indexed PASS-only outputs
-- raw, filtered, and PASS `bcftools stats` QC
-- machine-readable cohort and per-sample QC tables
-- human-readable variant-QC summaries
-- redistributable deterministic fixtures and a functional Docker smoke-test profile
-- a synthetic fixture where both samples cover both deterministic SNP loci, resolving to confident `1/1`/`0/0` genotypes instead of a missing call
-- an nf-test pipeline-level test asserting that genotype/annotation contract, run in GitHub Actions on every push and pull request against `main`
-- FILTER-value and per-annotation evaluable-rate accounting for the filtered VCFs, distinguishing a missing annotation from a satisfied threshold, plus a cohort-wide `raw/all` vs. `raw/snp`/`raw/indel` reconciliation
-- a documented GS-panel data contract (Issue #1 #F): `raw/all` normalization and post-split reclassification of multiallelic and `MIXED`-type records, a distinct GS-specific hard-filter re-application, a dosage genotype matrix with sample/variant metadata, full-lineage record accounting, and a schema-versioned reproducibility manifest with software-version, parameter, and checksum information, plus a module-level nf-test verifying `MIXED`-record splitting against the real pinned bcftools container
-- mapping-process hardening ahead of real-data ingestion (Issue #8): a single piped `BWA_MEM2_MEM_SORT` task (no intermediate `.sam`), documented non-oversubscribing CPU/memory formulas, read-group-aware early per-sample merging via `groupKey`, `task.attempt`-scaled OOM retry, a configurable `optical_duplicate_pixel_distance`, CASAVA-format synthetic read names that genuinely exercise GATK's read-name parsing, and permanent nf-test coverage of all of the above; **Phase 5** (Issue #8) additionally measured `BWA_MEM2_INDEX`/`BWA_MEM2_MEM_SORT` against a real Longxiaodou 4 reference and a real ~19.3x-coverage WGS accession on real hardware (Seedcore-01) -- see [`docs/mapping_real_reference_profile.md`](docs/mapping_real_reference_profile.md) -- and confirmed the 80/20 CPU split and the memory-split formula above are safe for that one reference/accession/machine with no OOM or retry; this is one machine's, one accession's measurement, not a performance guarantee or a validation of cohort scale (Issue #11/#26)
-- Joint Genotyping scale hardening ahead of multi-sample cohort ingestion (Issue #11): a real single-accession run (the same Seedcore-01/Longxiaodou 4/SRR29909135 gVCF from Issue #8 Phase 5) exposed a Nextflow `path`-input List/scalar collapse bug in `GATK_GENOMICSDBIMPORT` (and, found via the same evidence, the identical pattern in `GATK_GATHERVCFS`) that only surfaces at exactly one resolved sample, now fixed; `GenomicsDBImport`'s JVM heap is now capped at a safe 80% of `task.memory` (computed in MiB, not naive-GiB rounding) instead of the previous fixed-1-GiB reservation that left as little as 6.25% headroom for GenomicsDBImport's native TileDB storage layer at the existing 16 GiB allocation; a new `genomicsdb_batch_size` parameter (documented as a current initial operational value, not a validated one); and FAI/sequence-dictionary contig name+length+**order** validation (`bin/validate_reference_contigs.py`), gating both the generated and prebuilt reference-bundle paths before any GATK process starts. See [`docs/joint_genotyping_scaling.md`](docs/joint_genotyping_scaling.md) for the full contract, the real single-accession observations (including a targeted real-data GenomicsDBImport smoke test reusing that same gVCF), and what remains unvalidated at 20-30/327-sample scale (Issue #26)
+- strict構文パーサ対応のNextflow DSL2ワークフロー
+- パラメータとsamplesheetの検証
+- index生成/再利用に対応した設定可能な参照ゲノムbundle
+- raw/trimmed FastQCとペアエンドfastp trimming
+- read-groupを意識したBWA-MEM2マッピングと座標ソート
+- サンプル単位のread-group merge
+- 重複レコードを削除しないlibrary単位のGATK重複マーク
+- BAM indexとSAMtools flagstat/stats/idxstatsレポート
+- サンプル単位のGATK HaplotypeCaller GVCF生成
+- contig単位のGenomicsDBImportとGenotypeGVCFs
+- indexed raw cohort VCFへのreference順gathering
+- indexedなvariant type別出力を伴うSNP/indel分離
+- 設定可能なGATKハードフィルタリングとindexedなPASSのみの出力
+- raw/filtered/PASSの`bcftools stats` QC
+- 機械可読なcohort・サンプル単位QCテーブル
+- 人間可読なvariant-QCサマリー
+- 再配布可能なdeterministic fixtureと機能的なDocker smoke-test profile
+- 両サンプルが両方のdeterministic SNP locusをカバーし、欠損コールではなく確信度の高い
+  `1/1`/`0/0`遺伝子型へ解決されるsynthetic fixture
+- mainへのすべてのpush/pull requestでGitHub Actions上で実行される、その遺伝子型/annotation
+  契約を検証するnf-test pipeline-level test
+- filtered VCFのFILTER値・annotation別evaluable rate会計。annotation欠損としきい値未達を
+  区別し、cohort全体の`raw/all`対`raw/snp`/`raw/indel`のreconciliationも行う
+- 文書化されたGSパネルデータ契約(Issue #1 #F): `raw/all`の正規化とsplit後のmultiallelic・
+  MIXED型レコード再分類、独立したGS固有ハードフィルタ再適用、sample/variant metadataを伴う
+  dosage遺伝子型matrix、full-lineageレコード会計、software version・parameter・checksum
+  情報を伴うスキーマversion付き再現性manifest。実際にpinされたbcftools containerに対して
+  MIXEDレコード分割を検証するmodule-level nf-testも含む
+- 実データ投入に先立つmapping工程のhardening(Issue #8): 中間`.sam`を作らない単一のpiped
+  `BWA_MEM2_MEM_SORT`タスク、文書化された非oversubscribe CPU/メモリ計算式、`groupKey`
+  経由のread-groupを意識した早期サンプル単位merge、`task.attempt`でスケールするOOM retry、
+  設定可能な`optical_duplicate_pixel_distance`、GATKのread-name解析を実際に検証する
+  CASAVA形式のsynthetic read名、そして上記すべての恒久的なnf-testカバレッジ。**Phase 5**
+  (Issue #8)はさらに`BWA_MEM2_INDEX`/`BWA_MEM2_MEM_SORT`を実際のLongxiaodou 4参照ゲノムと
+  実際の約19.3xカバレッジのWGS検体に対して実機(Seedcore-01)で測定し
+  ([`docs/mapping_real_reference_profile.md`](docs/mapping_real_reference_profile.md)参照)、
+  上記の80/20 CPU分割とメモリ分割計算式がその1つの参照ゲノム/検体/マシンに対して、OOMや
+  retryなく安全であることを確認した。これは1台のマシン・1検体の測定であり、パフォーマンス
+  保証やコホート規模の検証ではない(Issue #11/#26)
+- 複数サンプルコホート投入に先立つJoint Genotyping工程のscale hardening(Issue #11):
+  実際の単一accession run(Issue #8 Phase 5と同じSeedcore-01/Longxiaodou 4/SRR29909135の
+  gVCF)が、正確に1つのサンプルが解決された場合にのみ表面化するNextflowの`path`-input
+  List/scalar collapseバグを`GATK_GENOMICSDBIMPORT`(および同じ証跡から発見された同一
+  パターンを持つ`GATK_GATHERVCFS`)で露呈させ、これを修正した。`GenomicsDBImport`のJVM
+  heapは、既存の16GiB割り当てにおいてわずか6.25%の余裕しかnative TileDBストレージ層に
+  残していなかった以前の固定1GiB予約の代わりに、`task.memory`の安全な80%(GiB丸めでは
+  なくMiB単位で計算)へ上限設定されるようになった。新しい`genomicsdb_batch_size`パラメータ
+  (現時点の初期運用値として文書化、検証済みの値ではない)、そしてどちらのGATK process開始
+  前にも生成・prebuilt両方の参照ゲノムbundleパスをゲートするFAI/sequence dictionary
+  contig名・長さ・**順序**検証(`bin/validate_reference_contigs.py`)を追加した。完全な
+  契約、実際の単一accession観察結果(同じgVCFを再利用したターゲット実データ
+  GenomicsDBImport smoke testを含む)、20〜30/327検体規模で未検証のまま残っている事項は
+  [`docs/joint_genotyping_scaling.md`](docs/joint_genotyping_scaling.md)を参照
+- Seedcore-01実機上での5検体実データE2Eコホート検証(Issue #26): 同一BioProjectに属する
+  5件の公開WGS検体を、QC→mapping→重複マーク→gVCF→Joint Genotyping→hard filtering→
+  variant QC→GSパネルまで通した。実行時間・peak RSS・storage使用量・sample/variant
+  accounting・再現性証跡を実測で記録した。20〜30検体・327検体規模への拡張条件を、この
+  実測に基づいて評価した(実行を伴わない)。詳細は
+  [実データコホートE2E検証](#実データコホートe2e検証issue-26)と
+  [`docs/real_cohort_e2e.md`](docs/real_cohort_e2e.md)を参照
 
-The following analysis and reproducibility capabilities remain planned:
+以下の解析・再現性機能は計画中です。
 
-- MultiQC report aggregation
-- comprehensive nf-test coverage across every module, and a Python-testable variant-QC module (Issue #1 #G)
-- an adzuki/VCF-panel ingestion path in `genomic-prediction-resnet-hybrid` (tracked as a follow-up issue on that repository, not in scope here)
+- MultiQCレポート集約
+- 全モジュールを網羅するnf-testカバレッジと、Pythonでテスト可能なvariant-QCモジュール
+  (Issue #1 #G)
+- `genomic-prediction-resnet-hybrid`におけるアズキ/VCFパネルのingestion経路(そのリポジトリ側の
+  follow-up issueとして追跡。ここではスコープ外)
+- 20〜30検体・327検体規模でのコホート検証(Issue #26)
 
-A capability is considered implemented only after its corresponding code and validation are present in this repository.
+ある能力は、対応するコードと検証がこのリポジトリに実際に存在して初めて実装済みとみなされます。
 
 ---
 
-## Data Handling Policy
+## データ取扱いポリシー
 
-This public repository is limited to:
+この公開リポジトリに含まれるのは以下のみです。
 
-- workflow and pipeline source code
-- commands and configuration required for reproducibility
-- analyses based on publicly available datasets
-- synthetic or redistributable test data
-- technical validation records that contain no confidential information
+- ワークフローとpipelineのソースコード
+- 再現性のために必要なコマンドと設定
+- 公開データセットに基づく解析
+- syntheticまたは再配布可能なテストデータ
+- 機密情報を含まない技術検証記録
 
-The following are not included:
+以下は含まれません。
 
-- former-employer or other non-public research data
-- customer data
-- proprietary SNP panels or marker selections
-- confidential business logic
-- credentials, access tokens, or private infrastructure details
-- material intended to remain protected as future intellectual property
+- 前職またはその他の非公開研究データ
+- 顧客データ
+- 専有のSNPパネルやマーカー選定
+- 機密のビジネスロジック
+- 認証情報・アクセストークン・非公開インフラの詳細
+- 将来の知的財産として保護すべき資料
 
-Raw WGS data and full reference bundles are not committed to this repository. They must be obtained from their authoritative public sources.
-
----
-
-## Related Repositories
-
-The following repositories represent distinct stages of a longer-term research stack. They are not yet connected by an automated end-to-end workflow.
-
-- [adzuki-snp-pipeline](https://github.com/hoso-jpn/adzuki-snp-pipeline) — public WGS data to cohort variants and SNP matrices; currently under reconstruction
-- [adzuki-gwas-analysis](https://github.com/hoso-jpn/adzuki-gwas-analysis) — analysis of publicly available GWAS summary statistics
-- [genomic-prediction-resnet-hybrid](https://github.com/hoso-jpn/genomic-prediction-resnet-hybrid) — auditable comparison of GBLUP and neural genomic-prediction models using compatible individual-level data
-
-The public Dryad dataset currently used by `adzuki-gwas-analysis` does not contain individual-level genotypes and phenotypes. Therefore, these three repositories should not be read as an already-operational SNP-to-GWAS-to-genomic-prediction service.
-
-As of this writing, `genomic-prediction-resnet-hybrid` has no adzuki- or VCF-specific ingestion code; its only verified data path reads unrelated SoyNAM soybean data. This pipeline's [GS panel](#genomic-selection-gs-panel) was designed to match that repository's own tested conventions (dosage encoding, dtype, on-disk shape, manifest structure) so a future loader there has a well-specified contract to build against, not because that loader exists yet.
+生のWGSデータと完全な参照ゲノムbundleはこのリポジトリにcommitされません。それぞれの
+権威ある公開ソースから取得する必要があります。
 
 ---
 
-## Author
+## 関連リポジトリ
+
+以下のリポジトリは、より長期的な研究スタックにおける異なる段階を表しています。まだ
+自動化されたend-to-endワークフローでは接続されていません。
+
+- [adzuki-snp-pipeline](https://github.com/hoso-jpn/adzuki-snp-pipeline) — 公開WGSデータから
+  コホートvariantとSNP行列まで。現在再構築中
+- [adzuki-gwas-analysis](https://github.com/hoso-jpn/adzuki-gwas-analysis) — 公開されている
+  GWAS summary statisticsの解析
+- [genomic-prediction-resnet-hybrid](https://github.com/hoso-jpn/genomic-prediction-resnet-hybrid) — 互換性のある
+  個体レベルデータを用いたGBLUPとニューラルゲノム予測モデルの監査可能な比較
+
+`adzuki-gwas-analysis`が現在使用している公開Dryadデータセットには個体レベルの遺伝子型・
+表現型は含まれていません。したがって、これら3つのリポジトリを既に稼働しているSNP→GWAS→
+ゲノム予測のend-to-endサービスとして読むべきではありません。
+
+本文書執筆時点で、`genomic-prediction-resnet-hybrid`にはアズキ固有・VCF固有のingestionコード
+はなく、検証済みの唯一のデータ経路は無関係なSoyNAMダイズデータを読み込むものです。この
+pipelineの[GSパネル](#ゲノミックセレクションgsパネル)は、そのloaderが既に存在するからでは
+なく、将来のloaderがそれに合わせて構築できるよう明確な契約を持てるように、そのリポジトリ自身の
+テスト済み規約(dosage符号化、dtype、ディスク上の形状、manifest構造)に合わせて設計されました。
+
+---
+
+## 著者
 
 **Yusuke Hosokawa**<br>
-Independent researcher and AI engineer<br>
-Building [Florigen AI](https://florigen.ai), a long-term agricultural AI initiative
+独立研究者・AIエンジニア<br>
+長期的な農業AI構想[Florigen AI](https://florigen.ai)を構築中
 
 Plant Genetics × Edge AI × Physical AI
 
 - [GitHub](https://github.com/hoso-jpn)
 - [researchmap](https://researchmap.jp/hosokawa-yusuke)
-- [Breeding Science (2025) — QTL mapping in rice chromosome segment substitution lines](https://doi.org/10.1270/jsbbs.24058)
+- [Breeding Science (2025) — イネ染色体segment substitution系統におけるQTLマッピング](https://doi.org/10.1270/jsbbs.24058)
 
-The genomics work in this repository documents plant-domain and bioinformatics expertise that informs longer-term agricultural AI and robotics research.
+このリポジトリのゲノミクス研究は、長期的な農業AI・ロボティクス研究の土台となる植物ドメイン・
+バイオインフォマティクスの専門性を文書化するものです。
 
 ---
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
+このプロジェクトはMIT Licenseの下でライセンスされています。[LICENSE](LICENSE)を参照して
+ください。
