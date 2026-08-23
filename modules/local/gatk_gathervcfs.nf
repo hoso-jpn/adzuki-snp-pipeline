@@ -1,3 +1,10 @@
+// Issue #11: List-safety fix only (see GATK_GENOMICSDBIMPORT for the full
+// rationale -- the same real-data run exposed the identical bug pattern
+// here: Nextflow silently unwraps a single-element List into a bare
+// scalar Path/File for `path(vcfs)`/`path(vcf_indexes)`, and `.size()` on
+// that scalar returns a byte count, not "1"). This process's Xmx formula
+// and 'process_medium' label are unchanged -- out of this Issue's scope,
+// which is GenomicsDBImport-specific memory hardening.
 process GATK_GATHERVCFS {
     tag "${meta.id}"
     label 'process_medium'
@@ -20,21 +27,24 @@ process GATK_GATHERVCFS {
     )
 
     script:
+    vcf_list = vcfs instanceof List ? vcfs : [vcfs]
+    vcf_index_list = vcf_indexes instanceof List ? vcf_indexes : [vcf_indexes]
+
+    if (vcf_list.size() != vcf_index_list.size()) {
+        error(
+            'the number of VCFs and indexes must match: ' +
+            "${vcf_list.size()} VCFs, " +
+            "${vcf_index_list.size()} indexes"
+        )
+    }
+
     memory_gb = Math.max(
         1,
         task.memory.toGiga().intValue() - 1
     )
-    input_arguments = vcfs
+    input_arguments = vcf_list
         .collect { vcf -> "--INPUT ${vcf}" }
         .join(" \\\n        ")
-
-    if (vcfs.size() != vcf_indexes.size()) {
-        error(
-            'the number of VCFs and indexes must match: ' +
-            "${vcfs.size()} VCFs, " +
-            "${vcf_indexes.size()} indexes"
-        )
-    }
 
     """
     gatk --java-options "-Xmx${memory_gb}g" GatherVcfs \
