@@ -36,3 +36,6 @@ results/
 !tests/bin/fixtures/*.vcf.gz
 !tests/modules/fixtures/*.vcf.gz
 !tests/modules/fixtures/*.vcf.gz.tbi
+!tests/data/reference/prebuilt_dict/*.dict
+!tests/data/reference/prebuilt_dict_reordered/*.dict
+!tests/modules/fixtures/reference_contigs/*.dict

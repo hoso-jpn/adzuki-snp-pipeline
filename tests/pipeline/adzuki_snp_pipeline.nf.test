@@ -3,6 +3,32 @@ nextflow_pipeline {
     name "Joint Genotyping fixture: ref/alt genotype and annotation contract"
     script "main.nf"
 
+    // Issue #11: nf-test's own workflow.trace.tasks() exposes only
+    // `name`/`success` per task, not a work directory -- so the real,
+    // fully-rendered `.command.sh` Nextflow generated for each task is
+    // located directly on disk instead, by walking down from `outputDir`'s
+    // sibling `work/` directory. `*.genomicsdb` directories are skipped
+    // during the walk: GenomicsDBImport's docker container runs as root
+    // and leaves its own workspace directory root-owned and
+    // world-unreadable (0700) on the host, which would otherwise make
+    // this walk itself throw AccessDeniedException on that subtree.
+    def findCommandScripts = { String testOutputDir, String needle ->
+        def testRoot = new File(testOutputDir).getParentFile()
+        def matches = []
+        def walk
+        walk = { File dir ->
+            dir.listFiles()?.each { entry ->
+                if (entry.isDirectory() && !entry.name.endsWith(".genomicsdb")) {
+                    walk(entry)
+                } else if (entry.name == ".command.sh" && entry.text.contains(needle)) {
+                    matches << entry.text
+                }
+            }
+        }
+        walk(testRoot)
+        return matches
+    }
+
     test("both samples resolve confident ref/alt genotypes at both deterministic SNP loci") {
 
         when {
@@ -48,6 +74,24 @@ nextflow_pipeline {
 
         then {
             assert workflow.success
+
+            // Issue #11: the default genomicsdb_batch_size (50) and the
+            // 80%-of-task.memory Xmx ceiling actually reach the real
+            // GenomicsDBImport invocation for every interval task, not
+            // just one of them -- read directly from each task's own
+            // rendered .command.sh rather than inferred from output
+            // equivalence (a 2-sample synthetic fixture's raw VCF would
+            // look identical regardless of --batch-size). conf/test.config's
+            // process_genomicsdb is cpus=2/memory='4 GB': 4096 MiB * 0.8
+            // floored is 3276 MiB, a value computed here from the same
+            // config, not hardcoded independently of it.
+            def genomicsDbScripts = findCommandScripts("$outputDir", "GenomicsDBImport")
+            assert genomicsDbScripts.size() == 2: "expected one GenomicsDBImport task per contig interval (chrSynthetic1, chrSynthetic2)"
+            genomicsDbScripts.each { script ->
+                assert script.contains("--batch-size 50")
+                assert script.contains('-Xmx3276m')
+                assert script.contains("--reader-threads 2")
+            }
 
             // Issue #8: exactly one BWA_MEM2_MEM_SORT task per read
             // group (3: sample_a_L001, sample_a_L002, sample_b_L001),
@@ -798,6 +842,248 @@ nextflow_pipeline {
                 assert altSample["DP"] == expected.alt_sample_dp
                 assert refSample["GT"] == expected.ref_genotype
                 assert refSample["DP"] == expected.ref_sample_dp
+            }
+        }
+    }
+
+    test("a non-default genomicsdb_batch_size reaches every real GenomicsDBImport invocation") {
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                sample_ploidy = "2"
+                // Issue #11: a String, not a bare Groovy integer literal
+                // (see the sample_ploidy/optical_duplicate_pixel_distance
+                // comments elsewhere in this file for why this matters
+                // for CLI-equivalent type coercion), and deliberately NOT
+                // the default (50) -- with 1-2 sample synthetic fixtures
+                // the raw cohort VCF's contents are identical regardless
+                // of --batch-size, so only reading the real rendered
+                // command (below) can prove this actually propagated,
+                // not just that the pipeline still produced correct
+                // output.
+                genomicsdb_batch_size = "7"
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            def genomicsDbScripts = findCommandScripts("$outputDir", "GenomicsDBImport")
+            assert genomicsDbScripts.size() == 2
+            genomicsDbScripts.each { script ->
+                assert script.contains("--batch-size 7")
+                assert !script.contains("--batch-size 50")
+            }
+
+            // the rest of the genotype contract is unaffected by
+            // batch-size -- confirms this parameter does not silently
+            // change GenomicsDBImport's actual variant output
+            assert path("$outputDir/variants/raw/cohort.raw.vcf.gz").exists()
+            def data_lines = path("$outputDir/variants/raw/cohort.raw.vcf.gz")
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert data_lines.size() == 2
+        }
+    }
+
+    test("genomicsdb_batch_size=0 is rejected before any process runs") {
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                genomicsdb_batch_size = "0"
+            }
+        }
+
+        then {
+            assert !workflow.success
+            def output = (workflow.stdout + workflow.stderr).join("\n")
+            assert output.contains("genomicsdb_batch_size")
+            assert workflow.trace.tasks().isEmpty()
+        }
+    }
+
+    test("a negative genomicsdb_batch_size is rejected before any process runs") {
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                genomicsdb_batch_size = "-3"
+            }
+        }
+
+        then {
+            assert !workflow.success
+            def output = (workflow.stdout + workflow.stderr).join("\n")
+            assert output.contains("genomicsdb_batch_size")
+            assert workflow.trace.tasks().isEmpty()
+        }
+    }
+
+    test("a non-integer genomicsdb_batch_size is rejected before any process runs") {
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                genomicsdb_batch_size = "not-a-number"
+            }
+        }
+
+        then {
+            assert !workflow.success
+            def output = (workflow.stdout + workflow.stderr).join("\n")
+            assert output.contains("genomicsdb_batch_size")
+            assert workflow.trace.tasks().isEmpty()
+        }
+    }
+
+    test("a matching prebuilt reference_fai/reference_dict pair completes the whole pipeline") {
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                sample_ploidy = "2"
+                reference_fai = "${projectDir}/tests/data/reference/synthetic.fa.fai"
+                // tests/data/reference/prebuilt_dict/: built once via
+                // `docker run
+                // broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb
+                // gatk CreateSequenceDictionary --REFERENCE synthetic.fa
+                // --OUTPUT synthetic.dict` (the exact same pinned digest
+                // GATK_CREATE_SEQUENCE_DICTIONARY uses), so this exercises
+                // a real, reproducibly-generated .dict supplied through
+                // the prebuilt path, not a hand-written one. Its `UR:`
+                // fields record the container-internal build path
+                // (/data/synthetic.fa) verbatim from that real run;
+                // validate_reference_contigs.py never reads UR/M5, only
+                // SN:/LN:, so this is cosmetic. Checksum recorded in
+                // CHECKSUMS.sha256 alongside the fixture.
+                reference_dict = "${projectDir}/tests/data/reference/prebuilt_dict/synthetic.dict"
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            // GATK_CREATE_SEQUENCE_DICTIONARY must not run at all when a
+            // prebuilt dict is supplied.
+            def taskNames = workflow.trace.tasks().collect { task -> task.name }
+            assert taskNames.every { name -> !name.contains("GATK_CREATE_SEQUENCE_DICTIONARY") }
+
+            assert path("$outputDir/variants/raw/cohort.raw.vcf.gz").exists()
+            def data_lines = path("$outputDir/variants/raw/cohort.raw.vcf.gz")
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert data_lines.size() == 2
+        }
+    }
+
+    test("a prebuilt reference_dict whose contigs are reordered relative to reference_fai fails before any process runs") {
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                reference_fai = "${projectDir}/tests/data/reference/synthetic.fa.fai"
+                // The exact same two real @SQ lines as
+                // tests/data/reference/prebuilt_dict/synthetic.dict
+                // (the "prebuilt success" test above), just reordered --
+                // same contig set as reference_fai, same lengths, only
+                // the order differs. This is the specific case a naive
+                // set-equality comparison would miss. In its own
+                // directory (not alongside prebuilt_dict/synthetic.dict)
+                // because main.nf requires reference_dict's basename to
+                // match reference_fasta's basename (synthetic.dict).
+                reference_dict = "${projectDir}/tests/data/reference/prebuilt_dict_reordered/synthetic.dict"
+            }
+        }
+
+        then {
+            assert !workflow.success
+
+            def output = (workflow.stdout + workflow.stderr).join("\n")
+            assert output.contains("reference FAI and sequence dictionary are inconsistent")
+            assert output.contains("first mismatch at index 0")
+
+            // No process that actually depends on reference_fai/
+            // reference_dict may have started -- the failure must happen
+            // at the VALIDATE_REFERENCE_CONTIGS gate, before any mapping
+            // or variant-calling work is done. FASTQC_RAW/FASTP/
+            // BWA_MEM2_INDEX have no data dependency on reference_fai/
+            // reference_dict at all (BWA_MEM2_INDEX only needs the fasta)
+            // and may legitimately have already completed concurrently
+            // by the time this failure is reported -- so isEmpty(), or a
+            // blanket "no BWA_MEM2* task", would both be too strong a
+            // claim here, and is not what this test is about.
+            def taskNames = workflow.trace.tasks().collect { task -> task.name }
+            assert taskNames.every { name ->
+                !name.contains("BWA_MEM2_MEM_SORT") && !name.contains("HAPLOTYPECALLER") &&
+                !name.contains("GENOMICSDBIMPORT") && !name.contains("GENOTYPEGVCFS")
             }
         }
     }

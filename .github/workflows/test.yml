@@ -39,4 +39,7 @@ jobs:
           tests/modules/gatk_selectvariants.nf.test
           tests/modules/gs_normalize_variants.nf.test
           tests/modules/bwa_mem2_mem_sort.nf.test
+          tests/modules/validate_reference_contigs.nf.test
+          tests/modules/gatk_genomicsdbimport.nf.test
+          tests/modules/gatk_gathervcfs.nf.test
           --ci
