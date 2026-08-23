@@ -1,6 +1,11 @@
+// Issue #30: dedicated resource label (see nextflow.config for the
+// real-data benchmark this was sized from). This process reads the
+// entire cohort's normalized VCF into memory at once; that footprint
+// exceeded process_low's previous 4 GiB first-attempt allocation on
+// Issue #26's real 5-sample cohort.
 process CLASSIFY_NORMALIZED_VARIANTS {
     tag "${meta.id}"
-    label 'process_low'
+    label 'process_variant_classification'
 
     // See modules/local/summarize_variant_qc.nf for why the full
     // (non-"-slim") Python image is required. This image also has no

@@ -1,6 +1,12 @@
+// Issue #30: dedicated resource label (see nextflow.config for the
+// real-data benchmark this was sized from). On Issue #26's real
+// 5-sample cohort this process's true peak RSS (5.34 GiB, measured at
+// a generous memory ceiling) exceeded process_low's previous 4 GiB
+// first-attempt allocation -- the original run's own report of
+// "peak_rss: 4 GB" was the cgroup ceiling itself, not genuine headroom.
 process BUILD_GS_PANEL {
     tag "${meta.id}"
-    label 'process_low'
+    label 'process_gs_panel'
 
     // See modules/local/summarize_variant_qc.nf for why the full
     // (non-"-slim") Python image is required.

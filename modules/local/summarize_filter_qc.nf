@@ -1,6 +1,13 @@
+// Issue #30: dedicated resource label (see nextflow.config for the
+// real-data benchmark this was sized from). Sized for the SNP
+// invocation's real footprint (indel is far lighter -- 1.4 GiB true
+// peak vs. SNP's 8.4 GiB on Issue #26's real 5-sample cohort -- but
+// both invocations share this one process/label; splitting further by
+// meta.variant_type was considered and rejected as unnecessary
+// complexity for a single label difference not yet shown to matter).
 process SUMMARIZE_FILTER_QC {
     tag "${meta.id}:${meta.variant_type}"
-    label 'process_low'
+    label 'process_variant_qc_summary'
 
     // See modules/local/summarize_variant_qc.nf for why the full
     // (non-"-slim") Python image is required.
