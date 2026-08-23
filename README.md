@@ -717,16 +717,35 @@ FASTQ→mapping→HaplotypeCallerの再実行は行わなかった)では、修�
 
 ## 実データコホートE2E検証(Issue #26)
 
-<!-- 実行結果は進行中: Seedcore-01での実行完了後にこのセクションを更新する -->
-
 Issue #8(mapping hardening)とIssue #11(Joint Genotyping scale hardening)が完了した後、
-Issue #26はSeedcore-01実機上で、公開WGSデータを用いた複数サンプルのSNPコーリングを段階的に
-検証し、受託解析で必要となるVCF・QC・遺伝子型行列・処理時間・メモリ使用量・再現性証跡を
-確認するものです。327検体のフル実行はこのIssueのスコープ外であり、3〜5検体規模の検証結果を
-もとに20〜30検体への拡張条件を評価します。
+Issue #26はSeedcore-01実機上で、同一BioProject(PRJNA1138464)に属する5件の公開WGS検体
+(`SRR29909135`はIssue #8から再利用、`SRR29909069`/`SRR29909072`/`SRR29909067`/`SRR29909073`
+を新規追加、カバレッジは約7〜19.3x)を用いて、QC→mapping→重複マーク→gVCF→Joint Genotyping→
+hard filtering→variant QC→GSパネルまでの全工程を実行しました。327検体のフル実行はこの
+Issueのスコープ外であり、この5検体規模の実測結果をもとに20〜30検体への拡張条件を評価します
+(拡張自体は未実施)。
 
-このセクションの実行結果は現在準備中です。最新の内容は
-[`docs/real_cohort_e2e.md`](docs/real_cohort_e2e.md)を参照してください。
+実行は2026-08-24 00:17〜02:50(JST)、**2時間31分37秒**で完了しました(exit 0、155タスク中
+153タスクが最終試行で成功、2タスクは`task.attempt`によるOOM retryで4GiB→8GiBへ増加した後
+成功。恒久的な失敗は0件)。得られたcohort VCFは5,558,870レコード(SNP 4,782,166件、indel
+790,151件、Ti/Tv比1.87)、PASS SNPが4,259,731件、PASS indelが770,385件。GSパネルは
+`panel_status: populated`(variant行4,298,980 x サンプル5)となり、これまでのsynthetic
+fixtureでは常に空だったGSパネルが、初めて実データで非空の出力を生成しました。実行時の
+peak RSS・storage使用量(この実行に起因する合計で約95 GB)・GATK_HAPLOTYPECALLERの
+実行時間が浅いカバレッジのサンプルほど長くなるという実測(32コアマシン上での並列実行時の
+CPU競合が原因と考えられる)、そして`process_low`ラベルのタスク(`CLASSIFY_NORMALIZED_VARIANTS`、
+`SUMMARIZE_FILTER_QC`)が5検体規模で既にデフォルトの4GiBでは不足しOOM killされたという発見は、
+20〜30検体規模へ拡張する前に検討すべき具体的な事項として文書化しています(コード変更は
+今回行っていません)。
+
+入力FASTQ・参照ゲノムbundle・container・Nextflowパラメータ・cohort/variant会計を記録した
+再現性manifestを新しい`bin/build_run_manifest.py`で生成し、
+[`docs/real_cohort_e2e_run_manifest.json`](docs/real_cohort_e2e_run_manifest.json)として
+commitしています(生データは一切含まず、checksum・件数・パラメータ・pin済みcontainer参照のみ)。
+
+完全な実測データ(環境情報、read-group由来の別のinstrument不一致の発見、baseline回帰、
+プロセスごとのpeak RSS・実行時間、storage内訳、20〜30検体拡張のための評価、データ取扱いの
+確認)は[`docs/real_cohort_e2e.md`](docs/real_cohort_e2e.md)を参照してください。
 
 ---
 
