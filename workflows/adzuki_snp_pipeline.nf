@@ -19,6 +19,10 @@ include {
 } from '../modules/local/gatk_create_sequence_dictionary'
 
 include {
+    VALIDATE_REFERENCE_CONTIGS
+} from '../modules/local/validate_reference_contigs'
+
+include {
     BWA_MEM2_INDEX
 } from '../modules/local/bwa_mem2_index'
 
@@ -243,6 +247,19 @@ workflow ADZUKI_SNP_PIPELINE {
         reference_dict_ch =
             GATK_CREATE_SEQUENCE_DICTIONARY.out.dict
     }
+
+    // Issue #11: validated once here, for both the generated and the
+    // prebuilt reference-bundle path (both have already converged to the
+    // same channel shape above) -- every downstream consumer below is
+    // rebound to this process's own pass-through output, so a contig
+    // name/order/length mismatch fails the whole run before
+    // GATK_HAPLOTYPECALLER or any other reference-dependent process starts.
+    VALIDATE_REFERENCE_CONTIGS(
+        reference_fai_ch,
+        reference_dict_ch,
+    )
+    reference_fai_ch = VALIDATE_REFERENCE_CONTIGS.out.fai
+    reference_dict_ch = VALIDATE_REFERENCE_CONTIGS.out.dict
 
     if (params.bwa_index_prefix) {
         bwa_indexes_ch = reference_ch.map {
