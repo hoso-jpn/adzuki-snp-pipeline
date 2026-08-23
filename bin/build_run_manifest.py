@@ -29,6 +29,16 @@ references already baked into each process's `container` directive
 pipeline), passed in via `--bwa-mem2-container`/`--samtools-container`/
 `--gatk-container`/`--python-container` rather than queried at run
 time -- the same reasoning as `build_gs_panel_manifest.py`.
+
+The Nextflow execution engine's own version (`--nextflow-version`,
+e.g. Nextflow's `nextflow.version`/`-v`) is recorded separately from
+those containers: Nextflow itself runs on the host, outside any pinned
+container, and its own runtime semantics (channel/path handling,
+scheduling, retry behavior) have previously been the actual root cause
+of a real production failure in this pipeline (Issue #11's
+single-element List/scalar collapse). Omitting it from a
+"reproducibility" manifest would leave out exactly the kind of
+execution-engine detail that mattered before.
 """
 
 from __future__ import annotations
@@ -293,6 +303,7 @@ def build_manifest(
     cohort_id: str,
     pipeline_version: str,
     git_commit: str,
+    nextflow_version: str,
     containers: dict[str, str],
     reference: dict[str, object],
     parameters: dict[str, object],
@@ -312,6 +323,7 @@ def build_manifest(
         "cohort_id": cohort_id,
         "pipeline_version": pipeline_version,
         "git_commit": git_commit or None,
+        "nextflow_version": nextflow_version,
         "containers": containers,
         "reference": reference,
         "parameters": parameters,
@@ -358,6 +370,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--git-commit",
         default="",
         help="Nextflow workflow.commitId; empty string is recorded as null.",
+    )
+    parser.add_argument(
+        "--nextflow-version",
+        required=True,
+        help="The Nextflow execution engine's own version (e.g. 26.04.6), not a "
+        "container-pinned tool version.",
     )
 
     parser.add_argument("--bwa-mem2-container", required=True)
@@ -494,6 +512,7 @@ def main(argv: list[str] | None = None) -> int:
         cohort_id=args.cohort_id,
         pipeline_version=args.pipeline_version,
         git_commit=args.git_commit,
+        nextflow_version=args.nextflow_version,
         containers={
             "bwa_mem2": args.bwa_mem2_container,
             "samtools": args.samtools_container,

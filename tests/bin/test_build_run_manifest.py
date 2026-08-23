@@ -384,6 +384,7 @@ class MainCliTests(unittest.TestCase):
             "--cohort-id", "cohort",
             "--pipeline-version", "0.2.0-dev",
             "--git-commit", "abc123",
+            "--nextflow-version", "26.04.6",
             *CONTAINER_CLI_ARGS,
             *REFERENCE_CLI_ARGS,
             "--reference-fasta", str(fasta),
@@ -415,6 +416,7 @@ class MainCliTests(unittest.TestCase):
         self.assertEqual(payload["schema_version"], 1)
         self.assertEqual(payload["cohort_id"], "cohort")
         self.assertEqual(payload["git_commit"], "abc123")
+        self.assertEqual(payload["nextflow_version"], "26.04.6")
         self.assertEqual(len(payload["samples"]), 1)
         self.assertEqual(payload["samples"][0]["sample_id"], "sample_a")
         self.assertEqual(payload["cohort_accounting"]["number_of_samples"], "2")
@@ -447,6 +449,7 @@ class MainCliTests(unittest.TestCase):
             argv = [
                 "--cohort-id", "cohort",
                 "--pipeline-version", "0.2.0-dev",
+                "--nextflow-version", "26.04.6",
                 *CONTAINER_CLI_ARGS,
                 *REFERENCE_CLI_ARGS,
                 "--reference-fasta", str(fasta),
@@ -483,6 +486,7 @@ class MainCliTests(unittest.TestCase):
             argv = [
                 "--cohort-id", "cohort",
                 "--pipeline-version", "0.2.0-dev",
+                "--nextflow-version", "26.04.6",
                 *CONTAINER_CLI_ARGS,
                 *REFERENCE_CLI_ARGS,
                 "--reference-fasta", str(fasta),

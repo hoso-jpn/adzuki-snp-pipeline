@@ -32,8 +32,8 @@
     "python": "python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7",
     "samtools": "quay.io/biocontainers/samtools:1.24--h9dcdb79_1@sha256:a130447589651ed09252aa95a5e4f4132942cdb54d835d81a04a9a930d656561"
   },
-  "generated_at": "2026-08-23T17:53:34Z",
-  "git_commit": "49cb2f6",
+  "generated_at": "2026-08-23T22:08:28Z",
+  "git_commit": "49cb2f606407bcafead0eea29a3962ebff6f7733",
   "gs_panel": {
     "cohort_id": "cohort",
     "manifest_hash": "sha256:ab3f41dadfc9fd31e330a98a760274ae025542eab73e83132a77711b87831812",
@@ -41,7 +41,8 @@
     "run_id": "20260823T174851Z-17bc089e",
     "schema_version": 1
   },
-  "manifest_hash": "sha256:574d4da25d90f7c425a4ab76c2cb45f118a5e9bbdedf387270a433aec2c4a9dd",
+  "manifest_hash": "sha256:67dc69eea2cb49ca706b6e13b96e2e9dc419ec4d3cb4b870bf2926fabe6a4d5b",
+  "nextflow_version": "26.04.6",
   "parameters": {
     "enable_gs_panel": true,
     "genomicsdb_batch_size": 50,
@@ -78,7 +79,7 @@
     "reference_id": "GCF_016808095.1",
     "reference_species": "Vigna angularis"
   },
-  "run_id": "20260823T175334Z-d6091148",
+  "run_id": "20260823T220828Z-4171dbf3",
   "samples": [
     {
       "fastq_1": {

@@ -107,13 +107,16 @@ across every read in each file (not just the first):
 `SRR29909067`/`SRR29909073` were pooled on a different one. This is expected for a
 multiplexed resequencing study and is not itself a finding.
 
-The finding: `A00609` is an Illumina NovaSeq-pattern instrument serial (already noted as an
-unresolved discrepancy against ENA's blanket "Illumina HiSeq X" metadata in Issue #8
-Phase 5's own documentation), while `E00361` follows Illumina's HiSeq 3000/4000-series
-serial pattern -- neither matches "HiSeq X" literally, and the two are *different*
-instrument families from each other. ENA/SRA's `instrument_model` field reports "Illumina
-HiSeq X" uniformly for every run in this BioProject, but the runs' own read headers show at
-least two distinct real instrument identities. As in Issue #8, `optical_duplicate_pixel_distance`
+The finding: `A00609`'s serial pattern is consistent with Illumina's NovaSeq naming
+convention (already noted as an unresolved discrepancy against ENA's blanket "Illumina
+HiSeq X" metadata in Issue #8 Phase 5's own documentation), while `E00361`'s serial pattern
+is consistent with Illumina's HiSeq 3000/4000-series naming convention instead -- neither
+matches "HiSeq X" literally, and the two serial patterns are consistent with *different*
+instrument families from each other. This is a read-header serial-naming-convention
+inference, not a confirmed instrument model lookup against an Illumina-maintained registry.
+ENA/SRA's `instrument_model` field reports "Illumina HiSeq X" uniformly for every run in
+this BioProject, but the runs' own read headers are consistent with at least two distinct
+real instrument identities. As in Issue #8, `optical_duplicate_pixel_distance`
 was **not** overridden from its default (`100`) for this run, given this same unresolved
 ambiguity -- overriding it towards a patterned-flowcell value on the assumption of one
 specific instrument model, when the read headers themselves suggest a different and
@@ -178,11 +181,16 @@ have refused to write a manifest at all on any disagreement -- see
 A whole-run provenance manifest was built with the new `bin/build_run_manifest.py`
 (Issue #26) from this run's own real, already-published artifacts -- input FASTQ checksums
 (read from the samplesheet actually used), reference bundle checksums, pinned container
-references, every Nextflow parameter used, cohort/variant-type accounting, a pointer to the
-GS panel's own manifest, and checksums of the raw cohort VCF, both PASS VCFs, and all five
-gVCFs. Committed as [`docs/real_cohort_e2e_run_manifest.json`](real_cohort_e2e_run_manifest.json)
-(no raw sequence data; every value is either a checksum, a count, a parameter, or a pinned
-container reference).
+references, the full (not abbreviated) git commit SHA this run executed against
+(`49cb2f606407bcafead0eea29a3962ebff6f7733`), the Nextflow execution engine's own version
+(`26.04.6`, recorded separately from the pinned tool containers -- Nextflow itself runs on
+the host outside any container, and its own runtime semantics were the actual root cause of
+a real production failure this pipeline hit before, in Issue #11), every Nextflow parameter
+used, cohort/variant-type accounting, a pointer to the GS panel's own manifest, and
+checksums of the raw cohort VCF, both PASS VCFs, and all five gVCFs. Committed as
+[`docs/real_cohort_e2e_run_manifest.json`](real_cohort_e2e_run_manifest.json) (no raw
+sequence data; every value is either a checksum, a count, a parameter, a pinned container
+reference, or the execution engine's own version).
 
 ## Resource usage (from `-with-trace`)
 
