@@ -1,5 +1,4 @@
-"""Regression guard for Issue #30's dedicated resource labels and the
-process_high cpus change.
+"""Regression guard for Issue #30's dedicated resource labels.
 
 Not a `bin/` CLI script test -- `nextflow.config`'s `withLabel` blocks
 are plain text (Groovy DSL) with no CLI surface to exercise, and the
@@ -29,6 +28,7 @@ MODULE_LABELS = (
     ("modules/local/classify_normalized_variants.nf", "process_variant_classification"),
     ("modules/local/summarize_filter_qc.nf", "process_variant_qc_summary"),
     ("modules/local/build_gs_panel.nf", "process_gs_panel"),
+    ("modules/local/gatk_haplotypecaller.nf", "process_haplotypecaller"),
 )
 
 # (label, expected cpus, expected memory closure text, expected time)
@@ -36,18 +36,24 @@ LABEL_CONTRACTS = (
     ("process_variant_classification", "2", "{ 12.GB * task.attempt }", "'2h'"),
     ("process_variant_qc_summary", "2", "{ 12.GB * task.attempt }", "'2h'"),
     ("process_gs_panel", "2", "{ 8.GB * task.attempt }", "'2h'"),
+    # process_high itself is unchanged (still cpus=8) -- Issue #30 only
+    # benchmarked GATK_HAPLOTYPECALLER, not GATK_GENOTYPEGVCFS (this
+    # label's other, unbenchmarked consumer), so the cpus value actually
+    # measured lives on process_haplotypecaller instead of here.
+    ("process_high", "8", "{ 16.GB * task.attempt }", "'24h'"),
     # Issue #30's real-data GATK_HAPLOTYPECALLER 4-vs-8-cpu benchmark
     # (same real BAM, isolated): ~3.5% wall-time difference, identical
     # gVCF variant records, but double the theoretical concurrency at
     # 4 cpus (floor(32/4)=8 vs floor(32/8)=4 on this host) -- see
     # nextflow.config's own comment for the full numbers.
-    ("process_high", "4", "{ 16.GB * task.attempt }", "'24h'"),
+    ("process_haplotypecaller", "4", "{ 16.GB * task.attempt }", "'24h'"),
 )
 
 TEST_PROFILE_LABELS = (
     "process_variant_classification",
     "process_variant_qc_summary",
     "process_gs_panel",
+    "process_haplotypecaller",
 )
 
 
@@ -83,6 +89,18 @@ class ModuleLabelTests(unittest.TestCase):
                     text,
                     f"{relative_path} was reverted back to label 'process_low'",
                 )
+
+    def test_haplotypecaller_does_not_share_process_high(self) -> None:
+        # The exact mistake this guard exists for: GATK_HAPLOTYPECALLER
+        # silently sharing process_high with GATK_GENOTYPEGVCFS again
+        # would change GATK_GENOTYPEGVCFS's own scheduler concurrency as
+        # an unreviewed side effect of a future HaplotypeCaller-only
+        # change -- the exact coupling this Issue's label split exists
+        # to prevent (PR #31 review feedback).
+        text = (REPO_ROOT / "modules/local/gatk_haplotypecaller.nf").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("label 'process_high'", text)
 
 
 class NextflowConfigResourceContractTests(unittest.TestCase):

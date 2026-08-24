@@ -70,7 +70,7 @@ withLabel: process_high {
 
 ## Resource architecture: after
 
-Three new dedicated labels, plus one changed value on an existing label:
+Four new dedicated labels; `process_high` itself is unchanged:
 
 ```groovy
 withLabel: process_variant_classification {
@@ -92,11 +92,27 @@ withLabel: process_gs_panel {
 }
 
 withLabel: process_high {
-    cpus   = 4    // was 8
+    cpus   = 8    // unchanged -- still shared by GATK_GENOTYPEGVCFS only
     memory = { 16.GB * task.attempt }
     time   = '24h'
 }
+
+withLabel: process_haplotypecaller {
+    cpus   = 4    // GATK_HAPLOTYPECALLER moved off process_high onto its
+    memory = { 16.GB * task.attempt }    // own label, so this value
+    time   = '24h'                       // reflects only what was
+}                                         // actually benchmarked below
 ```
+
+**Why a fourth label instead of just lowering `process_high`'s own cpus**: this Issue's
+benchmark measured `GATK_HAPLOTYPECALLER` only. `GATK_GENOTYPEGVCFS` also uses
+`process_high` and was not benchmarked at all -- lowering `process_high` itself would have
+silently changed `GATK_GENOTYPEGVCFS`'s own scheduler concurrency as an unreviewed side
+effect of a HaplotypeCaller-specific finding (PR #31 review feedback). Giving
+`GATK_HAPLOTYPECALLER` its own label means this cpus value is exactly what was measured,
+`GATK_GENOTYPEGVCFS` is untouched, and a future evaluation of `GATK_GENOTYPEGVCFS`'s own
+cpu needs (whether it uses 8 cpus at all is itself an open question this Issue does not
+answer -- see below) can change `process_high` independently.
 
 `cpus`/`time` for the three new labels are carried over from `process_low` unchanged --
 every benchmark below measured ~100% CPU (effectively single-threaded) and well under the
@@ -200,7 +216,8 @@ This benchmark's generous 24 GiB ceiling is what let the true figure surface at 
 ## Retry contract (unchanged mechanism, now a safety net rather than a first-line expectation)
 
 All four labels (`process_variant_classification`, `process_variant_qc_summary`,
-`process_gs_panel`, `process_high`) keep this repository's existing `errorStrategy` (retry
+`process_gs_panel`, `process_haplotypecaller`) keep this repository's existing
+`errorStrategy` (retry
 on exit 137/140/143) and `maxRetries=1`, with `memory` still a `{ N.GB * task.attempt }`
 closure -- so attempt 2 still gets double attempt 1's allocation, and the ratio is
 recomputed fresh on every attempt rather than holding a stale value (the same pattern
@@ -233,11 +250,20 @@ not scientific output.
 
 8 cpus bought only ~3.5% less wall time than 4 -- GATK's PairHMM-threaded region does not
 meaningfully scale past ~4 threads for this reference/workload on this hardware, consistent
-with the sub-linear real `%cpu` utilization measured at both settings. `GATK_GENOTYPEGVCFS`
-(`process_high`'s only other consumer) does not read `task.cpus` anywhere in its own
-script -- confirmed by reading `modules/local/gatk_genotypegvcfs.nf` directly -- so this
-change affects only how many concurrent scheduling slots this label's tasks compete for,
-not `GATK_GENOTYPEGVCFS`'s own execution.
+with the sub-linear real `%cpu` utilization measured at both settings.
+
+This finding applies to `GATK_HAPLOTYPECALLER` specifically, not to `process_high` as a
+whole: `GATK_GENOTYPEGVCFS` also carries `label 'process_high'` and was **not** benchmarked
+here. `GATK_HAPLOTYPECALLER` moved to its own dedicated `process_haplotypecaller` label
+(4 cpus) instead of `process_high` itself being lowered, specifically so this change cannot
+silently alter `GATK_GENOTYPEGVCFS`'s own scheduler concurrency as a side effect of a
+benchmark that never touched it -- `process_high` stays at 8 cpus, exactly as before.
+Separately (confirmed by reading `modules/local/gatk_genotypegvcfs.nf` directly, not
+assumed): `GATK_GENOTYPEGVCFS` does not read `task.cpus` anywhere in its own script at all,
+so whether it actually benefits from 8 cpus -- or would do just as well on fewer, freeing
+its own additional concurrency -- remains an open, unbenchmarked question this Issue
+deliberately leaves for separate evaluation rather than answering by inference from the
+HaplotypeCaller result.
 
 **Measurement integrity note**: the 4-cpu benchmark's isolation was briefly compromised for
 approximately 7 minutes (of its ~42-minute total) by an unrelated downstream-process
@@ -275,14 +301,18 @@ exercised up to 4-way) could exceed them by an amount this Issue has not measure
 
 ### CPU policy decision
 
-**Changed `process_high` from 8 to 4 cpus.** Rationale: real, measured, near-zero per-task
-cost (~3.5% wall time) for a real doubling of theoretical concurrency, with confirmed
-scientific-output equivalence. This is not "8 threads is slower" (the Issue's own
-instruction explicitly warned against that unsupported claim) -- it is "4 threads is
-adequate for this workload, and the freed concurrency is worth more than the small
-per-task cost." Not adopted reflexively: the change was made only because the benchmark
-showed a clear, quantified benefit; if it had shown a large per-task cost, `process_high`
-would have stayed at 8 with that finding recorded instead.
+**Moved `GATK_HAPLOTYPECALLER` onto a new `process_haplotypecaller` label at 4 cpus,
+leaving `process_high` (still used by `GATK_GENOTYPEGVCFS`) at 8 cpus, unchanged.**
+Rationale: real, measured, near-zero per-task cost (~3.5% wall time) for a real doubling of
+theoretical concurrency, with confirmed scientific-output equivalence. This is not "8
+threads is slower" (the Issue's own instruction explicitly warned against that unsupported
+claim) -- it is "4 threads is adequate for `GATK_HAPLOTYPECALLER` specifically on this
+workload, and the freed concurrency is worth more than the small per-task cost." Not
+adopted reflexively: the change was made only because the benchmark showed a clear,
+quantified benefit for the one process actually benchmarked; if it had shown a large
+per-task cost, `GATK_HAPLOTYPECALLER` would have stayed at 8 with that finding recorded
+instead. `GATK_GENOTYPEGVCFS`'s own cpu need was not evaluated at all and is left entirely
+alone on `process_high`.
 
 **New consideration this change introduces**: 8 concurrent `GATK_HAPLOTYPECALLER` tasks at
 ~10.2 GiB true peak RSS each is ~82 GiB, versus the previous 4 concurrent tasks at ~10.6
@@ -366,12 +396,15 @@ under any of the new memory values regardless, which is exactly why
 `tests/bin/test_resource_label_contracts.py` reads the real source files directly instead
 of relying on nf-test to observe a production-scale difference it cannot exercise.
 
-`tests/bin/test_resource_label_contracts.py` adds 4 tests: each of the three relabeled
-modules still declares its dedicated label (and not a reversion to `process_low`); each of
-the four changed/new labels (`process_variant_classification`, `process_variant_qc_summary`,
-`process_gs_panel`, `process_high`) has the expected `cpus`/`memory`/`time` in
-`nextflow.config`; memory still scales with `task.attempt` rather than a fixed value; and
-`conf/test.config` overrides all three new labels to CI-sized values.
+`tests/bin/test_resource_label_contracts.py` adds 5 tests: each of the four relabeled
+modules still declares its dedicated label (and not a reversion to `process_low`);
+`GATK_HAPLOTYPECALLER` specifically does not carry `process_high` (the exact coupling this
+label split exists to prevent); each of the four new/changed labels
+(`process_variant_classification`, `process_variant_qc_summary`, `process_gs_panel`,
+`process_haplotypecaller`) has the expected `cpus`/`memory`/`time` in `nextflow.config`
+(alongside `process_high` itself, confirmed unchanged at 8 cpus); memory still scales with
+`task.attempt` rather than a fixed value; and `conf/test.config` overrides all four new
+labels to CI-sized values.
 
 ## 20-30 sample Go / Conditional Go / No-Go decision
 
@@ -415,8 +448,9 @@ convert this to a GO:**
 
 - Monitor aggregate real memory usage during that run's `GATK_HAPLOTYPECALLER` stage
   specifically; if concurrent peak RSS approaches host capacity, be prepared to reduce
-  `process_high`'s cpus further (increasing concurrency more) or accept lower concurrency
-  by raising it back, rather than assuming this Issue's 4-cpu choice is final at that scale.
+  `process_haplotypecaller`'s cpus further (increasing concurrency more) or accept lower
+  concurrency by raising it back, rather than assuming this Issue's 4-cpu choice is final
+  at that scale.
 - Watch `CLASSIFY_NORMALIZED_VARIANTS`/`SUMMARIZE_FILTER_QC`/`BUILD_GS_PANEL` for any OOM
   at the new ceilings; if the larger cohort's record volume exceeds what 5 samples showed,
   re-benchmark with that scale's own real artifacts rather than assuming this Issue's
