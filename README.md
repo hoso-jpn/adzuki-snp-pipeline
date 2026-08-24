@@ -36,6 +36,7 @@ nf-testスイートがJoint Genotyping fixture契約・GenomicsDBImportのbatch-
 | パイプラインレベルテスト | 部分実装 | syntheticなDocker smoke testが3リードグループ・2サンプルGVCF・両locusで確信度の高い`1/1`/`0/0`遺伝子型を持つ2つのraw SNP・ハードフィルタannotation・indexed PASS出力・7種のvariant QCタスク・38個のQC成果物・GSパネルのempty-panel契約を検証する。[nf-test](https://www.nf-test.com/)によるpipeline-level testがこの契約を自動化し(`tests/pipeline/adzuki_snp_pipeline.nf.test`)、haploid(`sample_ploidy=1`、`enable_gs_panel=false`)のend-to-end遺伝子型契約とGSパネル有効時の`sample_ploidy=1`拒否(Issue #20)、mappingタスク数と重複マーク件数の厳密一致・負の`optical_duplicate_pixel_distance`拒否・prebuilt BWA-MEM2 indexパス(Issue #8)、`genomicsdb_batch_size`の伝播とXmx比率・prebuilt/生成両方の参照bundle・contig順序不一致の拒否(Issue #11)を検証する追加testを含む。module-level nf-testは実際にpinされたcontainerに対して、`GATK_SELECTVARIANTS`がMIXED型レコードをSNP/indel双方の選択から除外すること(`tests/modules/gatk_selectvariants.nf.test`)、`GS_NORMALIZE_VARIANTS`がMIXEDレコードを正しい遺伝子型再割当てで分割すること(`tests/modules/gs_normalize_variants.nf.test`)、`BWA_MEM2_MEM_SORT`が中間`.sam`を生成せず文書化されたCPU分割を適用すること(`tests/modules/bwa_mem2_mem_sort.nf.test`)、`VALIDATE_REFERENCE_CONTIGS`がFAI/dictの名前・長さ・順序不一致を検出すること(`tests/modules/validate_reference_contigs.nf.test`)、`GATK_GENOMICSDBIMPORT`/`GATK_GATHERVCFS`が単一sample入力(Nextflowのpath入力がList→scalarへ暗黙変換される境界条件)を正しく扱うこと(`tests/modules/gatk_genomicsdbimport.nf.test`、`tests/modules/gatk_gathervcfs.nf.test`)を確認する。全モジュールを網羅するnf-testは[Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1) #Gで計画中 |
 | Functional CI | syntheticフィクスチャpathで実装済み | `.github/workflows/test.yml`が`nextflow lint .`と結合nf-testスイート(pipeline-level + module-level、`-profile test,docker`)をmain向けのpush/pull requestごとに実行する。`.github/workflows/lint.yml`はリポジトリ構造のみを個別に検査する。実データコホートのCIはスコープ外 |
 | 実データコホート検証(Issue #26) | 5検体E2E検証を実施 | 公開WGSデータ5検体(同一BioProject)をSeedcore-01実機でQC→mapping→重複マーク→gVCF→Joint Genotyping→hard filtering→variant QC→GSパネルまで通した。詳細は[実データコホートE2E検証](#実データコホートe2e検証issue-26)を参照。20〜30検体・327検体規模の拡張は未実施(意図的にスコープ外) |
+| Real-cohort downstream resourceハードニング(Issue #30) | targeted benchmarkで対応済み、20〜30検体はConditional Go | Issue #26の実測で判明した`process_low`のOOM・GATK_HAPLOTYPECALLERのCPU競合を、Issue #26自身の実artifactを使ったtargeted benchmarkで解決。詳細は[Real-cohort downstream resource hardening](#real-cohort-downstream-resource-hardeningissue-30)を参照 |
 | Base Quality Score Recalibration (BQSR) | 意図的に除外 | 検証済みのknown-sitesリソースが存在しない。[設計判断](#設計判断)を参照 |
 | 本番利用 | 非対応 | これは実験的な植物研究リポジトリである |
 
@@ -737,8 +738,10 @@ peak RSS・storage使用量(この実行に起因する合計で約95 GB)・GATK
 実行時間が浅いカバレッジのサンプルほど長くなるという実測(32コアマシン上での並列実行時の
 CPU競合が原因と考えられる)、そして`process_low`ラベルのタスク(`CLASSIFY_NORMALIZED_VARIANTS`、
 `SUMMARIZE_FILTER_QC`)が5検体規模で既にデフォルトの4GiBでは不足しOOM killされたという発見は、
-20〜30検体規模へ拡張する前に検討すべき具体的な事項として文書化しています(コード変更は
-今回行っていません)。
+20〜30検体規模へ拡張する前に検討すべき具体的な事項として文書化しました。これらの実測は
+その後Issue #30で対応しています -- 詳細は
+[Real-cohort downstream resource hardening(Issue #30)](#real-cohort-downstream-resource-hardeningissue-30)
+を参照してください。
 
 入力FASTQ・参照ゲノムbundle・container・Nextflowパラメータ・cohort/variant会計を記録した
 再現性manifestを新しい`bin/build_run_manifest.py`で生成し、
@@ -748,6 +751,43 @@ commitしています(生データは一切含まず、checksum・件数・パ�
 完全な実測データ(環境情報、read-group由来の別のinstrument不一致の発見、baseline回帰、
 プロセスごとのpeak RSS・実行時間、storage内訳、20〜30検体拡張のための評価、データ取扱いの
 確認)は[`docs/real_cohort_e2e.md`](docs/real_cohort_e2e.md)を参照してください。
+
+---
+
+## Real-cohort downstream resource hardening(Issue #30)
+
+Issue #26の5検体実測で確認された2つの具体的なリスク -- `CLASSIFY_NORMALIZED_VARIANTS`と
+`SUMMARIZE_FILTER_QC`(`cohort:snp`)が`process_low`のデフォルト4GiBでOOM killされ、
+`BUILD_GS_PANEL`が4GiBを使い切っていたこと、そしてGATK_HAPLOTYPECALLERの実行時間が
+sequencing depthと単調に対応しなかったこと -- を、Issue #26自身の実artifactを再利用した
+targeted benchmarkで解決しました。20〜30検体のfull cohort実行そのものはこのIssueの
+スコープ外です。
+
+対応した内容:
+
+- `CLASSIFY_NORMALIZED_VARIANTS`・`SUMMARIZE_FILTER_QC`・`BUILD_GS_PANEL`を、無関係な
+  軽量processまで巻き込む`process_low`一律引き上げではなく、専用resourceラベル
+  (`process_variant_classification`・`process_variant_qc_summary`・`process_gs_panel`)へ
+  分離しました。Issue #26の実artifact(`cohort_gs.normalized.vcf.gz`、
+  `cohort.snp.filtered.vcf.gz`、`cohort_gs.snp.pass.vcf.gz`)を、意図的に大きめのmemory
+  上限でtargeted benchmarkした実測値(true peak RSS)に基づき、それぞれ12GiB(headroom
+  22.3%)、12GiB(headroom 29.8%)、8GiB(headroom 33.3%)へ設定しています。
+  `BUILD_GS_PANEL`の真のpeak RSS(5.34GiB)は、元のIssue #26実行が報告していた
+  `"peak_rss: 4 GB"`が実際にはcgroup上限そのものであり、swapに頼っていた可能性を示す
+  発見でもありました。
+- `GATK_HAPLOTYPECALLER`の同一real BAM(`SRR29909135`)に対する隔離環境でのCPU本数比較
+  (8 cpu: 40m45s、4 cpu: 42m10s。gVCFの実variantレコード1,134,549件は完全一致)により、
+  `process_high`のcpusを8から4へ変更しました。実行時間への影響はほぼゼロ(約3.5%)である
+  一方、32論理CPUのSeedcore-01では理論上の同時実行task数が4から8へ倍増します。
+- すべての変更についてoutputの意味的等価性(record数・classification/filter/GS panel会計
+  の一致)を確認済みです。
+
+20〜30検体規模へのGo/Conditional Go/No-Goは**Conditional Go**です。5検体規模で確認された
+具体的なblockerは解消しましたが、20〜30検体でのdownstream memoryスケーリング(より多くの
+variantレコードを一度にメモリへ載せる)と、8並列HaplotypeCallerでの実メモリ圧迫は未検証
+のままです。詳細な条件と根拠は
+[`docs/real_cohort_resource_hardening.md`](docs/real_cohort_resource_hardening.md)を
+参照してください。
 
 ---
 
@@ -1038,6 +1078,15 @@ Bootstrapped BQSRも、known-sites構築とそれが結果に与える影響が�
   実測に基づいて評価した(実行を伴わない)。詳細は
   [実データコホートE2E検証](#実データコホートe2e検証issue-26)と
   [`docs/real_cohort_e2e.md`](docs/real_cohort_e2e.md)を参照
+- Real-cohort downstream resourceハードニング(Issue #30): Issue #26の実測で判明した
+  `CLASSIFY_NORMALIZED_VARIANTS`・`SUMMARIZE_FILTER_QC`のOOM、`BUILD_GS_PANEL`の
+  headroom不足を、Issue #26自身の実artifactを使ったtargeted benchmarkで解決し、
+  無関係な軽量processを巻き込まない専用resourceラベルへ分離した。あわせて
+  `GATK_HAPLOTYPECALLER`の8 cpu対4 cpuを同一real BAMで隔離比較し、outputの意味的
+  等価性を確認したうえで4 cpuへ変更した(実行時間影響は約3.5%、理論上の同時実行数は
+  倍増)。20〜30検体規模はConditional Go(具体的な条件付き)。詳細は
+  [Real-cohort downstream resource hardening](#real-cohort-downstream-resource-hardeningissue-30)と
+  [`docs/real_cohort_resource_hardening.md`](docs/real_cohort_resource_hardening.md)を参照
 
 以下の解析・再現性機能は計画中です。
 

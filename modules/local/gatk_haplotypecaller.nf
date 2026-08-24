@@ -1,6 +1,9 @@
+// Issue #30: dedicated resource label, independent of process_high
+// (which GATK_GENOTYPEGVCFS also uses) -- see nextflow.config for the
+// real 8-vs-4-cpu benchmark this cpus value is based on.
 process GATK_HAPLOTYPECALLER {
     tag "${meta.id}"
-    label 'process_high'
+    label 'process_haplotypecaller'
 
     container 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
 
