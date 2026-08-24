@@ -1,4 +1,5 @@
-"""Regression guard for Issue #30's dedicated resource labels.
+"""Regression guard for Issue #30's dedicated resource labels and the
+process_high cpus change.
 
 Not a `bin/` CLI script test -- `nextflow.config`'s `withLabel` blocks
 are plain text (Groovy DSL) with no CLI surface to exercise, and the
@@ -35,6 +36,12 @@ LABEL_CONTRACTS = (
     ("process_variant_classification", "2", "{ 12.GB * task.attempt }", "'2h'"),
     ("process_variant_qc_summary", "2", "{ 12.GB * task.attempt }", "'2h'"),
     ("process_gs_panel", "2", "{ 8.GB * task.attempt }", "'2h'"),
+    # Issue #30's real-data GATK_HAPLOTYPECALLER 4-vs-8-cpu benchmark
+    # (same real BAM, isolated): ~3.5% wall-time difference, identical
+    # gVCF variant records, but double the theoretical concurrency at
+    # 4 cpus (floor(32/4)=8 vs floor(32/8)=4 on this host) -- see
+    # nextflow.config's own comment for the full numbers.
+    ("process_high", "4", "{ 16.GB * task.attempt }", "'24h'"),
 )
 
 TEST_PROFILE_LABELS = (
