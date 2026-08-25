@@ -33,14 +33,18 @@ MODULE_LABELS = (
 
 # (label, expected cpus, expected memory closure text, expected time)
 LABEL_CONTRACTS = (
-    # Issue #33: raised from Issue #30's 5-sample-sized values (12/12/8
-    # GiB) after a real 10-sample cohort run found each of these three
-    # processes' true peak RSS already exceeded them (28.47/16.28/12.65
-    # GiB respectively, measured at a generous 48 GiB ceiling) -- see
-    # nextflow.config's own comment for the full finding.
-    ("process_variant_classification", "2", "{ 40.GB * task.attempt }", "'2h'"),
+    # Issue #33: raised twice. First from Issue #30's 5-sample-sized
+    # values (12/12/8 GiB) after a real 10-sample cohort run found true
+    # peak RSS of 28.47/16.28/12.65 GiB. Then again after a real
+    # 20-sample cohort run found CLASSIFY_NORMALIZED_VARIANTS and
+    # BUILD_GS_PANEL's "successful" 10-sample-sized budgets were
+    # actually swap-assisted false positives (true peak 53.36/19.88
+    # GiB); SUMMARIZE_FILTER_QC's 22 GiB budget held genuinely at 20
+    # samples (true peak 19.91 GiB) and was left unchanged. See
+    # nextflow.config's own comment for the full findings.
+    ("process_variant_classification", "2", "{ 72.GB * task.attempt }", "'2h'"),
     ("process_variant_qc_summary", "2", "{ 22.GB * task.attempt }", "'2h'"),
-    ("process_gs_panel", "2", "{ 17.GB * task.attempt }", "'2h'"),
+    ("process_gs_panel", "2", "{ 27.GB * task.attempt }", "'2h'"),
     # process_high itself is unchanged (still cpus=8) -- Issue #30 only
     # benchmarked GATK_HAPLOTYPECALLER, not GATK_GENOTYPEGVCFS (this
     # label's other, unbenchmarked consumer), so the cpus value actually
