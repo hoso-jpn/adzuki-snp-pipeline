@@ -283,7 +283,163 @@ covers Stage 1 only and does not itself authorize Stage 2.
 
 ## Stage 2: 20-sample cohort
 
-_(Pending Stage 1 Gate approval. Not executed.)_
+### Accession selection
+
+10 additional accessions were approved from the same candidate-research process as Stage 1
+(next-smallest remaining WGS/paired-end runs in BioProject `PRJNA1138464`, unique BioSample,
+ENA-published MD5): `SRR29909124`, `SRR29909423`, `SRR29908965`, `SRR29909330`, `SRR29908836`,
+`SRR29909171`, `SRR29908888`, `SRR29909434`, `SRR29909384`, and (substituted for an
+originally-approved accession, see below) `SRR29909372`.
+
+`SRR29909293` was originally approved but its R2 FASTQ was found to be genuinely missing on
+ENA's mirror -- not a transient network issue: the file's own URL returned a persistent HTTP
+301 redirecting to itself with a trailing slash, and the resulting page was ENA's own Apache
+directory listing showing the "directory" as empty. Confirmed by checking `SRR29909293_1`'s
+same-directory URL, which returned a normal 200 with the correct `Content-Length`. This is a
+real upstream data-availability gap, not something retries could fix. `SRR29909372`
+(`SAMN42720914`, `AZ017`, the next-smallest unused candidate) was substituted with fresh human
+approval before any download of it began.
+
+Read-header inspection (whole-file consistency, all 10 samples) surfaced a **third** distinct
+real instrument-serial pattern not seen in Issue #26 or Stage 1: `ST-E00600` (6 of the 10 new
+samples) and `ST-E00575` (1 sample), alongside `E00361` (2 samples, same family already seen)
+and `A00609` (1 sample, the NovaSeq-pattern family). Across all 20 samples, at least 3-4
+distinct real instrument identities are now evidenced by read headers, none matching ENA's
+uniform `instrument_model=Illumina HiSeq X` metadata for this BioProject. As before, this is
+a serial-naming-convention inference, not a confirmed model lookup, and is not resolved one
+way or the other -- it is recorded as a fact about this data, consistent with this
+repository's standing practice since Issue #8.
+
+### Reuse strategy
+
+The existing 10 samples' upstream results (QC, mapping, dedup, HaplotypeCaller gVCFs) were
+reused via Nextflow's own `-resume` mechanism rather than recomputed: the 10-sample run's
+work directory was copied byte-for-byte to a new `runs/20sample/work/` (preserving Issue #33's
+own Stage 1 evidence untouched), and the 20-sample samplesheet's first 10 rows were kept
+byte-identical to the 10-sample samplesheet (same file paths, same read-group IDs, same
+library/platform fields) so Nextflow's task-hash cache would recognize them as unchanged
+inputs. This worked exactly as expected: the run log shows `cached: 10` for every one of the
+10 existing samples' per-sample tasks (FASTQC/fastp/mapping/dedup/HaplotypeCaller), while the
+10 new samples executed fresh, and every process downstream of Joint Genotyping (which
+depends on the full sample set) re-executed fresh against all 20 samples' real gVCFs --
+including benefiting automatically from the resource fix already applied to `nextflow.config`
+at that point (`556f38f`). Reused vs. recomputed status is recorded per-sample in the run's own
+Nextflow trace (`status` column: `CACHED` for the 10 reused, `COMPLETED` for the 10 new).
+
+### Execution
+
+Run via `nextflow run . -profile docker -resume`, executing against commit `556f38f` (the
+first resource-fix commit; the second fix below was produced *from* analyzing this run, so it
+postdates it).
+
+- Started: 2026-08-25T13:56:51Z. Completed: 2026-08-25T19:06:47Z (**5h 9m 54s** -- similar
+  total wall time to the 10-sample run despite double the samples, because 44.5% of CPU-hours
+  were served from cache).
+- `NEXTFLOW_RUN_EXIT=0`. 288 total task executions; 194 completed fresh, 94 cached, **0
+  failed** (unlike Stage 1, no OOM-triggered retry occurred on the first attempt this time --
+  see below for why that is not the full story).
+- CPU-hours: 186.1 (44.5% cached).
+
+### HaplotypeCaller concurrency
+
+Computed the same way as Stage 1, from the 10 *new* samples' real trace timestamps (the 10
+cached samples did not consume real compute this time): **real max concurrency reached 8 of
+the theoretical 8** -- the full theoretical ceiling, an improvement over Stage 1's 7/8. Peak
+RSS for the 10 new tasks ranged 8.1-11.5 GB, all comfortably within the 16 GiB budget. During
+this window, host `MemAvailable` never dropped below **69.6 GiB** and swap usage stayed at
+~0 -- HaplotypeCaller concurrency itself remains healthy at 20 samples.
+
+### Downstream resource: the fix did not fully hold at 20 samples either
+
+Two of the three processes fixed after Stage 1 again showed a resource problem, this time
+without an explicit OOM-kill:
+
+- `CLASSIFY_NORMALIZED_VARIANTS` "succeeded" on its first attempt but the trace reported peak
+  RSS of **39.9 GB against its 40 GiB budget** -- suspiciously close to the ceiling again.
+- `BUILD_GS_PANEL` "succeeded" at **exactly 17 GB against its 17 GiB budget**.
+- `SUMMARIZE_FILTER_QC (cohort:snp)` reported 19.9 GB against its 22 GiB budget (9.5%
+  headroom) and looked comparatively healthy.
+
+The host-level monitor shows this was not a coincidence: swap usage spiked to **7.21 GiB**
+during `CLASSIFY_NORMALIZED_VARIANTS`'s exact execution window, and to **5.42 GiB** during
+`BUILD_GS_PANEL`'s -- both real, measured, time-correlated swap events, confirming both
+"successes" were swap-assisted false positives, the identical pattern found (and supposedly
+fixed) after Stage 1. Because `CLASSIFY_NORMALIZED_VARIANTS` and `SUMMARIZE_FILTER_QC`
+happened to run concurrently in this production run, `SUMMARIZE_FILTER_QC`'s own reading could
+not be trusted at face value either without isolating it.
+
+Repeating the same benchmark methodology -- each process run **alone** (not concurrently, to
+avoid the exact cross-contamination risk above) against the real 20-sample cohort's own
+artifacts, at a generous 96 GiB ceiling:
+
+| Process | 10-sample true peak | 20-sample true peak | Previous budget | New budget | New headroom |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `CLASSIFY_NORMALIZED_VARIANTS` | 28.47 GiB | **53.36 GiB** | 40 GiB | 72 GiB | 25.9% |
+| `SUMMARIZE_FILTER_QC` (snp) | 16.28 GiB | **19.91 GiB** (genuine -- no swap spike in its own window) | 22 GiB | 22 GiB (unchanged) | 9.5% |
+| `BUILD_GS_PANEL` | 12.65 GiB | **19.88 GiB** | 17 GiB | 27 GiB | 26.4% |
+
+`SUMMARIZE_FILTER_QC`'s own true peak (19.91 GiB) closely matched its production trace
+reading (19.9 GB), confirming that specific reading was genuine despite running alongside a
+memory-starved sibling task -- its budget is left unchanged, though a 9.5% headroom is thin
+and worth re-checking at 30 samples rather than assumed safe. Growth from 10->20 samples was
+far from a consistent multiplier across processes (`BUILD_GS_PANEL` ~1.57x, `CLASSIFY_
+NORMALIZED_VARIANTS` ~1.87x, `SUMMARIZE_FILTER_QC` ~1.22x) -- underscoring again that this is
+observed, scale-specific evidence, not a formula to extrapolate to 30/327 samples.
+
+All three benchmark outputs were confirmed data-identical to the real 20-sample run's
+production outputs. **Fix applied** (commit `e70529e`): `process_variant_classification` and
+`process_gs_panel` raised to 72/27 GiB; `process_variant_qc_summary` left at 22 GiB. Full
+regression (252 unit tests, `nextflow lint .` 35/0, `git diff --check`, the same 26-test
+nf-test suite) passed. As with Stage 1, the full 20-sample E2E pipeline was not re-executed
+after this second fix.
+
+### Joint Genotyping
+
+`GATK_GENOMICSDBIMPORT`/`GATK_GENOTYPEGVCFS` (36 intervals each, `process_genomicsdb`/
+`process_high`, unchanged) completed with no OOM/retry across all real 20-sample tasks.
+
+### Storage
+
+| Location | Size |
+| --- | ---: |
+| `input/` (20 samples' FASTQ, existing + new) | 42.0 GB |
+| `runs/20sample/work/` (includes a full copy of Stage 1's own work dir for `-resume`) | 273.1 GB |
+| `runs/20sample/results/` (published outputs) | 133.1 GB |
+| Host free space before / after | 2.9 TB / 2.5 TB |
+
+Storage remains far from a constraint on this host; the `-resume`-copy approach roughly
+doubles the transient work-directory footprint relative to a from-scratch run, a one-time
+cost of this reuse strategy, not a persistent one (Stage 1's own `runs/10sample/` is
+untouched and could be deleted once Stage 2's results are confirmed independently valid).
+
+### Sample and variant accounting
+
+- `bcftools query -l cohort.raw.vcf.gz`: exactly 20 unique samples, matching the samplesheet
+  with no duplication or loss.
+- Raw/all: 12,059,905 records (10,296,980 SNP + 1,649,635 indel; 113,290
+  `records_not_selected`; 0 `snp_indel_duplicate_records`). Ti/Tv 1.85 (stable across all
+  three scales measured so far). Missing genotypes 25,027,068/241,198,100 (10.4% -- lower
+  than the 10-sample cohort's 12.3%; missingness is not expected to move monotonically with
+  sample count, since it depends on which specific samples/coverage depths are added).
+
+### GS panel accounting
+
+`panel_status: populated`. Matrix 9,252,873 variant rows x 20 sample columns; variant
+metadata 9,252,873 rows; sample metadata 20 rows -- all three cross-checked and agreeing, per
+the pipeline's own internal record accounting.
+
+### 20-sample Gate decision: **GO**
+
+| Criterion | Result |
+| --- | --- |
+| E2E completes stably | Yes -- exit 0, and (after the second fix) no swap-assisted false positives remain unaddressed |
+| Memory/swap/retry with no unacceptable operational behavior | The two swap-assisted successes were caught and fixed, not left as silent risk |
+| Downstream positive headroom, or fix completed + regression | Fix completed (commit `e70529e`), full regression green |
+| Storage headroom sufficient | Yes -- 2.5 TB free after the run |
+| Does 30 samples add useful new information? | Yes -- see below |
+
+**Proceeding to Stage 3 (30 samples) requires separate human approval before any additional
+accession is downloaded**, exactly as for Stage 2.
 
 ## Stage 3: 30-sample cohort
 
