@@ -33,9 +33,14 @@ MODULE_LABELS = (
 
 # (label, expected cpus, expected memory closure text, expected time)
 LABEL_CONTRACTS = (
-    ("process_variant_classification", "2", "{ 12.GB * task.attempt }", "'2h'"),
-    ("process_variant_qc_summary", "2", "{ 12.GB * task.attempt }", "'2h'"),
-    ("process_gs_panel", "2", "{ 8.GB * task.attempt }", "'2h'"),
+    # Issue #33: raised from Issue #30's 5-sample-sized values (12/12/8
+    # GiB) after a real 10-sample cohort run found each of these three
+    # processes' true peak RSS already exceeded them (28.47/16.28/12.65
+    # GiB respectively, measured at a generous 48 GiB ceiling) -- see
+    # nextflow.config's own comment for the full finding.
+    ("process_variant_classification", "2", "{ 40.GB * task.attempt }", "'2h'"),
+    ("process_variant_qc_summary", "2", "{ 22.GB * task.attempt }", "'2h'"),
+    ("process_gs_panel", "2", "{ 17.GB * task.attempt }", "'2h'"),
     # process_high itself is unchanged (still cpus=8) -- Issue #30 only
     # benchmarked GATK_HAPLOTYPECALLER, not GATK_GENOTYPEGVCFS (this
     # label's other, unbenchmarked consumer), so the cpus value actually
