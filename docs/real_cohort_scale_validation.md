@@ -71,8 +71,11 @@ stale relative to code:
 | `process_variant_qc_summary` | 2 | 12 GiB | 2h | `SUMMARIZE_FILTER_QC` |
 | `process_gs_panel` | 2 | 8 GiB | 2h | `BUILD_GS_PANEL` |
 
-All `memory` values are `{ N.GB * task.attempt }` closures; `maxRetries = 1`;
-`errorStrategy` retries only on exit 137/140/143 (OOM-like), otherwise terminates. At 32
+Most OOM-retryable labels use `{ N.GB * task.attempt }` with `maxRetries = 1` and retry
+only on exit 137/140/143. `process_variant_classification` is an intentional exception:
+it is fixed at its 20-sample-validated 72 GiB budget and fails fast, because doubling to
+144 GiB would exceed Seedcore-01's physical-memory envelope and undermine Issue #33's
+scale-rebenchmarking policy. At 32
 logical CPUs, `process_haplotypecaller` (4 cpus/task) permits up to `floor(32/4) = 8`
 concurrent `GATK_HAPLOTYPECALLER` tasks in theory -- whether that is actually reached under
 real scheduling/contention is exactly what Stage 1 measures below, not assumed.
@@ -393,6 +396,40 @@ regression (252 unit tests, `nextflow lint .` 35/0, `git diff --check`, the same
 nf-test suite) passed. As with Stage 1, the full 20-sample E2E pipeline was not re-executed
 after this second fix.
 
+### Review follow-up: 72 GiB CLASSIFY replay
+
+PR review identified that the global retry contract would turn the 72 GiB first attempt
+into a 144 GiB retry, beyond Seedcore-01's 123 GiB physical-RAM envelope. The production
+contract was therefore changed to fixed 72 GiB, `errorStrategy = 'terminate'`, and
+`maxRetries = 0`. OOM is now a signal to preserve the evidence and re-benchmark that
+cohort scale, rather than to push through via a host-unsafe retry.
+
+The existing 20-sample real artifact was replayed in isolation in the pinned Python
+container with Docker `--memory=72g --memory-swap=72g` (no container swap allowance):
+
+| Measurement | Result |
+| --- | --- |
+| Input | `cohort_gs.normalized.vcf.gz` from the Stage 2 production results |
+| Input SHA256 | `bff0d959554dbf5660ff208b01eb4e2e5b11ff6f9bd7b14b5bd37af1bbebf03a` |
+| Pipeline/script commit | `2a5aa7288ead28ab395b430bacd7cd8d98e67d4d` (classifier script SHA256 `62a314ac407a9e6e7de2a7d6a32a20d689e49bdc062f98112497a35fdd1303e5`) |
+| Container | `python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7` |
+| Memory ceiling | 72 GiB |
+| Wall time | 1m32.064s |
+| Peak cgroup memory | 52.99 GiB (56,895,574,016 bytes) |
+| Minimum host `MemAvailable` | 67.21 GiB (72,163,557,376 bytes) |
+| Host swap before / peak / delta | 2.458 / 2.458 / **0 GiB** (2,638,778,368 / 2,638,778,368 / 0 bytes) |
+| Container swap peak | 0 bytes |
+| Exit / OOM | 0 / false |
+| Output records | 10,556,952 |
+| Semantic equivalence | Exact match to the production pre-index CLASSIFY VCF; all classification/accounting metrics also match |
+
+Two warm-up runs were not accepted as no-swap evidence: although both exited 0 with zero
+container swap, the host swapped out 1.35 GiB and then 95.7 MiB of other resident pages.
+The final confirmatory run above started after that cold-page eviction had stabilized and
+had zero host swap delta. This preserves the Issue #33 rule that a swap-assisted completion
+is not evidence of real headroom. At 20 samples, 72 GiB is therefore confirmed operational;
+the result is not extrapolated to 30 or 327 samples.
+
 ### Joint Genotyping
 
 `GATK_GENOMICSDBIMPORT`/`GATK_GENOTYPEGVCFS` (36 intervals each, `process_genomicsdb`/
@@ -436,7 +473,7 @@ the pipeline's own internal record accounting.
 | Memory/swap/retry with no unacceptable operational behavior | The two swap-assisted successes were caught and fixed, not left as silent risk |
 | Downstream positive headroom, or fix completed + regression | Fix completed (commit `e70529e`), full regression green |
 | Storage headroom sufficient | Yes -- 2.5 TB free after the run |
-| Does 30 samples add useful new information? | Yes -- see below |
+| Should Stage 3 be executed? | No -- after human review, the potential pure scale-validation value was judged insufficient relative to added compute/download cost because the same resource-budget failure pattern had already recurred at both 10 and 20 samples |
 
 **Proceeding to Stage 3 (30 samples) requires separate human approval before any additional
 accession is downloaded**, exactly as for Stage 2.
@@ -506,6 +543,12 @@ Issue twice caught and fixed.
    transfer to a different machine or dataset without its own re-verification.
 5. 30-sample scale itself was never executed; treat any claim about 30-sample behavior as
    inferred from the 20-sample trend, not measured.
+6. `process_variant_qc_summary` and `process_gs_panel` retain the global OOM retry contract:
+   their individual second attempts request 44 and 54 GiB, respectively, which are each
+   inside this host's physical-memory envelope. They were not changed without new evidence.
+   If both retries overlap, however, their combined 98 GiB request leaves limited room for
+   the OS, filesystem cache, containers, and other pipeline tasks; concurrent retry behavior
+   remains a host-contention limitation to monitor rather than a claim of proven safety.
 
 **What this GO does not mean**: it does not mean 20-30 samples has a guaranteed production
 SLA, that the full 327-sample cohort has been validated in any way, or that resource budgets
@@ -533,6 +576,12 @@ scope, per this Issue's own body):
 
 - **327-sample full cohort**: not attempted, not modeled quantitatively beyond the
   qualitative resource-scaling caution above.
+- **Manifest resource provenance**: the historical 10- and 20-sample manifests record
+  material scientific parameters, container digests, and their run commits, but do not
+  embed label-level CPU/memory contracts directly. Those historical contracts are
+  reconstructed from each manifest's immutable `git_commit` and the corresponding
+  `nextflow.config`; the manifests were not retroactively edited to imply that this later
+  72 GiB fail-fast policy existed during the original runs.
 - **`genomicsdb_batch_size` (default 50)**: its actual batching/consolidation behavior has
   now been left unexercised across three real scales (5, 10, 20 samples), all below the
   default. A cohort at or above 50 samples is the first point this becomes observable.
