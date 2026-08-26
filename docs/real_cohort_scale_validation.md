@@ -443,13 +443,106 @@ accession is downloaded**, exactly as for Stage 2.
 
 ## Stage 3: 30-sample cohort
 
-_(Pending Stage 2 Gate approval and a decision that 30 samples adds sufficient information.
-Not executed.)_
+**Not executed, by explicit human decision after reviewing Stage 2's results.**
 
-## Final operational decision
+Rationale: the same class of downstream memory regression -- a budget sized from real
+evidence at one scale turning out to be a swap-assisted false positive at the next scale --
+occurred at both the 10-sample and 20-sample transitions. Each time, isolated real-data
+benchmarking correctly identified the true peak RSS and a fix was applied and verified. This
+repeating pattern is itself the substantive finding this Issue set out to produce: real
+memory usage for `CLASSIFY_NORMALIZED_VARIANTS`, `SUMMARIZE_FILTER_QC`, and `BUILD_GS_PANEL`
+does not scale in a way that can be predicted once and trusted at the next cohort size --
+it must be re-verified against real data at whatever scale is actually run. A third
+repetition at 30 samples would very likely reconfirm the same lesson (another budget
+exceeded, another fix, another verification) without adding a qualitatively different
+finding, at the cost of several more hours of real compute and, per the approved candidates
+list already prepared for it, 10 more real downloads. Given that, proceeding to 30 samples
+was judged to add limited additional information relative to its cost, and the decision was
+made to treat the 20-sample result as sufficient evidence for this Issue's purpose.
 
-_(Pending all executed stages.)_
+This is not a claim that 30 (or more) samples would fail -- only that this specific question
+(is a once-benchmarked resource budget still valid at the next scale) has already been
+answered twice in the negative, and a third confirmation was not judged worth its cost. The
+Stage 3 candidate pool identified during this Issue's own research (10 further unused
+WGS/paired-end accessions from `PRJNA1138464`) remains available, undownloaded, if a future
+Issue decides differently.
+
+## Final operational decision: **CONDITIONAL GO**
+
+For 20-30 real samples as a commissioned-analysis scale on `seedcore-01`, using this exact
+pipeline configuration and reference:
+
+**What GO means here**: at 20 samples specifically, every resource blocker actually found by
+real execution evidence (HaplotypeCaller concurrency, and three downstream processes' memory
+budgets) has been fixed and re-verified against real data, not assumed from theory or
+extrapolated from a smaller cohort. HaplotypeCaller concurrency reached the full theoretical
+maximum (8 of 8) with no host memory pressure. Sample, variant, and GS panel accounting are
+all internally consistent at both 10 and 20 samples.
+
+**Why "conditional", not an unconditional GO**: the central, repeated finding of this Issue
+is that these downstream memory budgets have **not** stabilized across the three scales
+measured so far (5 -> 10 -> 20 samples) -- each scale's real true peak RSS exceeded the
+previous scale's fixed budget, by inconsistent multipliers (1.2x-1.9x per 2x sample-count
+increase, not a fixed formula). Treating the current (post-20-sample-fix) budgets as safe
+for a future 25-30 sample run without re-measurement would repeat exactly the mistake this
+Issue twice caught and fixed.
+
+**Conditions for treating 20-30 samples as GO in a future commissioned engagement:**
+
+1. Before running any real cohort at a sample count not already measured here (i.e. not
+   exactly 10 or 20), re-run the isolated true-peak-RSS benchmark for
+   `CLASSIFY_NORMALIZED_VARIANTS`, `SUMMARIZE_FILTER_QC`, and `BUILD_GS_PANEL` against that
+   cohort's own real, already-produced artifacts before trusting the existing budgets --
+   do not assume linear extrapolation from the 5/10/20-sample figures in this document.
+2. `SUMMARIZE_FILTER_QC`'s 22 GiB budget currently has only 9.5% headroom at 20 samples (true
+   peak 19.91 GiB) -- treat this as the most likely next process to need re-fitting, not as
+   settled.
+3. `genomicsdb_batch_size` (default 50) remains completely unexercised in its actual batching
+   behavior at every scale measured so far (5, 10, 20 -- all below 50); a future cohort at or
+   above 50 samples must treat GenomicsDBImport's batching behavior as unvalidated, not
+   assumed safe by extension of this Issue's own findings.
+4. This evidence is specific to this reference (Longxiaodou 4), this pipeline configuration,
+   and this physical host (`seedcore-01`, 32 logical CPUs / 123 GiB RAM); it does not
+   transfer to a different machine or dataset without its own re-verification.
+5. 30-sample scale itself was never executed; treat any claim about 30-sample behavior as
+   inferred from the 20-sample trend, not measured.
+
+**What this GO does not mean**: it does not mean 20-30 samples has a guaranteed production
+SLA, that the full 327-sample cohort has been validated in any way, or that resource budgets
+found sufficient here will remain sufficient without the re-verification step in condition 1
+above.
+
+## Issue #1 (#I) completion assessment
+
+Issue #1's tracking item #I calls for cohort validation at "3-5 samples and 20-30 samples."
+The 3-5 sample side was already completed and closed via Issue #26. For the 20-30 sample
+side: a real 20-sample cohort completed end-to-end with a documented, evidence-based
+CONDITIONAL GO, and 30 samples was deliberately not executed for the reasons stated above,
+with that decision itself backed by real evidence (the repeating resource-regression
+pattern) rather than being skipped without justification. Whether this satisfies #I's intent
+is ultimately Issue #1's own call, not decided unilaterally here -- Issue #1 itself is not
+being closed by this Issue or this PR. What can be stated factually: the 20-30 sample range
+now has real, benchmarked execution evidence at 20 samples specifically (not merely
+extrapolated), which is a materially different state than before this Issue, even though 30
+samples itself remains unexecuted.
 
 ## Limitations and 327-sample unresolved risks
 
-_(Pending final stage.)_
+Carried over from Issue #26/#30, still unresolved by this Issue (all explicitly out of
+scope, per this Issue's own body):
+
+- **327-sample full cohort**: not attempted, not modeled quantitatively beyond the
+  qualitative resource-scaling caution above.
+- **`genomicsdb_batch_size` (default 50)**: its actual batching/consolidation behavior has
+  now been left unexercised across three real scales (5, 10, 20 samples), all below the
+  default. A cohort at or above 50 samples is the first point this becomes observable.
+- **`--sample-name-map`**: not exercised; relevant once GenomicsDBImport batching itself
+  becomes relevant at larger scale.
+- **Interval splitting / small-scaffold grouping / `ReblockGVCFs`**: none of these
+  large-cohort-oriented optimizations have been implemented or measured.
+- **Hard-filter thresholds, MAF/call-rate filtering, LD pruning, imputation, GS model
+  training, GWAS, ARMS marker design, GPU/Parabricks**: all remain entirely out of scope,
+  as in Issue #26/#30.
+- **Downstream memory scaling formula**: explicitly not modeled. Three real data points
+  (5, 10, 20 samples) show inconsistent per-process growth multipliers; no functional form
+  is asserted to predict 25, 30, or 327-sample requirements from these figures.

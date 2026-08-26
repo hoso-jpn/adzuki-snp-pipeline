@@ -36,7 +36,8 @@ nf-testスイートがJoint Genotyping fixture契約・GenomicsDBImportのbatch-
 | パイプラインレベルテスト | 部分実装 | syntheticなDocker smoke testが3リードグループ・2サンプルGVCF・両locusで確信度の高い`1/1`/`0/0`遺伝子型を持つ2つのraw SNP・ハードフィルタannotation・indexed PASS出力・7種のvariant QCタスク・38個のQC成果物・GSパネルのempty-panel契約を検証する。[nf-test](https://www.nf-test.com/)によるpipeline-level testがこの契約を自動化し(`tests/pipeline/adzuki_snp_pipeline.nf.test`)、haploid(`sample_ploidy=1`、`enable_gs_panel=false`)のend-to-end遺伝子型契約とGSパネル有効時の`sample_ploidy=1`拒否(Issue #20)、mappingタスク数と重複マーク件数の厳密一致・負の`optical_duplicate_pixel_distance`拒否・prebuilt BWA-MEM2 indexパス(Issue #8)、`genomicsdb_batch_size`の伝播とXmx比率・prebuilt/生成両方の参照bundle・contig順序不一致の拒否(Issue #11)を検証する追加testを含む。module-level nf-testは実際にpinされたcontainerに対して、`GATK_SELECTVARIANTS`がMIXED型レコードをSNP/indel双方の選択から除外すること(`tests/modules/gatk_selectvariants.nf.test`)、`GS_NORMALIZE_VARIANTS`がMIXEDレコードを正しい遺伝子型再割当てで分割すること(`tests/modules/gs_normalize_variants.nf.test`)、`BWA_MEM2_MEM_SORT`が中間`.sam`を生成せず文書化されたCPU分割を適用すること(`tests/modules/bwa_mem2_mem_sort.nf.test`)、`VALIDATE_REFERENCE_CONTIGS`がFAI/dictの名前・長さ・順序不一致を検出すること(`tests/modules/validate_reference_contigs.nf.test`)、`GATK_GENOMICSDBIMPORT`/`GATK_GATHERVCFS`が単一sample入力(Nextflowのpath入力がList→scalarへ暗黙変換される境界条件)を正しく扱うこと(`tests/modules/gatk_genomicsdbimport.nf.test`、`tests/modules/gatk_gathervcfs.nf.test`)を確認する。全モジュールを網羅するnf-testは[Issue #1](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/1) #Gで計画中 |
 | Functional CI | syntheticフィクスチャpathで実装済み | `.github/workflows/test.yml`が`nextflow lint .`と結合nf-testスイート(pipeline-level + module-level、`-profile test,docker`)をmain向けのpush/pull requestごとに実行する。`.github/workflows/lint.yml`はリポジトリ構造のみを個別に検査する。実データコホートのCIはスコープ外 |
 | 実データコホート検証(Issue #26) | 5検体E2E検証を実施 | 公開WGSデータ5検体(同一BioProject)をSeedcore-01実機でQC→mapping→重複マーク→gVCF→Joint Genotyping→hard filtering→variant QC→GSパネルまで通した。詳細は[実データコホートE2E検証](#実データコホートe2e検証issue-26)を参照。20〜30検体・327検体規模の拡張は未実施(意図的にスコープ外) |
-| Real-cohort downstream resourceハードニング(Issue #30) | targeted benchmarkで対応済み、20〜30検体はConditional Go | Issue #26の実測で判明した`process_low`のOOM・GATK_HAPLOTYPECALLERのCPU競合を、Issue #26自身の実artifactを使ったtargeted benchmarkで解決。詳細は[Real-cohort downstream resource hardening](#real-cohort-downstream-resource-hardeningissue-30)を参照 |
+| Real-cohort downstream resourceハードニング(Issue #30) | targeted benchmarkで対応済み(5検体規模) | Issue #26の実測で判明した`process_low`のOOM・GATK_HAPLOTYPECALLERのCPU競合を、Issue #26自身の実artifactを使ったtargeted benchmarkで解決。詳細は[Real-cohort downstream resource hardening](#real-cohort-downstream-resource-hardeningissue-30)を参照 |
+| 10→20検体 real cohort段階検証(Issue #33) | 20検体E2E完了、Conditional Go、30検体は明示的な判断でスキップ | 既存5+追加5→10検体、10検体+追加10→20検体でE2Eを実行。HaplotypeCaller実concurrencyは20検体で理論値8に対し実測8(100%)。downstream memory(`CLASSIFY_NORMALIZED_VARIANTS`/`SUMMARIZE_FILTER_QC`/`BUILD_GS_PANEL`)は10検体・20検体それぞれで実測に基づく再修正が2回連続で必要になった(swap-assisted false positiveを都度検出・修正)。この再発パターン自体が主要な知見であり、30検体の追加実行は情報量に対するコストが高いと判断し省略。詳細は[`docs/real_cohort_scale_validation.md`](docs/real_cohort_scale_validation.md)を参照 |
 | Base Quality Score Recalibration (BQSR) | 意図的に除外 | 検証済みのknown-sitesリソースが存在しない。[設計判断](#設計判断)を参照 |
 | 本番利用 | 非対応 | これは実験的な植物研究リポジトリである |
 
@@ -1084,9 +1085,21 @@ Bootstrapped BQSRも、known-sites構築とそれが結果に与える影響が�
   無関係な軽量processを巻き込まない専用resourceラベルへ分離した。あわせて
   `GATK_HAPLOTYPECALLER`の8 cpu対4 cpuを同一real BAMで隔離比較し、outputの意味的
   等価性を確認したうえで4 cpuへ変更した(実行時間影響は約3.5%、理論上の同時実行数は
-  倍増)。20〜30検体規模はConditional Go(具体的な条件付き)。詳細は
+  倍増)。5検体規模での実測に基づく判断であり、20〜30検体規模の最終判断はIssue #33を参照。
+  詳細は
   [Real-cohort downstream resource hardening](#real-cohort-downstream-resource-hardeningissue-30)と
   [`docs/real_cohort_resource_hardening.md`](docs/real_cohort_resource_hardening.md)を参照
+- 10→20検体 real cohort段階検証(Issue #33): Issue #26/#30の5検体実測を土台に、
+  10検体→20検体へ段階的に拡張した。既存サンプルの上流処理(mapping・重複マーク・
+  HaplotypeCaller)は`nextflow -resume`で再利用し(samplesheetの該当行をbyte-identicalに
+  保つことでcache hitを確認)、追加サンプルのみ実計算した。HaplotypeCaller実concurrencyは
+  20検体で理論値8に対し実測8(100%)。一方、Issue #30で5検体規模から算出した
+  `CLASSIFY_NORMALIZED_VARIANTS`・`SUMMARIZE_FILTER_QC`・`BUILD_GS_PANEL`のmemory budgetは
+  10検体・20検体への拡張のたびに実測を超え、host-level swap monitoringでswap-assisted
+  false positiveと確認したうえで2回連続して実データbenchmarkに基づく再修正を行った。この
+  再発パターン自体を主要な知見とし、30検体規模の追加実行はコストに対する追加情報量が
+  限定的と判断してスキップした(明示的な判断であり、未検証というだけではない)。
+  20〜30検体規模の最終判断はConditional Go(具体的な条件は[`docs/real_cohort_scale_validation.md`](docs/real_cohort_scale_validation.md)参照)
 
 以下の解析・再現性機能は計画中です。
 
@@ -1095,7 +1108,7 @@ Bootstrapped BQSRも、known-sites構築とそれが結果に与える影響が�
   (Issue #1 #G)
 - `genomic-prediction-resnet-hybrid`におけるアズキ/VCFパネルのingestion経路(そのリポジトリ側の
   follow-up issueとして追跡。ここではスコープ外)
-- 20〜30検体・327検体規模でのコホート検証(Issue #26)
+- 327検体規模でのコホート検証(20検体規模はIssue #33で完了、30検体は明示的判断でスキップ -- 詳細は[`docs/real_cohort_scale_validation.md`](docs/real_cohort_scale_validation.md)を参照)
 
 ある能力は、対応するコードと検証がこのリポジトリに実際に存在して初めて実装済みとみなされます。
 
