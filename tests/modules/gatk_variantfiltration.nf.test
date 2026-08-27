@@ -1,0 +1,535 @@
+nextflow_process {
+
+    name "GATK_VARIANTFILTRATION hard-filter input contract"
+    script "modules/local/gatk_variantfiltration.nf"
+    process "GATK_VARIANTFILTRATION"
+
+    // Issue #17: this module had no module-level test at all, so its
+    // defensive branches (empty filter list, missing name/expression)
+    // were unreachable from the pipeline -- workflows/adzuki_snp_pipeline.nf
+    // only ever builds literal, well-formed lists -- and therefore never
+    // executed. Every negative case below drives the process directly,
+    // which is the boundary those checks now live on.
+    //
+    // tests/modules/fixtures/variantfiltration_contract.vcf.gz is
+    // hand-written plain VCF (bgzipped and tabix-indexed) against the
+    // synthetic reference contigs, carrying only the QD/SOR annotations
+    // and QUAL values the filters below evaluate, so each record's
+    // expected FILTER value is deterministic:
+    //   chrSynthetic1:1000  QUAL=100  QD=25.00  SOR=0.500  -> passes all
+    //   chrSynthetic1:2000  QUAL=100  QD=1.00   SOR=0.500  -> QD only
+    //   chrSynthetic1:3000  QUAL=10   QD=25.00  SOR=9.000  -> QUAL + SOR
+    //   chrSynthetic2:1000  QUAL=100  QD=25.00  SOR=0.500  -> passes all
+    //
+    // The filter names/thresholds in the positive cases are this test's
+    // own literal input, deliberately spelled the same as the pipeline's
+    // real SNP hard filters so the test is representative. They are NOT
+    // a second definition of params.snp_filter_*: changing a threshold
+    // in nextflow.config does not and should not change these, and the
+    // scientific thresholds themselves are out of scope for Issue #17.
+
+    test("a valid SNP filter list tags exactly the records that fail it, and passes the rest") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'SNP_QD_LOW',   expression: 'QD < 2.0' ],
+                        [ name: 'SNP_QUAL_LOW', expression: 'QUAL < 30.0' ],
+                        [ name: 'SNP_SOR_HIGH', expression: 'SOR > 3.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // meta is passed through untouched, and the output
+            // filename/index contract is derived from it
+            assert process.out.vcf.size() == 1
+            assert process.out.vcf[0][0] == [ id: 'cohort', variant_type: 'snp' ]
+            assert process.out.vcf[0][1].endsWith("cohort.snp.filtered.vcf.gz")
+            assert process.out.vcf[0][2].endsWith("cohort.snp.filtered.vcf.gz.tbi")
+            assert path(process.out.vcf[0][2]).exists()
+
+            def lines = path(process.out.vcf[0][1]).linesGzip
+            def records = lines.findAll { line -> !line.startsWith("#") }
+            assert records.size() == 4
+
+            // FILTER values, keyed by contig:position. GATK writes
+            // multiple tags joined by ';' in an order it chooses, so
+            // compare as sets rather than as a literal string.
+            def filtersByLocus = records.collectEntries { line ->
+                def fields = line.split("\t")
+                [("${fields[0]}:${fields[1]}".toString()): (fields[6].split(";") as Set)]
+            }
+            assert filtersByLocus["chrSynthetic1:1000"] == ["PASS"] as Set
+            assert filtersByLocus["chrSynthetic1:2000"] == ["SNP_QD_LOW"] as Set
+            assert filtersByLocus["chrSynthetic1:3000"] == ["SNP_QUAL_LOW", "SNP_SOR_HIGH"] as Set
+            assert filtersByLocus["chrSynthetic2:1000"] == ["PASS"] as Set
+
+            // every configured filter is declared in the header, so the
+            // FILTER tags above are self-describing in the artifact
+            def filterHeaderIds = lines
+                .findAll { line -> line.startsWith("##FILTER=<ID=") }
+                .collect { line -> (line =~ /##FILTER=<ID=([^,>]+)/)[0][1] }
+            assert filterHeaderIds.containsAll(["SNP_QD_LOW", "SNP_QUAL_LOW", "SNP_SOR_HIGH"])
+        }
+    }
+
+    // Issue #17 shell-argument safety. A GATK JEXL expression may
+    // legitimately contain single-quoted string literals, and the
+    // previous "--filter-expression '${expression}'" interpolation broke
+    // on exactly that: the embedded quote closed the shell's quoting
+    // early and handed the remainder to the shell (reachable from the
+    // CLI, since the real expressions embed --snp_filter_* params).
+    // With POSIX '\'' quoting the expression reaches GATK byte for byte,
+    // which is what this test proves end to end -- the record on
+    // chrSynthetic2 is tagged, so GATK really did evaluate the quoted
+    // literal rather than the shell mangling it.
+    test("a filter expression containing single quotes and shell metacharacters reaches GATK intact") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'QUOTED_CONTIG', expression: "CHROM == 'chrSynthetic2'" ],
+                        [ name: 'COMPOUND_LOW',  expression: 'QD < 2.0 && SOR < 3.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def records = path(process.out.vcf[0][1])
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            def filtersByLocus = records.collectEntries { line ->
+                def fields = line.split("\t")
+                [("${fields[0]}:${fields[1]}".toString()): (fields[6].split(";") as Set)]
+            }
+
+            // the single-quoted JEXL string literal was evaluated
+            assert filtersByLocus["chrSynthetic2:1000"] == ["QUOTED_CONTIG"] as Set
+            // and the '&&' / '<' compound expression too
+            assert filtersByLocus["chrSynthetic1:2000"] == ["COMPOUND_LOW"] as Set
+            assert filtersByLocus["chrSynthetic1:1000"] == ["PASS"] as Set
+            assert filtersByLocus["chrSynthetic1:3000"] == ["PASS"] as Set
+        }
+    }
+
+    // Issue #17: an empty list is a configuration error, not a
+    // successful no-op. GATK_VARIANTFILTRATION *is* the hard-filtering
+    // step, so accepting [] would publish a cohort.snp.filtered.vcf.gz
+    // whose name claims filtering was applied while every record is
+    // unfiltered PASS -- and GATK_SELECTPASSVARIANTS downstream would
+    // then pass the entire raw callset through as though it had been
+    // filtered.
+    test("an empty filter list fails fast instead of publishing an unfiltered 'filtered' VCF") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    []
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("no hard filters were configured for snp")
+            assert output.contains("not a no-op")
+        }
+    }
+
+    test("a null filter list is rejected as a non-list, naming the type it got") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    null
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("must be a list")
+            assert output.contains("null")
+        }
+    }
+
+    test("a filter with no 'name' key is rejected, naming its position in the list") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'SNP_QD_LOW', expression: 'QD < 2.0' ],
+                        [ expression: 'SOR > 3.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("hard filter 2 of 2 for snp is missing 'name'")
+        }
+    }
+
+    test("a filter with a null 'name' is rejected") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: null, expression: 'QD < 2.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("has a null 'name'")
+        }
+    }
+
+    test("a filter with an empty-string 'name' is rejected") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: '', expression: 'QD < 2.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("has a blank 'name'")
+        }
+    }
+
+    // The case a bare Groovy truthiness check (`if (!name)`) misses
+    // entirely: "   " is a non-empty String and therefore truthy, so the
+    // previous contract accepted it and passed a whitespace-only
+    // --filter-name to GATK.
+    test("a whitespace-only 'name' is rejected, which a bare Groovy truthiness check would have accepted") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: '   ', expression: 'QD < 2.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("has a blank 'name'")
+        }
+    }
+
+    test("a filter with no 'expression' key is rejected, naming its position in the list") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'SNP_QD_LOW' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("hard filter 1 of 1 for snp is missing 'expression'")
+        }
+    }
+
+    test("a filter with a null 'expression' is rejected") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'SNP_QD_LOW', expression: null ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("has a null 'expression'")
+        }
+    }
+
+    test("a whitespace-only 'expression' is rejected") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'SNP_QD_LOW', expression: '  \\t ' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("has a blank 'expression'")
+        }
+    }
+
+    test("a non-string 'expression' is rejected rather than stringified into the GATK argument") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'SNP_QD_LOW', expression: [ 'QD', '<', 2.0 ] ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("has a non-string 'expression'")
+        }
+    }
+
+    // Issue #17: two filters sharing a FILTER id make the output VCF
+    // unauditable -- a record tagged QD_LOW no longer says which of the
+    // two thresholds it failed, and summarize_filter_qc.py's per-tag
+    // counts silently merge them.
+    test("two filters sharing a name are rejected, naming both positions") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'QD_LOW', expression: 'QD < 2.0' ],
+                        [ name: 'QD_LOW', expression: 'QD < 3.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("duplicate hard filter name 'QD_LOW' for snp")
+            assert output.contains("filters 1 and 2 share it")
+        }
+    }
+
+    // 'PASS' is the VCF-reserved value for "passed all filters".
+    // Tagging a failing record with it would make that record
+    // indistinguishable from a passing one, and
+    // GATK_SELECTPASSVARIANTS's --exclude-filtered would then keep
+    // records this step meant to drop.
+    test("a filter named 'PASS' is rejected as a reserved VCF FILTER value") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'PASS', expression: 'QD < 2.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("is reserved")
+        }
+    }
+
+    // A VCF FILTER id cannot contain whitespace or ';' (the FILTER
+    // field's own separator), so a name -- unlike a JEXL expression --
+    // takes a strict allowlist rather than relying on shell quoting
+    // alone.
+    test("a filter name containing whitespace is rejected as an invalid VCF FILTER id") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'SNP QD LOW', expression: 'QD < 2.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("invalid hard filter name 'SNP QD LOW'")
+        }
+    }
+
+    // The injection shape the old interpolation was vulnerable to: a
+    // single quote in a filter *name* closed --filter-name's quoting and
+    // let the rest run as shell. The name allowlist now rejects it
+    // outright, before quoting even matters.
+    test("a filter name containing a single quote is rejected outright") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: "QD'; touch /tmp/nf-test-injection; echo '", expression: 'QD < 2.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("invalid hard filter name")
+        }
+    }
+
+    // Issue #17: the GS lineage reuses this same module as
+    // GATK_VARIANTFILTRATION_GS with meta.variant_type='snp' and the
+    // same SNP hard filters, so the contract above has to hold for a
+    // 'cohort_gs'-flavoured meta too -- the filename and index are
+    // derived from meta, and nothing about the validation is specific to
+    // the primary lineage.
+    test("the same contract holds for the GS lineage's own meta and filenames") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort_gs', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'SNP_QD_LOW', expression: 'QD < 2.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.vcf[0][0] == [ id: 'cohort_gs', variant_type: 'snp' ]
+            assert process.out.vcf[0][1].endsWith("cohort_gs.snp.filtered.vcf.gz")
+            assert process.out.vcf[0][2].endsWith("cohort_gs.snp.filtered.vcf.gz.tbi")
+
+            def records = path(process.out.vcf[0][1])
+                .linesGzip
+                .findAll { line -> !line.startsWith("#") }
+            assert records.size() == 4
+            assert records.findAll { line -> line.split("\t")[6] == "SNP_QD_LOW" }.size() == 1
+        }
+    }
+}

@@ -22,6 +22,13 @@ nextflow_process {
     // that single type -- so a MIXED record is excluded from *both*
     // selections instead. These two tests run the real pinned GATK
     // 4.6.2.0 container (no mocking) to pin down that contract.
+    //
+    // Issue #17: the input tuple lost its fourth `val(variant_type)`
+    // element ('SNP'/'INDEL'). The GATK --select-type-to-include
+    // argument is now derived from the canonical lowercase
+    // meta.variant_type tag inside the module, so the two can no longer
+    // contradict each other. The MIXED contract these two tests pin
+    // down is unchanged -- only the input shape is.
 
     test("a MIXED-type record is excluded from the SNP selection, and only the pure SNP record is kept") {
 
@@ -31,8 +38,7 @@ nextflow_process {
                 input[0] = [
                     [ id: 'mixed_contract', variant_type: 'snp' ],
                     file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz"),
-                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi"),
-                    "SNP"
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi")
                 ]
                 """
             }
@@ -58,8 +64,7 @@ nextflow_process {
                 input[0] = [
                     [ id: 'mixed_contract', variant_type: 'indel' ],
                     file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz"),
-                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi"),
-                    "INDEL"
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi")
                 ]
                 """
             }
@@ -74,6 +79,131 @@ nextflow_process {
 
             assert indelRecords.size() == 1
             assert indelRecords[0].startsWith("chrSynthetic1\t2000\t")
+        }
+    }
+
+    // Issue #17 negative paths. meta.variant_type is the only source of
+    // the GATK type argument now, so it is validated at this process
+    // boundary (not just in workflows/adzuki_snp_pipeline.nf) and every
+    // rejection below is reachable by using the module directly, which
+    // is exactly what these tests do. The assertions check the message
+    // names the offending value and the allowed set, so a real
+    // misconfiguration is diagnosable from the Nextflow error alone.
+
+    test("an unsupported meta.variant_type is rejected with a message naming the value and the allowed set") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'mixed_contract', variant_type: 'mnp' ],
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("unsupported variant type 'mnp'")
+            assert output.contains("expected one of: snp, indel")
+        }
+    }
+
+    // 'MIXED' is a real GATK VariantContext type, so a bare
+    // meta.variant_type.toUpperCase() with no allowlist would have
+    // handed GATK a valid argument here and silently produced a
+    // cohort.mixed.vcf.gz that no downstream stage of this pipeline
+    // consumes -- the case that most needs to fail rather than run.
+    test("'mixed' is rejected even though MIXED is a type GATK itself would accept") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'mixed_contract', variant_type: 'mixed' ],
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("unsupported variant type 'mixed'")
+        }
+    }
+
+    // The canonical representation is lowercase because meta.variant_type
+    // is interpolated into published filenames and QC accounting keys.
+    // Accepting 'SNP' here would publish cohort.SNP.vcf.gz and split
+    // those keys, so a non-canonical spelling fails rather than being
+    // quietly normalized.
+    test("an uppercase 'SNP' is rejected rather than silently normalized to the canonical lowercase tag") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'mixed_contract', variant_type: 'SNP' ],
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("unsupported variant type 'SNP'")
+        }
+    }
+
+    test("a meta with no variant_type key at all is rejected, not treated as an implicit default") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'mixed_contract' ],
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("requires meta.variant_type")
+            assert output.contains("expected one of: snp, indel")
+        }
+    }
+
+    test("a present-but-null variant_type is rejected") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'mixed_contract', variant_type: null ],
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("unsupported variant type 'null'")
         }
     }
 }
