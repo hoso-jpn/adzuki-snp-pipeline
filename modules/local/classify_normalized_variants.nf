@@ -1,8 +1,11 @@
-// Issue #30: dedicated resource label (see nextflow.config for the
-// real-data benchmark this was sized from). This process reads the
-// entire cohort's normalized VCF into memory at once; that footprint
-// exceeded process_low's previous 4 GiB first-attempt allocation on
-// Issue #26's real 5-sample cohort.
+// Issue #30 introduced this dedicated resource label after the original
+// all-record implementation exceeded process_low on a real 5-sample cohort.
+// Issue #35 removed that O(N-records) representation: classification and
+// output now stream by (CHROM, POS), retaining only the current locus while
+// preserving all-occurrence duplicate-key exclusion. Formal 10/20-sample
+// replays at 70ae4d6 measured the Python process at about 21 MiB at both
+// scales with zero swap growth and production-equivalent output. See
+// nextflow.config for the separate page-cache-aware resource contract.
 process CLASSIFY_NORMALIZED_VARIANTS {
     tag "${meta.id}"
     label 'process_variant_classification'

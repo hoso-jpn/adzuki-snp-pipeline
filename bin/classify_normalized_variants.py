@@ -1,396 +1,254 @@
 #!/usr/bin/env python3
-"""Reclassify bcftools-norm output into a biallelic-SNP-only GS panel input.
-
-`bcftools norm -m-` splits every multiallelic record (including a
-GATK-MIXED record, one site with both a SNP-type and an indel-type ALT
-allele -- see `bin/reconcile_variant_type_counts.py` for how GATK's own
-type label works pre-split) into one biallelic row per original ALT
-allele. Once split, GATK's pre-split type label no longer applies to
-any individual output row, so this tool reclassifies every row from
-scratch by its own REF/ALT shape:
-
-- `snp`: REF and ALT are each a single base.
-- `mnp`: REF and ALT are equal length, longer than one base.
-- `indel`: REF and ALT differ in length.
-- `symbolic_or_star`: ALT contains symbolic/breakend syntax (`<`, `[`,
-  `]`) or is the spanning-deletion marker `*`.
-- `no_alt`: ALT is the literal `.` (no alternate allele observed at
-  this site). Checked before the length comparison below, since a
-  single-base REF and `.` are otherwise the same string length and
-  would silently be miscounted as a `snp`.
-
-Only `snp`-classified rows are eligible for the GS panel. A row whose
-(CHROM, POS, REF, ALT) key is not unique after classification is
-excluded entirely -- every occurrence, not just the extras -- because
-there is no automatic way to decide which of two colliding records is
-correct; keeping one at random would be a silent, unreviewable choice.
-
-This tool also resets every kept record's FILTER to "." (not "PASS"):
-bcftools norm propagates the *original* record's FILTER value to every
-split child regardless of that child's new shape, which can leave a
-semantically mismatched tag (e.g. a SNP-named filter on a row that is
-now shaped like an indel). Resetting to "." marks these records as not
-yet evaluated, matching this repository's own `raw` stage convention,
-so the GS-specific hard-filter step downstream makes its own PASS/FAIL
-decision from a clean slate.
-
-The output is a plain-text (uncompressed) VCF, not `.vcf.gz`: this
-script only ever needs to *read* bgzip-compressed input (BGZF is valid
-gzip and decompresses correctly with the standard library, the same as
-every other script in this repository), but the standard `gzip` module
-writes plain DEFLATE, which `tabix` cannot index. Compressing and
-indexing the output is left to a dedicated bcftools-container step.
-"""
-
+"""Locus-stream normalized VCF records into the biallelic-SNP GS input."""
 from __future__ import annotations
 
 import argparse
 import gzip
+import os
+import shutil
 import sys
+import tempfile
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
-VARIANT_CLASSES: tuple[str, ...] = ("snp", "mnp", "indel", "symbolic_or_star", "no_alt")
+VARIANT_CLASSES = ("snp", "mnp", "indel", "symbolic_or_star", "no_alt")
 ELIGIBLE_CLASS = "snp"
 RESET_FILTER_VALUE = "."
-SYMBOLIC_MARKERS = ("<", "[", "]")
-SPANNING_DELETION_ALLELE = "*"
-NO_ALT_ALLELE = "."
-
-ACCOUNTING_HEADER: tuple[str, ...] = ("cohort_id", "metric", "value")
+ACCOUNTING_HEADER = ("cohort_id", "metric", "value")
 
 
 class MalformedVcfError(Exception):
     """Raised when a normalized VCF cannot be classified safely."""
 
 
-@dataclass(frozen=True)
-class VcfHeader:
-    """The header lines and sample columns read from a VCF."""
-
-    meta_lines: tuple[str, ...]
-    chrom_line: str
-    sample_names: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class ClassifiedRecord:
-    """One post-split data row, classified by its own REF/ALT shape."""
-
-    chrom: str
-    pos: str
-    id_: str
-    ref: str
-    alt: str
-    qual: str
-    info: str
-    format_: str
-    sample_fields: tuple[str, ...]
-    variant_class: str
-
-    @property
-    def key(self) -> tuple[str, str, str, str]:
-        return (self.chrom, self.pos, self.ref, self.alt)
-
-
-@dataclass(frozen=True)
-class ClassificationResult:
-    """Every record and count this tool computes."""
-
-    header: VcfHeader
+@dataclass
+class ClassificationStats:
     total_input_records: int
     class_counts: dict[str, int]
-    duplicate_key_records: int
-    distinct_duplicate_keys: tuple[tuple[str, str, str, str], ...]
-    output_records: tuple[ClassifiedRecord, ...]
+    duplicate_key_records: int = 0
+    distinct_duplicate_keys: int = 0
+    output_records: int = 0
+
+
+@dataclass(frozen=True)
+class LocusRecord:
+    ref: str
+    alt: str
+    output_line: str
+
+    @property
+    def allele_key(self) -> tuple[str, str]:
+        return self.ref, self.alt
 
 
 def classify_variant(ref: str, alt: str) -> str:
     """Classify one post-split (single-ALT) record by REF/ALT shape."""
-    if alt == NO_ALT_ALLELE:
+    if alt == ".":
         return "no_alt"
-
-    if any(marker in alt for marker in SYMBOLIC_MARKERS) or alt == SPANNING_DELETION_ALLELE:
+    if alt == "*" or any(marker in alt for marker in ("<", "[", "]")):
         return "symbolic_or_star"
-
     if "," in alt:
         raise MalformedVcfError(
             f"record {ref}>{alt} still has multiple ALT alleles after "
             "bcftools norm -m- splitting; expected exactly one"
         )
-
     if len(ref) == len(alt):
         return "snp" if len(ref) == 1 else "mnp"
-
     return "indel"
 
 
-def _parse_header(lines: list[str]) -> VcfHeader:
-    meta_lines: list[str] = []
-    chrom_line: str | None = None
-
-    for line in lines:
-        if line.startswith("##"):
-            if line.startswith("##FILTER="):
-                continue
-            meta_lines.append(line)
-        elif line.startswith("#CHROM"):
-            chrom_line = line
-            break
-
-    if chrom_line is None:
-        raise MalformedVcfError("no #CHROM header line found")
-
-    fields = chrom_line.split("\t")
-    if len(fields) <= 9:
-        raise MalformedVcfError(
-            f"#CHROM header has {len(fields)} fields, expected at least 10 "
-            "(9 fixed columns plus one or more samples)"
-        )
-
-    return VcfHeader(
-        meta_lines=tuple(meta_lines),
-        chrom_line=chrom_line,
-        sample_names=tuple(fields[9:]),
+def _temporary_path(final_path: Path) -> Path:
+    final_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{final_path.name}.", suffix=".tmp", dir=final_path.parent
     )
+    os.close(descriptor)
+    # Nextflow may run the container as a different uid from the publishing
+    # process. Match ordinary pipeline artifacts (umask 022) after mkstemp's
+    # deliberately private creation mode so publishDir can copy finalized files.
+    os.chmod(name, 0o644)
+    return Path(name)
 
 
-def parse_normalized_vcf(path: Path) -> ClassificationResult:
-    """Read a bcftools-norm output VCF and classify every data row."""
-    header: VcfHeader | None = None
-    total_input_records = 0
-    class_counts: dict[str, int] = {name: 0 for name in VARIANT_CLASSES}
-    key_counts: Counter[tuple[str, str, str, str]] = Counter()
-    candidates: list[ClassifiedRecord] = []
+def _flush_locus(chrom: str, pos: int, records: list[LocusRecord], output: TextIO,
+                 duplicates: TextIO, stats: ClassificationStats) -> None:
+    counts = Counter(record.allele_key for record in records)
+    for record in records:
+        if counts[record.allele_key] == 1:
+            output.write(record.output_line + "\n")
+            stats.output_records += 1
+    for (ref, alt), count in counts.items():
+        if count > 1:
+            stats.distinct_duplicate_keys += 1
+            stats.duplicate_key_records += count
+            duplicates.write(f"  {chrom}:{pos} {ref}>{alt}\n")
 
-    with gzip.open(path, "rt", encoding="utf-8") as handle:
-        header_lines: list[str] = []
 
-        for line in handle:
-            line = line.rstrip("\n")
+def _write_accounting(path: Path, cohort_id: str, stats: ClassificationStats) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write("\t".join(ACCOUNTING_HEADER) + "\n")
+        handle.write(f"{cohort_id}\ttotal_input_records\t{stats.total_input_records}\n")
+        for name in VARIANT_CLASSES:
+            handle.write(f"{cohort_id}\t{name}_records\t{stats.class_counts[name]}\n")
+        handle.write(f"{cohort_id}\tduplicate_key_records\t{stats.duplicate_key_records}\n")
+        handle.write(f"{cohort_id}\tdistinct_duplicate_keys\t{stats.distinct_duplicate_keys}\n")
+        handle.write(f"{cohort_id}\toutput_records\t{stats.output_records}\n")
 
-            if not line:
-                continue
 
-            if line.startswith("#"):
-                header_lines.append(line)
+def _write_summary(path: Path, cohort_id: str, stats: ClassificationStats,
+                   duplicate_path: Path) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write("Variant normalization and classification summary\n")
+        handle.write(f"Cohort ID: {cohort_id}\n")
+        handle.write("Total input records (post bcftools norm -m- splitting): "
+                     f"{stats.total_input_records}\n")
+        for name in VARIANT_CLASSES:
+            handle.write(f"  {name}: {stats.class_counts[name]}\n")
+        handle.write("Only 'snp'-classified records are eligible for the GS panel; "
+                     "mnp/indel/symbolic_or_star records are excluded here, not "
+                     "silently dropped further downstream.\n")
+        handle.write("Duplicate (CHROM, POS, REF, ALT) keys: "
+                     f"{stats.distinct_duplicate_keys} distinct key(s), "
+                     f"{stats.duplicate_key_records} record(s) total -- every occurrence "
+                     "of a colliding key is excluded, not just the extras, since there is "
+                     "no automatic way to decide which one is correct.\n")
+        if stats.distinct_duplicate_keys:
+            handle.write("Colliding keys:\n")
+            with duplicate_path.open(encoding="utf-8") as evidence:
+                shutil.copyfileobj(evidence, handle)
+        handle.write(f"Output records (eligible for GS hard-filtering): {stats.output_records}\n")
+        handle.write("FILTER has been reset to '.' on every output record: bcftools norm "
+                     "propagates the original record's FILTER value to every split child "
+                     "regardless of that child's new shape, which can leave a semantically "
+                     "mismatched tag; the GS-specific hard-filter step downstream makes its "
+                     "own PASS/FAIL decision from a clean slate.\n")
+
+
+def stream_classify_vcf(normalized_vcf: Path, cohort_id: str, output_path: Path,
+                        accounting_path: Path, summary_path: Path) -> ClassificationStats:
+    """Process a contig-grouped, position-sorted VCF with locus-bounded memory."""
+    finals = (output_path, accounting_path, summary_path)
+    temps = tuple(_temporary_path(path) for path in finals)
+    duplicate_path = _temporary_path(summary_path.with_name(summary_path.name + ".duplicates"))
+    stats = ClassificationStats(0, {name: 0 for name in VARIANT_CLASSES})
+    try:
+        with (gzip.open(normalized_vcf, "rt", encoding="utf-8") as source,
+              temps[0].open("w", encoding="utf-8") as output,
+              duplicate_path.open("w", encoding="utf-8") as duplicates):
+            saw_header = False
+            current_locus: tuple[str, int] | None = None
+            locus_records: list[LocusRecord] = []
+            current_contig: str | None = None
+            closed_contigs: set[str] = set()
+            previous_pos: int | None = None
+            for line_number, raw_line in enumerate(source, 1):
+                line = raw_line.rstrip("\n")
+                if not line:
+                    continue
+                if line.startswith("##"):
+                    if saw_header:
+                        raise MalformedVcfError(f"{normalized_vcf}:{line_number}: metadata after #CHROM header")
+                    if not line.startswith("##FILTER="):
+                        output.write(line + "\n")
+                    continue
                 if line.startswith("#CHROM"):
-                    header = _parse_header(header_lines)
-                continue
+                    if saw_header:
+                        raise MalformedVcfError(f"{normalized_vcf}:{line_number}: duplicate #CHROM header")
+                    header_fields = line.split("\t")
+                    if len(header_fields) <= 9:
+                        raise MalformedVcfError(
+                            f"{normalized_vcf}: #CHROM header has {len(header_fields)} fields, "
+                            "expected at least 10 (9 fixed columns plus one or more samples)"
+                        )
+                    saw_header = True
+                    output.write(line + "\n")
+                    continue
+                if line.startswith("#"):
+                    continue
+                if not saw_header:
+                    raise MalformedVcfError(f"{normalized_vcf}: data row seen before #CHROM header")
 
-            if header is None:
-                raise MalformedVcfError(f"{path}: data row seen before #CHROM header")
+                fields = line.split("\t", 9)
+                if len(fields) < 10:
+                    raise MalformedVcfError(
+                        f"{normalized_vcf}:{line_number}: data row has {len(fields)} "
+                        "tab-separated fields, expected at least 10"
+                    )
+                chrom, pos_text, id_, ref, alt, qual, _filter, info, format_, samples = fields
+                try:
+                    pos = int(pos_text)
+                except ValueError as error:
+                    raise MalformedVcfError(
+                        f"{normalized_vcf}:{line_number}: POS is not an integer: {pos_text!r}"
+                    ) from error
+                if pos < 1:
+                    raise MalformedVcfError(f"{normalized_vcf}:{line_number}: POS must be positive: {pos}")
 
-            fields = line.split("\t")
-            if len(fields) < 10:
-                raise MalformedVcfError(
-                    f"{path}: data row has {len(fields)} tab-separated fields, "
-                    "expected at least 10"
-                )
+                if chrom != current_contig:
+                    if chrom in closed_contigs:
+                        raise MalformedVcfError(
+                            f"{normalized_vcf}:{line_number}: contig {chrom!r} re-entered after it was closed"
+                        )
+                    if current_contig is not None:
+                        closed_contigs.add(current_contig)
+                    current_contig, previous_pos = chrom, None
+                elif previous_pos is not None and pos < previous_pos:
+                    raise MalformedVcfError(
+                        f"{normalized_vcf}:{line_number}: POS decreased within contig {chrom!r}: "
+                        f"{pos} after {previous_pos}"
+                    )
+                previous_pos = pos
 
-            total_input_records += 1
-            chrom, pos, id_, ref, alt, qual, _filter, info, format_ = fields[:9]
-            sample_fields = tuple(fields[9:])
+                locus = chrom, pos
+                if current_locus is not None and locus != current_locus:
+                    _flush_locus(*current_locus, locus_records, output, duplicates, stats)
+                    locus_records.clear()
+                current_locus = locus
+                stats.total_input_records += 1
+                variant_class = classify_variant(ref, alt)
+                stats.class_counts[variant_class] += 1
+                if variant_class == ELIGIBLE_CLASS:
+                    locus_records.append(LocusRecord(
+                        ref, alt, "\t".join((chrom, pos_text, id_, ref, alt, qual,
+                                             RESET_FILTER_VALUE, info, format_, samples))))
+            if not saw_header:
+                raise MalformedVcfError(f"{normalized_vcf}: no #CHROM header line found")
+            if current_locus is not None:
+                _flush_locus(*current_locus, locus_records, output, duplicates, stats)
 
-            variant_class = classify_variant(ref, alt)
-            class_counts[variant_class] += 1
-
-            if variant_class != ELIGIBLE_CLASS:
-                continue
-
-            record = ClassifiedRecord(
-                chrom=chrom,
-                pos=pos,
-                id_=id_,
-                ref=ref,
-                alt=alt,
-                qual=qual,
-                info=info,
-                format_=format_,
-                sample_fields=sample_fields,
-                variant_class=variant_class,
-            )
-            key_counts[record.key] += 1
-            candidates.append(record)
-
-    if header is None:
-        raise MalformedVcfError(f"{path}: no #CHROM header line found")
-
-    distinct_duplicate_keys = tuple(
-        sorted(key for key, count in key_counts.items() if count > 1)
-    )
-    duplicate_key_records = sum(
-        key_counts[key] for key in distinct_duplicate_keys
-    )
-    output_records = tuple(
-        record for record in candidates if key_counts[record.key] == 1
-    )
-
-    return ClassificationResult(
-        header=header,
-        total_input_records=total_input_records,
-        class_counts=class_counts,
-        duplicate_key_records=duplicate_key_records,
-        distinct_duplicate_keys=distinct_duplicate_keys,
-        output_records=output_records,
-    )
-
-
-def build_accounting_rows(cohort_id: str, result: ClassificationResult) -> list[list[str]]:
-    """Build the normalization/classification accounting TSV data rows."""
-    rows = [[cohort_id, "total_input_records", str(result.total_input_records)]]
-
-    for variant_class in VARIANT_CLASSES:
-        rows.append(
-            [cohort_id, f"{variant_class}_records", str(result.class_counts[variant_class])]
-        )
-
-    rows.append([cohort_id, "duplicate_key_records", str(result.duplicate_key_records)])
-    rows.append(
-        [cohort_id, "distinct_duplicate_keys", str(len(result.distinct_duplicate_keys))]
-    )
-    rows.append([cohort_id, "output_records", str(len(result.output_records))])
-
-    return rows
-
-
-def build_summary_text(cohort_id: str, result: ClassificationResult) -> str:
-    """Build the human-readable normalization/classification summary."""
-    lines = [
-        "Variant normalization and classification summary",
-        f"Cohort ID: {cohort_id}",
-        f"Total input records (post bcftools norm -m- splitting): {result.total_input_records}",
-    ]
-
-    for variant_class in VARIANT_CLASSES:
-        lines.append(f"  {variant_class}: {result.class_counts[variant_class]}")
-
-    lines.append(
-        "Only 'snp'-classified records are eligible for the GS panel; "
-        "mnp/indel/symbolic_or_star records are excluded here, not "
-        "silently dropped further downstream."
-    )
-    lines.append(
-        f"Duplicate (CHROM, POS, REF, ALT) keys: {len(result.distinct_duplicate_keys)} "
-        f"distinct key(s), {result.duplicate_key_records} record(s) total -- "
-        "every occurrence of a colliding key is excluded, not just the extras, "
-        "since there is no automatic way to decide which one is correct."
-    )
-
-    if result.distinct_duplicate_keys:
-        lines.append("Colliding keys:")
-        for chrom, pos, ref, alt in result.distinct_duplicate_keys:
-            lines.append(f"  {chrom}:{pos} {ref}>{alt}")
-
-    lines.append(
-        f"Output records (eligible for GS hard-filtering): {len(result.output_records)}"
-    )
-    lines.append(
-        "FILTER has been reset to '.' on every output record: bcftools norm "
-        "propagates the original record's FILTER value to every split child "
-        "regardless of that child's new shape, which can leave a "
-        "semantically mismatched tag; the GS-specific hard-filter step "
-        "downstream makes its own PASS/FAIL decision from a clean slate."
-    )
-
-    return "\n".join(lines) + "\n"
-
-
-def write_vcf(path: Path, result: ClassificationResult) -> None:
-    """Write the eligible, FILTER-reset records as a plain-text VCF."""
-    lines = list(result.header.meta_lines)
-    lines.append(result.header.chrom_line)
-
-    for record in result.output_records:
-        fields = [
-            record.chrom,
-            record.pos,
-            record.id_,
-            record.ref,
-            record.alt,
-            record.qual,
-            RESET_FILTER_VALUE,
-            record.info,
-            record.format_,
-            *record.sample_fields,
-        ]
-        lines.append("\t".join(fields))
-
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def write_tsv(path: Path, header: tuple[str, ...], rows: list[list[str]]) -> None:
-    """Write a tab-separated file with the given header followed by rows."""
-    lines = ["\t".join(header)]
-    lines.extend("\t".join(row) for row in rows)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        _write_accounting(temps[1], cohort_id, stats)
+        _write_summary(temps[2], cohort_id, stats, duplicate_path)
+        for temporary, final in zip(temps, finals, strict=True):
+            os.replace(temporary, final)
+        return stats
+    finally:
+        for temporary in (*temps, duplicate_path):
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
-    """Parse command-line arguments for the classification CLI."""
-    parser = argparse.ArgumentParser(
-        description=(
-            "Reclassify bcftools-norm output by post-split REF/ALT shape "
-            "and select the biallelic-SNP-only subset eligible for a GS panel."
-        )
-    )
-    parser.add_argument(
-        "--normalized-vcf",
-        required=True,
-        type=Path,
-        help="Path to a bgzipped bcftools norm -m- output VCF.",
-    )
-    parser.add_argument("--cohort-id", required=True, help="Cohort identifier.")
-    parser.add_argument(
-        "--output",
-        required=True,
-        type=Path,
-        help="Output path for the plain-text, biallelic-SNP-only VCF.",
-    )
-    parser.add_argument(
-        "--accounting-output",
-        required=True,
-        type=Path,
-        help="Output path for the classification accounting TSV.",
-    )
-    parser.add_argument(
-        "--summary-output",
-        required=True,
-        type=Path,
-        help="Output path for the human-readable summary text file.",
-    )
-
+    parser = argparse.ArgumentParser(description="Locus-stream normalized variants for GS.")
+    parser.add_argument("--normalized-vcf", required=True, type=Path)
+    parser.add_argument("--cohort-id", required=True)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--accounting-output", required=True, type=Path)
+    parser.add_argument("--summary-output", required=True, type=Path)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the CLI end to end and return a process exit code."""
     args = parse_args(argv)
-
     try:
-        result = parse_normalized_vcf(args.normalized_vcf)
-    except OSError as error:
-        print(
-            f"classify_normalized_variants.py: error: cannot read {args.normalized_vcf}: {error}",
-            file=sys.stderr,
-        )
-        return 1
-    except MalformedVcfError as error:
+        stream_classify_vcf(args.normalized_vcf, args.cohort_id, args.output,
+                            args.accounting_output, args.summary_output)
+    except (OSError, MalformedVcfError) as error:
         print(f"classify_normalized_variants.py: error: {error}", file=sys.stderr)
         return 1
-
-    write_vcf(args.output, result)
-    write_tsv(
-        args.accounting_output,
-        ACCOUNTING_HEADER,
-        build_accounting_rows(args.cohort_id, result),
-    )
-    args.summary_output.write_text(
-        build_summary_text(args.cohort_id, result),
-        encoding="utf-8",
-    )
-
     return 0
 
 

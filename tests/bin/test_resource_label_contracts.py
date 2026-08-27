@@ -33,16 +33,12 @@ MODULE_LABELS = (
 
 # (label, expected cpus, expected memory text, expected time)
 LABEL_CONTRACTS = (
-    # Issue #33: raised twice. First from Issue #30's 5-sample-sized
-    # values (12/12/8 GiB) after a real 10-sample cohort run found true
-    # peak RSS of 28.47/16.28/12.65 GiB. Then again after a real
-    # 20-sample cohort run found CLASSIFY_NORMALIZED_VARIANTS and
-    # BUILD_GS_PANEL's "successful" 10-sample-sized budgets were
-    # actually swap-assisted false positives (true peak 53.36/19.88
-    # GiB); SUMMARIZE_FILTER_QC's 22 GiB budget held genuinely at 20
-    # samples (true peak 19.91 GiB) and was left unchanged. See
-    # nextflow.config's own comment for the full findings.
-    ("process_variant_classification", "2", "memory = 72.GB", "'2h'"),
+    # Issue #35's locus-streaming implementation held classifier Python
+    # RSS at about 21 MiB for both formal 10- and 20-sample replays. Its
+    # 10 GiB contract includes roughly 25% headroom over the larger 7.43
+    # GiB end-to-end cgroup peak, which includes reclaimable output page
+    # cache. The other Issue #33 contracts remain unchanged.
+    ("process_variant_classification", "2", "memory = 10.GB", "'2h'"),
     ("process_variant_qc_summary", "2", "{ 22.GB * task.attempt }", "'2h'"),
     ("process_gs_panel", "2", "{ 27.GB * task.attempt }", "'2h'"),
     # process_high itself is unchanged (still cpus=8) -- Issue #30 only
@@ -143,15 +139,15 @@ class NextflowConfigResourceContractTests(unittest.TestCase):
 
     def test_variant_classification_is_fixed_memory_and_fail_fast(self) -> None:
         block = _extract_label_block(self.config_text, "process_variant_classification")
-        self.assertRegex(block, r"memory\s*=\s*72\.GB\b")
+        self.assertRegex(block, r"memory\s*=\s*10\.GB\b")
         self.assertRegex(block, r"errorStrategy\s*=\s*'terminate'")
         self.assertRegex(block, r"maxRetries\s*=\s*0\b")
         self.assertNotIn("task.attempt", block)
 
-    def test_variant_classification_cannot_regress_to_144_gb_retry(self) -> None:
+    def test_variant_classification_cannot_regress_to_attempt_scaled_retry(self) -> None:
         block = _extract_label_block(self.config_text, "process_variant_classification")
-        self.assertNotIn("{ 72.GB * task.attempt }", block)
-        self.assertIn("memory = 72.GB", block)
+        self.assertNotIn("{ 10.GB * task.attempt }", block)
+        self.assertIn("memory = 10.GB", block)
         self.assertIn("errorStrategy = 'terminate'", block)
         self.assertIn("maxRetries    = 0", block)
 
@@ -159,7 +155,7 @@ class NextflowConfigResourceContractTests(unittest.TestCase):
 class TestProfileHasNoUnboundedResourceRequest(unittest.TestCase):
     """conf/test.config must override all three new labels to tiny CI-sized values.
 
-    Without this, CI would request nextflow.config's real 8-12 GiB
+    Without this, CI would request nextflow.config's real production
     production values for every push/PR, rather than a value sized for
     the synthetic fixture.
     """
