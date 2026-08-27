@@ -2,8 +2,10 @@
 // all-record implementation exceeded process_low on a real 5-sample cohort.
 // Issue #35 removed that O(N-records) representation: classification and
 // output now stream by (CHROM, POS), retaining only the current locus while
-// preserving all-occurrence duplicate-key exclusion. See nextflow.config for
-// the historical pre-streaming peaks and the post-streaming resource contract.
+// preserving all-occurrence duplicate-key exclusion. Formal 10/20-sample
+// replays at 70ae4d6 measured the Python process at about 21 MiB at both
+// scales with zero swap growth and production-equivalent output. See
+// nextflow.config for the separate page-cache-aware resource contract.
 process CLASSIFY_NORMALIZED_VARIANTS {
     tag "${meta.id}"
     label 'process_variant_classification'

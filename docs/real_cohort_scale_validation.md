@@ -67,15 +67,18 @@ stale relative to code:
 | `process_mapping` | 8 | 16 GiB | 24h | `BWA_MEM2_MEM_SORT` |
 | `process_bwa_index` | 8 | 16 GiB | 24h | `BWA_MEM2_INDEX` |
 | `process_genomicsdb` | 8 | 16 GiB | 24h | `GATK_GENOMICSDBIMPORT` |
-| `process_variant_classification` | 2 | 12 GiB | 2h | `CLASSIFY_NORMALIZED_VARIANTS` |
+| `process_variant_classification` | 2 | 10 GiB | 2h | `CLASSIFY_NORMALIZED_VARIANTS` |
 | `process_variant_qc_summary` | 2 | 12 GiB | 2h | `SUMMARIZE_FILTER_QC` |
 | `process_gs_panel` | 2 | 8 GiB | 2h | `BUILD_GS_PANEL` |
 
 Most OOM-retryable labels use `{ N.GB * task.attempt }` with `maxRetries = 1` and retry
 only on exit 137/140/143. `process_variant_classification` is an intentional exception:
-it is fixed at its 20-sample-validated 72 GiB budget and fails fast, because doubling to
-144 GiB would exceed Seedcore-01's physical-memory envelope and undermine Issue #33's
-scale-rebenchmarking policy. At 32
+Issue #35's formal streaming replay replaced the historical 72 GiB contract with a fixed
+10 GiB budget and retained fail-fast behavior. The budget includes about 25% headroom over
+the 20-sample cgroup peak (including output page cache); classifier Python RSS itself was
+about 21 MiB at both 10 and 20 samples. See
+[`classify_normalized_variants_streaming_benchmark.md`](classify_normalized_variants_streaming_benchmark.md).
+At 32
 logical CPUs, `process_haplotypecaller` (4 cpus/task) permits up to `floor(32/4) = 8`
 concurrent `GATK_HAPLOTYPECALLER` tasks in theory -- whether that is actually reached under
 real scheduling/contention is exactly what Stage 1 measures below, not assumed.

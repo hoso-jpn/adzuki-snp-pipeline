@@ -1100,6 +1100,12 @@ Bootstrapped BQSRも、known-sites構築とそれが結果に与える影響が�
   再発パターン自体を主要な知見とし、30検体規模の追加実行はコストに対する追加情報量が
   限定的と判断してスキップした(明示的な判断であり、未検証というだけではない)。
   20〜30検体規模の最終判断はConditional Go(具体的な条件は[`docs/real_cohort_scale_validation.md`](docs/real_cohort_scale_validation.md)参照)
+- 分類処理のlocus-local streaming化(Issue #35): formal 10/20検体targeted replayで
+  classifier Python peak RSSはそれぞれ約20.8/20.9 MiB、host swap deltaはともに0となり、
+  旧実装の28.47/53.36 GiBからcohort-size比例のmaterializationを解消した。classified VCFの
+  全recordとaccounting/summaryはhistorical productionと同一である。plain VCFを後段で圧縮
+  する際に付加される3本のbcftools provenance headerのみを区別して検証した。実測詳細は
+  [`docs/classify_normalized_variants_streaming_benchmark.md`](docs/classify_normalized_variants_streaming_benchmark.md)を参照
 
 以下の解析・再現性機能は計画中です。
 
