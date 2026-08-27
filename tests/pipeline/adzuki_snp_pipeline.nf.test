@@ -102,6 +102,34 @@ nextflow_pipeline {
             assert mappingTasks.size() == 3
             assert taskNames.every { name -> !name.contains("SAMTOOLS_SORT") }
 
+            // Issue #17: the variant-filtering lineage's task cardinality,
+            // re-measured against current main rather than taken from Issue
+            // #17's own "SNP/indel each 2 tasks" wording -- that wording
+            // predates the GS panel lineage (Issue #18), which adds its own
+            // GATK_VARIANTFILTRATION_GS/GATK_SELECTPASSVARIANTS_GS tasks
+            // reusing the same two modules. Matched on "NAME (" so the
+            // aliased _GS processes are counted separately rather than
+            // swept up by a substring match on the base name. Dropping
+            // GATK_SELECTVARIANTS's duplicate val(variant_type) input must
+            // not change any of these counts.
+            def tasksNamed = { String processName ->
+                taskNames.findAll { name -> name.contains("${processName} (") }
+            }
+            assert tasksNamed("GATK_SELECTVARIANTS").size() == 2
+            assert tasksNamed("GATK_VARIANTFILTRATION").size() == 2
+            assert tasksNamed("GATK_SELECTPASSVARIANTS").size() == 2
+            assert tasksNamed("GATK_VARIANTFILTRATION_GS").size() == 1
+            assert tasksNamed("GATK_SELECTPASSVARIANTS_GS").size() == 1
+
+            // the canonical lowercase meta.variant_type is what reaches the
+            // process tags, for both the primary and the GS lineage
+            assert tasksNamed("GATK_SELECTVARIANTS").collect { name ->
+                name.replaceAll(/^.*\(/, "").replaceAll(/\)$/, "")
+            } as Set == ["cohort:snp", "cohort:indel"] as Set
+            assert tasksNamed("GATK_VARIANTFILTRATION_GS").collect { name ->
+                name.replaceAll(/^.*\(/, "").replaceAll(/\)$/, "")
+            } == ["cohort_gs:snp"]
+
             // one gVCF per biological sample (Issue #12)
             assert path("$outputDir/variants/gvcf/sample_a.g.vcf.gz").exists()
             assert path("$outputDir/variants/gvcf/sample_a.g.vcf.gz.tbi").exists()

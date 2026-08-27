@@ -180,6 +180,27 @@ def indelHardFilters() {
     ]
 }
 
+// Issue #17: the single place that maps a canonical variant type to its
+// hard-filter list, used by both the primary SNP/indel filtering
+// lineage and the GS lineage below. This is a total lookup over the two
+// representable variant types rather than an if/else-if with a third
+// `else error("unsupported variant type: ...")` branch, because
+// GATK_SELECTVARIANTS already fail-fasts at its own process boundary on
+// any meta.variant_type outside {snp, indel} (see
+// modules/local/gatk_selectvariants.nf) -- and every tuple reaching the
+// primary call site is that process's own output, so the branch was
+// unreachable and duplicated a validation that now has one owner. A
+// lookup miss would still be caught, since GATK_VARIANTFILTRATION
+// rejects a null/empty `filters` at its own boundary.
+def hardFiltersForVariantType(variant_type) {
+    def filters_by_variant_type = [
+        snp: snpHardFilters(),
+        indel: indelHardFilters(),
+    ]
+
+    return filters_by_variant_type[variant_type?.toString()]
+}
+
 workflow ADZUKI_SNP_PIPELINE {
     take:
     samples_ch
@@ -420,6 +441,11 @@ workflow ADZUKI_SNP_PIPELINE {
 
     GATK_GATHERVCFS(cohort_vcfs_ch)
 
+    // Issue #17: `meta.variant_type` alone -- the uppercase 'SNP'/'INDEL'
+    // GATK argument that used to be passed alongside it as a fourth
+    // tuple element is now derived from this same canonical tag inside
+    // modules/local/gatk_selectvariants.nf, so the two can no longer
+    // disagree (e.g. [variant_type: 'snp'] paired with 'INDEL').
     variant_types_ch = GATK_GATHERVCFS.out.vcf
         .flatMap { meta, vcf, vcf_index ->
             [
@@ -427,13 +453,11 @@ workflow ADZUKI_SNP_PIPELINE {
                     meta + [variant_type: 'snp'],
                     vcf,
                     vcf_index,
-                    'SNP',
                 ),
                 tuple(
                     meta + [variant_type: 'indel'],
                     vcf,
                     vcf_index,
-                    'INDEL',
                 ),
             ]
         }
@@ -442,19 +466,12 @@ workflow ADZUKI_SNP_PIPELINE {
 
     hard_filter_inputs_ch = GATK_SELECTVARIANTS.out.vcf
         .map { meta, vcf, vcf_index ->
-            def filters
-
-            if (meta['variant_type'] == 'snp') {
-                filters = snpHardFilters()
-            } else if (meta['variant_type'] == 'indel') {
-                filters = indelHardFilters()
-            } else {
-                error(
-                    "unsupported variant type: ${meta['variant_type']}"
-                )
-            }
-
-            tuple(meta, vcf, vcf_index, filters)
+            tuple(
+                meta,
+                vcf,
+                vcf_index,
+                hardFiltersForVariantType(meta['variant_type']),
+            )
         }
 
     GATK_VARIANTFILTRATION(hard_filter_inputs_ch)
@@ -555,7 +572,12 @@ workflow ADZUKI_SNP_PIPELINE {
 
         gs_hard_filter_inputs_ch = GS_INDEX_CLASSIFIED_VARIANTS.out.vcf
             .map { meta, vcf, vcf_index ->
-                tuple(meta + [variant_type: 'snp'], vcf, vcf_index, snpHardFilters())
+                tuple(
+                    meta + [variant_type: 'snp'],
+                    vcf,
+                    vcf_index,
+                    hardFiltersForVariantType('snp'),
+                )
             }
 
         GATK_VARIANTFILTRATION_GS(gs_hard_filter_inputs_ch)
