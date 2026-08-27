@@ -31,11 +31,20 @@ MODULE_LABELS = (
     ("modules/local/gatk_haplotypecaller.nf", "process_haplotypecaller"),
 )
 
-# (label, expected cpus, expected memory closure text, expected time)
+# (label, expected cpus, expected memory text, expected time)
 LABEL_CONTRACTS = (
-    ("process_variant_classification", "2", "{ 12.GB * task.attempt }", "'2h'"),
-    ("process_variant_qc_summary", "2", "{ 12.GB * task.attempt }", "'2h'"),
-    ("process_gs_panel", "2", "{ 8.GB * task.attempt }", "'2h'"),
+    # Issue #33: raised twice. First from Issue #30's 5-sample-sized
+    # values (12/12/8 GiB) after a real 10-sample cohort run found true
+    # peak RSS of 28.47/16.28/12.65 GiB. Then again after a real
+    # 20-sample cohort run found CLASSIFY_NORMALIZED_VARIANTS and
+    # BUILD_GS_PANEL's "successful" 10-sample-sized budgets were
+    # actually swap-assisted false positives (true peak 53.36/19.88
+    # GiB); SUMMARIZE_FILTER_QC's 22 GiB budget held genuinely at 20
+    # samples (true peak 19.91 GiB) and was left unchanged. See
+    # nextflow.config's own comment for the full findings.
+    ("process_variant_classification", "2", "memory = 72.GB", "'2h'"),
+    ("process_variant_qc_summary", "2", "{ 22.GB * task.attempt }", "'2h'"),
+    ("process_gs_panel", "2", "{ 27.GB * task.attempt }", "'2h'"),
     # process_high itself is unchanged (still cpus=8) -- Issue #30 only
     # benchmarked GATK_HAPLOTYPECALLER, not GATK_GENOTYPEGVCFS (this
     # label's other, unbenchmarked consumer), so the cpus value actually
@@ -47,6 +56,10 @@ LABEL_CONTRACTS = (
     # 4 cpus (floor(32/4)=8 vs floor(32/8)=4 on this host) -- see
     # nextflow.config's own comment for the full numbers.
     ("process_haplotypecaller", "4", "{ 16.GB * task.attempt }", "'24h'"),
+)
+
+RETRY_SCALING_LABELS = tuple(
+    label for label, *_rest in LABEL_CONTRACTS if label != "process_variant_classification"
 )
 
 TEST_PROFILE_LABELS = (
@@ -118,15 +131,29 @@ class NextflowConfigResourceContractTests(unittest.TestCase):
                 self.assertIn(expected_memory, block)
                 self.assertRegex(block, rf"time\s*=\s*{re.escape(expected_time)}")
 
-    def test_memory_scales_with_task_attempt_not_a_fixed_value(self) -> None:
+    def test_retryable_memory_scales_with_task_attempt(self) -> None:
         # Issue #8/#11's own OOM-retry contract (errorStrategy retries on
         # 137/140/143, maxRetries = 1) only helps if a retried attempt
         # actually gets more memory than the one that was killed -- a
         # fixed (non-attempt-scaled) value would silently defeat that.
-        for label, *_rest in LABEL_CONTRACTS:
+        for label in RETRY_SCALING_LABELS:
             with self.subTest(label=label):
                 block = _extract_label_block(self.config_text, label)
                 self.assertIn("task.attempt", block)
+
+    def test_variant_classification_is_fixed_memory_and_fail_fast(self) -> None:
+        block = _extract_label_block(self.config_text, "process_variant_classification")
+        self.assertRegex(block, r"memory\s*=\s*72\.GB\b")
+        self.assertRegex(block, r"errorStrategy\s*=\s*'terminate'")
+        self.assertRegex(block, r"maxRetries\s*=\s*0\b")
+        self.assertNotIn("task.attempt", block)
+
+    def test_variant_classification_cannot_regress_to_144_gb_retry(self) -> None:
+        block = _extract_label_block(self.config_text, "process_variant_classification")
+        self.assertNotIn("{ 72.GB * task.attempt }", block)
+        self.assertIn("memory = 72.GB", block)
+        self.assertIn("errorStrategy = 'terminate'", block)
+        self.assertIn("maxRetries    = 0", block)
 
 
 class TestProfileHasNoUnboundedResourceRequest(unittest.TestCase):

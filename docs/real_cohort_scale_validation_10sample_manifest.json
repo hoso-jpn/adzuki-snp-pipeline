@@ -1,0 +1,252 @@
+{
+  "checksums": {
+    "SRR29909067.g.vcf.gz": "sha256:60b61281a3cc4d217202af6de08fa8fccd32ed3e6aacd5b252f4006e922006a3",
+    "SRR29909068.g.vcf.gz": "sha256:0c2b29a02d1a226b08800b603b1187c097c762f70d4fc4303dad96c2ad77c4ed",
+    "SRR29909069.g.vcf.gz": "sha256:3070b6707d1e8dc812d7feb29f12f1cc2bb06bfc39b4ecaa8e1bfc3ff9678332",
+    "SRR29909070.g.vcf.gz": "sha256:f028c7134ab4f54f48b2b21960e39d48a52a588e2e96f89cdab3f40f43d3da85",
+    "SRR29909072.g.vcf.gz": "sha256:2c596b7745eaf10063a9973830fe752790672d03a7eaed99435f5fcecfb058b2",
+    "SRR29909073.g.vcf.gz": "sha256:e41d2b2d638a131da5ab22ad6a28bbec971744e55988fac9560be719437c5d18",
+    "SRR29909074.g.vcf.gz": "sha256:4af78f57955e45044bc394b83042a3e9dcfb8193039ba5efaaa9281c2e587b41",
+    "SRR29909135.g.vcf.gz": "sha256:d170ce105b1ace6c305a5d11b540a92e99c49cc99e72631ebc09c3f9782080e1",
+    "SRR29909418.g.vcf.gz": "sha256:fdce9d9aeef7a0a5000ec3577b57bbd401753a5821409419e07c875502d61626",
+    "SRR29909421.g.vcf.gz": "sha256:22a221c58a6331bf57fbbbe120cc050fa3d53854bfc189b6caead0b56ef34bf3",
+    "cohort.indel.pass.vcf.gz": "sha256:ea82cc2a5024baf34a1d7525929022664d8dccb7fefc94277b67e79e51a18553",
+    "cohort.raw.vcf.gz": "sha256:95199a49211e088009ede5332e5b6b398413e055be27fc55654577e8279bb019",
+    "cohort.snp.pass.vcf.gz": "sha256:efa8719ed89b41112ec0ce1405615b3c3418bdef214d80cfc57699e3f718ed89"
+  },
+  "cohort_accounting": {
+    "cohort_missing_genotypes": "12627888",
+    "cohort_missingness_rate": "0.123233",
+    "cohort_total_genotypes": "102471250",
+    "number_of_indels": "1499061",
+    "number_of_mnps": "0",
+    "number_of_multiallelic_sites": "490456",
+    "number_of_others": "0",
+    "number_of_records": "10247125",
+    "number_of_samples": "10",
+    "number_of_snps": "8805394",
+    "sample_names": "SRR29909067,SRR29909068,SRR29909069,SRR29909070,SRR29909072,SRR29909073,SRR29909074,SRR29909135,SRR29909418,SRR29909421",
+    "transition_transversion_ratio": "1.85",
+    "transitions": "5793342",
+    "transversions": "3127383"
+  },
+  "cohort_id": "cohort",
+  "containers": {
+    "bwa_mem2": "community.wave.seqera.io/library/bwa-mem2_htslib_samtools:db98f81f55b64113@sha256:5ebd1290d9680195817ce75915b79ae2e608834c017824b7e2bc7b141509b242",
+    "gatk": "broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb",
+    "python": "python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7",
+    "samtools": "quay.io/biocontainers/samtools:1.24--h9dcdb79_1@sha256:a130447589651ed09252aa95a5e4f4132942cdb54d835d81a04a9a930d656561"
+  },
+  "generated_at": "2026-08-25T03:44:15Z",
+  "git_commit": "f129a01ada403a138b01edcfaea4c261b25f8eb1",
+  "gs_panel": {
+    "cohort_id": "cohort",
+    "manifest_hash": "sha256:a36f5cef570da30488cb8f0ccb147fc4f204f7512c90c8da0239d02862eb86bd",
+    "panel_status": "populated",
+    "run_id": "20260825T031917Z-74f0c035",
+    "schema_version": 1
+  },
+  "manifest_hash": "sha256:e550ef999cd7e93f954a7d34690b5be3bd806c0d58b6e7a01d9b9bb4e7d830f6",
+  "nextflow_version": "26.04.6",
+  "parameters": {
+    "enable_gs_panel": true,
+    "genomicsdb_batch_size": 50,
+    "indel_filter_fs_max": 200.0,
+    "indel_filter_qd_min": 2.0,
+    "indel_filter_qual_min": 30.0,
+    "indel_filter_read_pos_rank_sum_min": -20.0,
+    "optical_duplicate_pixel_distance": 100,
+    "sample_ploidy": 2,
+    "snp_filter_fs_max": 60.0,
+    "snp_filter_mq_min": 40.0,
+    "snp_filter_mq_rank_sum_min": -12.5,
+    "snp_filter_qd_min": 2.0,
+    "snp_filter_qual_min": 30.0,
+    "snp_filter_read_pos_rank_sum_min": -8.0,
+    "snp_filter_sor_max": 3.0
+  },
+  "pipeline_version": "0.2.0-dev",
+  "reference": {
+    "dict": {
+      "checksum": "sha256:8b46bbdf860fbd4af1844ec8aa68117f8c1ffe53063ab6c73854d51643fbddea",
+      "filename": "GCF_016808095.1_ASM1680809v1_genomic.dict"
+    },
+    "fai": {
+      "checksum": "sha256:c5db64484f1c2e8a14368ca68b51e3d4ce8a5afefd277b3780085bd9128ddde5",
+      "filename": "GCF_016808095.1_ASM1680809v1_genomic.fna.fai"
+    },
+    "fasta": {
+      "checksum": "sha256:e9838db1b048b54b21534285aaf95eae64cb3019d85af270b44e20b3d545f383",
+      "filename": "GCF_016808095.1_ASM1680809v1_genomic.fna"
+    },
+    "reference_accession": "GCF_016808095.1",
+    "reference_cultivar": "Longxiaodou 4",
+    "reference_id": "GCF_016808095.1",
+    "reference_species": "Vigna angularis"
+  },
+  "run_id": "20260825T034415Z-bbf0fe60",
+  "samples": [
+    {
+      "fastq_1": {
+        "checksum": "sha256:fc8ace4190032559328559be25efcebf93778484f263e3d862fe46e60d821cc9",
+        "filename": "SRR29909135_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:ba9cf1f11dee32c586f9521d1c88474eaba713a3b7da182fb95adb58c6bbfef8",
+        "filename": "SRR29909135_2.fastq.gz"
+      },
+      "library_id": "AZ693",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3CWYDSXY.4",
+      "read_group_id": "SRR29909135_L004",
+      "sample_id": "SRR29909135"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:3bab2c53af8f0f8dc6f6dca48f6488eafdcf43338e8dfa77720bc8f028576ce0",
+        "filename": "SRR29909069_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:dabb7fe0e7d36ffc88b37214a36ffa959601d444f42c219546674ee93ed33506",
+        "filename": "SRR29909069_2.fastq.gz"
+      },
+      "library_id": "AZ648",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3CWYDSXY.4",
+      "read_group_id": "SRR29909069_L004",
+      "sample_id": "SRR29909069"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:41b02821a5eaa593edf3660375fd929241e01c6153b9c9b8887516b1a9388a4b",
+        "filename": "SRR29909072_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:f0d7ccf8bb6a3b7c6f2118175371f82231109c7b4de2b6ed79ab425e2da91013",
+        "filename": "SRR29909072_2.fastq.gz"
+      },
+      "library_id": "AZ636",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909072_L006",
+      "sample_id": "SRR29909072"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:5297c4d81b582be6ed080d31b887db7ab1d7932d5500c1a07fea0dbf66c1f97f",
+        "filename": "SRR29909067_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:cfd7d287ee2109938c7e7c0fed89af6effbb10eb33bd6d0af4770582038ee0df",
+        "filename": "SRR29909067_2.fastq.gz"
+      },
+      "library_id": "AZ702",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909067_L006",
+      "sample_id": "SRR29909067"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:f267eff8838b8671a7123773005eac6eae91a737f2b99e74fd77a0423a0e1942",
+        "filename": "SRR29909073_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:9a48198618fd1a9c38dcaf7bd8dd8f7abb04dc3e8257b316084b553c35db09a0",
+        "filename": "SRR29909073_2.fastq.gz"
+      },
+      "library_id": "AZ635",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909073_L006",
+      "sample_id": "SRR29909073"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:cac92df47a78350e7a806a5a124b3eb14e3e5d9c6544a8c4aaac9c96b4b8fc11",
+        "filename": "SRR29909074_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:4a83952bca002dbb5fad60768c5d0f3867b6fdb684173a77fb8f5e91bd78dfb7",
+        "filename": "SRR29909074_2.fastq.gz"
+      },
+      "library_id": "AZ633",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909074_L006",
+      "sample_id": "SRR29909074"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:7aea515b703996a954b73d75aa8fab7745fc5b182a434d76bcde7e2deb1b944b",
+        "filename": "SRR29909070_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:f387439ad078cfc4c2a8fc552f6333ee093995ed700f5055e9cdb10ffc4ea92b",
+        "filename": "SRR29909070_2.fastq.gz"
+      },
+      "library_id": "AZ639",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909070_L006",
+      "sample_id": "SRR29909070"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:1992726a00b81722a58bb7a40743ebb4910518a54eb4689aca7ce851a7673436",
+        "filename": "SRR29909068_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:9468c6e622174992f07e9f063b85dd1a89327eff5fc90aa17c1e7ebbbf2eea3d",
+        "filename": "SRR29909068_2.fastq.gz"
+      },
+      "library_id": "AZ659",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909068_L006",
+      "sample_id": "SRR29909068"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:68c16aad7c77cb39978079bfb19604a30b777b5e66a920d920a19053d10fa217",
+        "filename": "SRR29909421_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:08ef1305f3e77c4c2f5a878783ef164f2bd5ace6bfbfec9b65f6f888182b5cfb",
+        "filename": "SRR29909421_2.fastq.gz"
+      },
+      "library_id": "AZ662",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909421_L006",
+      "sample_id": "SRR29909421"
+    },
+    {
+      "fastq_1": {
+        "checksum": "sha256:c1e429b24a023b2427a2006411dbc0a9929cb6a1334a12ce72b70c003f283844",
+        "filename": "SRR29909418_1.fastq.gz"
+      },
+      "fastq_2": {
+        "checksum": "sha256:c0f1ccc78555690fe39e12a28745159c05a22dada1087544ce2bab144b5484a2",
+        "filename": "SRR29909418_2.fastq.gz"
+      },
+      "library_id": "AZ665",
+      "platform": "ILLUMINA",
+      "platform_unit": "H3NC3CCX2.6",
+      "read_group_id": "SRR29909418_L006",
+      "sample_id": "SRR29909418"
+    }
+  ],
+  "schema_version": 1,
+  "variant_type_accounting": {
+    "raw_all_number_of_mnps": "0",
+    "raw_all_number_of_multiallelic_sites": "490456",
+    "raw_all_number_of_others": "0",
+    "raw_all_records": "10247125",
+    "raw_indel_records": "1422224",
+    "raw_snp_records": "8748064",
+    "records_not_selected": "76837",
+    "records_not_selected_is_negative": "false",
+    "snp_indel_duplicate_records": "0"
+  }
+}
