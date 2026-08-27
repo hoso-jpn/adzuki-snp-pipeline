@@ -17,7 +17,15 @@ def validatedHardFilters(meta, filters) {
         ? (meta['variant_type'] ?: 'unknown')
         : 'unknown'
 
-    if (!(filters instanceof Collection)) {
+    // List, not Collection: the contract is an *ordered* list. The
+    // position numbers in every diagnostic below ("hard filter 2 of 7"),
+    // and the order the --filter-name/--filter-expression pairs reach
+    // GATK in, are only meaningful and reproducible if the input has a
+    // defined iteration order -- which an unordered Collection such as a
+    // Set does not guarantee. snpHardFilters()/indelHardFilters() both
+    // return Groovy list literals (ArrayList), so this rejects nothing
+    // the pipeline actually passes.
+    if (!(filters instanceof List)) {
         error(
             "hard filters for ${variant_type} must be a list, got " +
                 "${filters == null ? 'null' : filters.getClass().getName()}"

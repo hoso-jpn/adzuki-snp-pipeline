@@ -184,6 +184,62 @@ nextflow_process {
         }
     }
 
+    // Issue #17 review follow-up: the contract is an *ordered* list, not
+    // any Collection. A Set satisfies "non-empty collection of filters"
+    // but not the ordering the position diagnostics ("hard filter 2 of
+    // 2") and the --filter-name/--filter-expression argument order
+    // depend on, so it is rejected rather than silently iterated in
+    // whatever order the Set happens to have.
+    test("an unordered Collection such as a Set is rejected, since the contract is an ordered list") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'A', expression: 'QD < 2.0' ],
+                        [ name: 'B', expression: 'SOR > 3.0' ]
+                    ] as Set
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("must be a list")
+            assert output.contains("Set")
+        }
+    }
+
+    test("a non-string 'name' is rejected rather than stringified into the GATK argument") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 42, expression: 'QD < 2.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (process.stdout + process.stderr).join("\n")
+            assert output.contains("has a non-string 'name'")
+        }
+    }
+
     test("a filter with no 'name' key is rejected, naming its position in the list") {
 
         when {
