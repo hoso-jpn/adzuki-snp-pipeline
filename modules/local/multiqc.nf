@@ -26,14 +26,19 @@ process MULTIQC {
     path 'multiqc_version.txt', emit: version
 
     script:
+    def asFileList = { value ->
+        value == null
+            ? []
+            : (value instanceof List ? value : [value])
+    }
     def categories = [
-        raw_fastqc_zips: raw_fastqc_zips,
-        trimmed_fastqc_zips: trimmed_fastqc_zips,
-        fastp_jsons: fastp_jsons,
-        markduplicates_metrics: markduplicates_metrics,
-        samtools_flagstats: samtools_flagstats,
-        samtools_stats: samtools_stats,
-        samtools_idxstats: samtools_idxstats,
+        raw_fastqc_zips: asFileList.call(raw_fastqc_zips),
+        trimmed_fastqc_zips: asFileList.call(trimmed_fastqc_zips),
+        fastp_jsons: asFileList.call(fastp_jsons),
+        markduplicates_metrics: asFileList.call(markduplicates_metrics),
+        samtools_flagstats: asFileList.call(samtools_flagstats),
+        samtools_stats: asFileList.call(samtools_stats),
+        samtools_idxstats: asFileList.call(samtools_idxstats),
     ]
     def empty_categories = categories
         .findAll { _name, files -> files == null || files.isEmpty() }
@@ -47,7 +52,7 @@ process MULTIQC {
     }
 
     def input_files = categories.values()
-        .collectMany { files -> files as List }
+        .collectMany { files -> files }
         .collect { report -> report.getName() }
     def quoted_input_files = input_files
         .collect { report -> "'/multiqc/input/${report}'" }

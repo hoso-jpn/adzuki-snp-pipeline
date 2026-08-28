@@ -1202,4 +1202,53 @@ nextflow_pipeline {
             }
         }
     }
+
+    test("one sample and one read group reaches MultiQC through real single-emission QC channels") {
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def sampleBLine = sourceLines.find { line -> line.startsWith("sample_b,") }
+                assert sampleBLine != null
+                def rewrittenLine = sampleBLine.replaceAll(
+                    "tests/data/reads/",
+                    "${projectDir}/tests/data/reads/"
+                )
+                def singleSampleSheet = new File("${outputDir}/samplesheet.single-sample.csv")
+                singleSampleSheet.text = sourceLines[0] + "\n" + rewrittenLine + "\n"
+
+                outdir = "$outputDir"
+                input = singleSampleSheet.toString()
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            def multiqcJsonFile = path("$outputDir/qc/multiqc/multiqc_data/multiqc_data.json")
+            assert multiqcJsonFile.exists()
+            def multiqc = new groovy.json.JsonSlurper().parse(multiqcJsonFile.toFile())
+            def parsed = multiqc.report_saved_raw_data
+
+            assert parsed.multiqc_fastqc.keySet() as Set == [
+                "sample_b_L001.raw.R1",
+                "sample_b_L001.raw.R2",
+                "sample_b_L001.trimmed.R1",
+                "sample_b_L001.trimmed.R2",
+            ] as Set
+            assert parsed.multiqc_fastp.keySet() as Set == ["sample_b_L001"] as Set
+            assert parsed.multiqc_picard_dups.keySet() as Set == ["sample_b"] as Set
+            assert parsed.multiqc_samtools_flagstat.keySet() as Set == ["sample_b"] as Set
+            assert parsed.multiqc_samtools_stats.keySet() as Set == ["sample_b"] as Set
+            assert parsed.multiqc_samtools_idxstats.keySet() as Set == ["sample_b"] as Set
+
+            def sources = multiqc.report_data_sources
+            assert sources.Picard.DuplicationMetrics.size() == 1
+            assert sources.Samtools.flagstat.size() == 1
+            assert sources.Samtools.stats.size() == 1
+            assert sources.Samtools.idxstats.size() == 1
+            assert sources.fastp.all_sections.size() == 1
+            assert sources.FastQC.all_sections.size() == 4
+        }
+    }
 }

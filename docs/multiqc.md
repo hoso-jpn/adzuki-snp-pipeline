@@ -75,7 +75,7 @@ fastpは`<read_group_id>`のread-group granularityです。MarkDuplicatesと全S
 nf-testは`multiqc_data/multiqc_data.json`の公開された安定subsetをparseし、次を検証します。
 
 - `report_saved_raw_data`のFastQC 12、fastp 3、Picard duplication 2、SAMtools各section 2 samples
-- `report_data_sources`のstandard module/section、7 source class、合計23 source files
+- 7 input categories、`report_data_sources`の6 standard module/section source classes、合計23 source files
 - raw/trimmed、R1/R2、全read-group sample IDの集合
 - sourceが`/multiqc/input/`配下のallowlisted QC reportだけであること
 - project/output/work/tmpのabsolute pathがJSON、source provenance、logへ漏れないこと
