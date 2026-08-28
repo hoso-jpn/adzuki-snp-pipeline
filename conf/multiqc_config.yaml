@@ -1,0 +1,31 @@
+no_version_check: true
+no_ai: true
+megaqc_upload: false
+make_data_dir: true
+data_dir_name: multiqc_data
+data_format: json
+require_logs: true
+show_analysis_paths: false
+use_filename_as_sample_name: true
+fn_clean_sample_names: true
+# Deliberately omit MultiQC's default `.trim` token: it would collapse
+# `<read_group_id>.trimmed.R1` and `.R2` to the same sample name.
+fn_clean_exts:
+  - .gz
+  - .fastq
+  - .fq
+  - .zip
+  - _fastqc
+  - .json
+  - .fastp
+  - .html
+  - .markduplicates.metrics
+  - .flagstat
+  - .stats
+  - .idxstats
+  - .txt
+run_modules:
+  - fastqc
+  - fastp
+  - picard
+  - samtools

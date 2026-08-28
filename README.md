@@ -14,9 +14,10 @@ Joint Genotyping、設定可能なハードフィルタリング、PASS抽出、
 [`docs/real_cohort_scale_validation.md`](docs/real_cohort_scale_validation.md)を参照)。
 あわせて、履歴として手動実行した単一サンプルのSNPコーリング試行(pilot)も残しています。
 パイプラインレベルのnf-testスイートがJoint Genotyping fixture契約・GenomicsDBImportの
-batch-size/メモリ契約・参照ゲノムFAI/dict契約をカバーしています。MultiQC集約はP1の
-[Issue #38](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/38)へ移管し、全モジュールを
-網羅するnf-testと327検体スケールの検証は将来の拡張として扱います。
+batch-size/メモリ契約・参照ゲノムFAI/dict契約をカバーしています。P1の
+[Issue #38](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/38)でMultiQC集約を実装し、
+synthetic test profileで標準moduleによる統合を検証しています。327検体スケールの検証は
+将来の拡張として扱います。
 
 この研究はFlorigen AIの長期的な農業AI活動を支える植物遺伝学・バイオインフォマティクス研究の
 一部です。ゲノム予測からPhysical AIへの直接的な開発パスを意味するものではありません。
@@ -35,7 +36,7 @@ batch-size/メモリ契約・参照ゲノムFAI/dict契約をカバーしてい�
 | GSパネル(genomic selection) | syntheticデータで機能検証済み、実データ20検体で動作確認済み | `raw/all`を正規化(`bcftools norm -m-`)し、split後のREF/ALT形状で再分類し、独立したlineageで再フィルタし、sample/variant metadataとfull-lineage record会計、再現性manifestを備えたdosage matrixへ変換する([`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md)参照)。Issue #33の20検体runでは9,252,873 variant × 20 sampleのpopulated panelを確認した。MAF/コールレートフィルタ、LD pruning、imputationはスコープ外。しきい値の妥当性は未検証であり、現時点でこのパネルを読み込む下流リポジトリは存在しない |
 | 設定可能な参照ゲノムbundle | 実装済み | 互換性のあるprebuilt indexを受け付けるか、FASTA・sequence dictionary・BWA-MEM2 indexを生成する |
 | 複数サンプルJoint Genotyping | syntheticデータで機能検証済み、実データ20検体で動作確認済み(Issue #26/#33) | syntheticでは2サンプル・2contigでGenomicsDBImportベースのJoint Genotypingが完了し、各deterministic SNP locusは`1/1`/`0/0`の非欠損ペア(`AC=2;AN=4;AF=0.5`)に解決される。実データではLongxiaodou 4参照ゲノムで5→10→20検体まで動作を確認した。30検体は根拠を記録して明示的にスキップし、327検体規模は未検証 |
-| 読み取り前処理・QC | 個別QC成果物まで実装済み、MultiQCはP1 | raw/trimmed FastQC、ペアエンドfastp、mappingログ、重複metrics、SAMtools QCを生成する。統合レポートは[Issue #38](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/38)で追跡する |
+| 読み取り前処理・QC | MultiQC統合までsyntheticデータで機能検証済み | raw/trimmed FastQC、ペアエンドfastp、重複metrics、SAMtools QCを明示allowlistでMultiQC 1.35へ集約する。実データ20検体・327検体では未検証。詳細は[`docs/multiqc.md`](docs/multiqc.md)を参照 |
 | パイプラインレベルテスト | 部分実装 | syntheticなDocker smoke testが3リードグループ・2サンプルGVCF・両locusで確信度の高い`1/1`/`0/0`遺伝子型を持つ2つのraw SNP・ハードフィルタannotation・indexed PASS出力・7種のvariant QCタスク・38個のQC成果物・GSパネルのempty-panel契約を検証する。[nf-test](https://www.nf-test.com/)によるpipeline-level testがこの契約を自動化し(`tests/pipeline/adzuki_snp_pipeline.nf.test`)、haploid(`sample_ploidy=1`、`enable_gs_panel=false`)のend-to-end遺伝子型契約とGSパネル有効時の`sample_ploidy=1`拒否(Issue #20)、mappingタスク数と重複マーク件数の厳密一致・負の`optical_duplicate_pixel_distance`拒否・prebuilt BWA-MEM2 indexパス(Issue #8)、`genomicsdb_batch_size`の伝播とXmx比率・prebuilt/生成両方の参照bundle・contig順序不一致の拒否(Issue #11)を検証する追加testを含む。module-level nf-testは実際にpinされたcontainerに対して、`GATK_SELECTVARIANTS`がMIXED型レコードをSNP/indel双方の選択から除外すること(`tests/modules/gatk_selectvariants.nf.test`)、`GS_NORMALIZE_VARIANTS`がMIXEDレコードを正しい遺伝子型再割当てで分割すること(`tests/modules/gs_normalize_variants.nf.test`)、`BWA_MEM2_MEM_SORT`が中間`.sam`を生成せず文書化されたCPU分割を適用すること(`tests/modules/bwa_mem2_mem_sort.nf.test`)、`VALIDATE_REFERENCE_CONTIGS`がFAI/dictの名前・長さ・順序不一致を検出すること(`tests/modules/validate_reference_contigs.nf.test`)、`GATK_GENOMICSDBIMPORT`/`GATK_GATHERVCFS`が単一sample入力(Nextflowのpath入力がList→scalarへ暗黙変換される境界条件)を正しく扱うこと(`tests/modules/gatk_genomicsdbimport.nf.test`、`tests/modules/gatk_gathervcfs.nf.test`)を確認する。Issue #1 #GのP0契約は現在のpipeline-level／主要module-level nf-testとCIで完了している。全モジュールを網羅するカバレッジは将来の拡張 |
 | Functional CI | syntheticフィクスチャpathで実装済み | `.github/workflows/test.yml`が`nextflow lint .`と結合nf-testスイート(pipeline-level + module-level、`-profile test,docker`)をmain向けのpush/pull requestごとに実行する。`.github/workflows/lint.yml`はリポジトリ構造のみを個別に検査する。実データコホートのCIはスコープ外 |
 | 実データコホート検証(Issue #26/#33) | 5→10→20検体E2E検証を実施 | 公開WGSデータをSeedcore-01実機でQC→mapping→重複マーク→gVCF→Joint Genotyping→hard filtering→variant QC→GSパネルまで通した。Issue #26で5検体、Issue #33で10→20検体へ拡張。30検体は根拠を記録して明示的にスキップし、327検体は未検証 |
@@ -123,8 +124,8 @@ Issue [#4](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/4)、
 - filtered SNP/indel VCFについてFILTER値・annotation別のevaluable rate会計を報告し、`raw/snp`と`raw/indel`のレコード数を`raw/all`に対してreconcileする
 - 決定論的なexpected SNPを伴う再配布可能なsynthetic functional-testデータセットを提供する
 
-MultiQC実行はP1の[Issue #38](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/38)へ移管しています。
-全モジュールを網羅するnf-testと327検体規模のコホート検証は将来の拡張です。実データE2Eは
+MultiQC統合はP1の[Issue #38](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/38)で実装し、
+synthetic fixtureで検証しています。327検体規模のコホート検証は将来の拡張です。実データE2Eは
 20検体まで完了し、30検体はIssue #33で根拠を記録したうえで明示的にスキップしています。
 
 ### 必要要件
@@ -1030,6 +1031,7 @@ P0基盤の実装ロードマップは[Issue #1](https://github.com/hoso-jpn/adz
 - サンプル単位のread-group merge
 - 重複レコードを削除しないlibrary単位のGATK重複マーク
 - BAM indexとSAMtools flagstat/stats/idxstatsレポート
+- raw/trimmed FastQC、fastp JSON、MarkDuplicates metrics、SAMtools QCのMultiQC統合
 - サンプル単位のGATK HaplotypeCaller GVCF生成
 - contig単位のGenomicsDBImportとGenotypeGVCFs
 - indexed raw cohort VCFへのreference順gathering

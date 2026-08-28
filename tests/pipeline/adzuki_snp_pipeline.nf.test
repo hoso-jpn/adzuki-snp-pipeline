@@ -311,6 +311,93 @@ nextflow_pipeline {
             assert sampleAMetrics.exists()
             assert sampleBMetrics.exists()
 
+            // Issue #38: the cohort-level MultiQC process scans only the
+            // seven explicitly collected QC-report categories. Assert the
+            // stable semantic subset of MultiQC 1.35's JSON, not the HTML
+            // bytes or runtime-generated timestamps.
+            def multiqcDir = new File("$outputDir/qc/multiqc")
+            def multiqcReport = new File(multiqcDir, "multiqc_report.html")
+            def multiqcDataDir = new File(multiqcDir, "multiqc_data")
+            def multiqcJsonFile = new File(multiqcDataDir, "multiqc_data.json")
+            def multiqcConfig = new File(multiqcDir, "multiqc_config.yaml")
+            def multiqcVersion = new File(multiqcDir, "multiqc_version.txt")
+
+            assert multiqcReport.exists() && multiqcReport.length() > 0
+            assert multiqcReport.text.toLowerCase().contains("<!doctype html>")
+            assert multiqcDataDir.isDirectory()
+            assert multiqcJsonFile.exists() && multiqcJsonFile.length() > 0
+            assert multiqcConfig.bytes == file("${projectDir}/conf/multiqc_config.yaml").bytes
+            assert multiqcVersion.text.contains("1.35")
+
+            def multiqc = new groovy.json.JsonSlurper().parse(multiqcJsonFile)
+            def parsed = multiqc.report_saved_raw_data
+            def expectedReadGroups = [
+                "sample_a_L001",
+                "sample_a_L002",
+                "sample_b_L001",
+            ] as Set
+            def expectedFastqcSamples = expectedReadGroups.collectMany { readGroup ->
+                [
+                    "${readGroup}.raw.R1",
+                    "${readGroup}.raw.R2",
+                    "${readGroup}.trimmed.R1",
+                    "${readGroup}.trimmed.R2",
+                ]
+            } as Set
+
+            assert parsed.multiqc_fastqc.keySet() as Set == expectedFastqcSamples
+            assert parsed.multiqc_fastp.keySet() as Set == expectedReadGroups
+            assert parsed.multiqc_picard_dups.keySet() as Set == ["sample_a", "sample_b"] as Set
+            assert parsed.multiqc_samtools_flagstat.keySet() as Set == ["sample_a", "sample_b"] as Set
+            assert parsed.multiqc_samtools_stats.keySet() as Set == ["sample_a", "sample_b"] as Set
+            assert parsed.multiqc_samtools_idxstats.keySet() as Set == ["sample_a", "sample_b"] as Set
+
+            def sources = multiqc.report_data_sources
+            assert sources.Picard.DuplicationMetrics.size() == 2
+            assert sources.Samtools.flagstat.size() == 2
+            assert sources.Samtools.stats.size() == 2
+            assert sources.Samtools.idxstats.size() == 2
+            assert sources.fastp.all_sections.size() == 3
+            assert sources.FastQC.all_sections.size() == 12
+            assert [
+                sources.Picard.DuplicationMetrics,
+                sources.Samtools.flagstat,
+                sources.Samtools.stats,
+                sources.Samtools.idxstats,
+                sources.fastp.all_sections,
+                sources.FastQC.all_sections,
+            ].sum { sourceClass -> sourceClass.size() } == 23
+
+            def provenanceText = new File(multiqcDataDir, "multiqc_sources.json").text
+            def multiqcLogText = new File(multiqcDataDir, "multiqc.log").text
+            [
+                projectDir.toString(),
+                new File("$outputDir").getParentFile().absolutePath,
+                "/work/",
+                "/tmp/",
+            ].each { forbiddenPath ->
+                assert !multiqcJsonFile.text.contains(forbiddenPath)
+                assert !provenanceText.contains(forbiddenPath)
+                assert !multiqcLogText.contains(forbiddenPath)
+            }
+
+            def sourcePaths = [
+                sources.Picard.DuplicationMetrics,
+                sources.Samtools.flagstat,
+                sources.Samtools.stats,
+                sources.Samtools.idxstats,
+                sources.fastp.all_sections,
+                sources.FastQC.all_sections,
+            ].collectMany { sourceClass -> sourceClass.values() }
+            assert sourcePaths.every { sourcePath -> sourcePath.startsWith("/multiqc/input/") }
+            assert sourcePaths.every { sourcePath ->
+                !sourcePath.endsWith(".html") &&
+                !sourcePath.endsWith(".vcf") &&
+                !sourcePath.endsWith(".vcf.gz") &&
+                !sourcePath.endsWith(".bam") &&
+                !sourcePath.endsWith(".fastq.gz")
+            }
+
             // optical_duplicate_pixel_distance actually reaches the real
             // GATK command line (Picard records its own full invocation
             // as a comment header in the metrics file)

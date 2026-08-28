@@ -47,6 +47,10 @@ include {
 } from '../modules/local/samtools_qc'
 
 include {
+    MULTIQC
+} from '../modules/local/multiqc'
+
+include {
     GATK_HAPLOTYPECALLER
 } from '../modules/local/gatk_haplotypecaller'
 
@@ -362,6 +366,42 @@ workflow ADZUKI_SNP_PIPELINE {
     GATK_MARKDUPLICATES(SAMTOOLS_MERGE.out.bam)
     SAMTOOLS_INDEX(GATK_MARKDUPLICATES.out.bam)
     SAMTOOLS_QC(SAMTOOLS_INDEX.out.bam)
+
+    raw_fastqc_for_multiqc_ch = FASTQC_RAW.out.zip
+        .map { _meta, report -> report }
+        .collect()
+    trimmed_fastqc_for_multiqc_ch = FASTQC_TRIMMED.out.zip
+        .map { _meta, report -> report }
+        .collect()
+    fastp_for_multiqc_ch = FASTP.out.reports
+        .map { _meta, json, _html -> json }
+        .collect()
+    markduplicates_for_multiqc_ch = GATK_MARKDUPLICATES.out.metrics
+        .map { _meta, report -> report }
+        .collect()
+    flagstat_for_multiqc_ch = SAMTOOLS_QC.out.flagstat
+        .map { _meta, report -> report }
+        .collect()
+    stats_for_multiqc_ch = SAMTOOLS_QC.out.stats
+        .map { _meta, report -> report }
+        .collect()
+    idxstats_for_multiqc_ch = SAMTOOLS_QC.out.idxstats
+        .map { _meta, report -> report }
+        .collect()
+    multiqc_config_ch = channel.value(
+        file("${projectDir}/conf/multiqc_config.yaml", checkIfExists: true)
+    )
+
+    MULTIQC(
+        raw_fastqc_for_multiqc_ch,
+        trimmed_fastqc_for_multiqc_ch,
+        fastp_for_multiqc_ch,
+        markduplicates_for_multiqc_ch,
+        flagstat_for_multiqc_ch,
+        stats_for_multiqc_ch,
+        idxstats_for_multiqc_ch,
+        multiqc_config_ch,
+    )
 
     GATK_HAPLOTYPECALLER(
         SAMTOOLS_INDEX.out.bam,
@@ -696,6 +736,10 @@ workflow ADZUKI_SNP_PIPELINE {
     flagstat = SAMTOOLS_QC.out.flagstat
     stats = SAMTOOLS_QC.out.stats
     idxstats = SAMTOOLS_QC.out.idxstats
+    multiqc_report = MULTIQC.out.report
+    multiqc_data = MULTIQC.out.data
+    multiqc_config = MULTIQC.out.config
+    multiqc_version = MULTIQC.out.version
     reference_fai = reference_fai_ch
     reference_dict = reference_dict_ch
     bwa_indexes = bwa_indexes_ch

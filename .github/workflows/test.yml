@@ -43,4 +43,6 @@ jobs:
           tests/modules/validate_reference_contigs.nf.test
           tests/modules/gatk_genomicsdbimport.nf.test
           tests/modules/gatk_gathervcfs.nf.test
+          tests/modules/fastqc.nf.test
+          tests/modules/multiqc.nf.test
           --ci

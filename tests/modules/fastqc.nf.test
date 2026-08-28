@@ -1,0 +1,65 @@
+nextflow_process {
+
+    name "FASTQC collision-safe staged naming contract"
+    script "modules/local/fastqc.nf"
+    process "FASTQC"
+
+    test("same source basenames remain distinct by read group, stage, and mate") {
+
+        when {
+            process {
+                """
+                def sourceR1 = file("${projectDir}/tests/data/reads/sample_a_L001_R1.fastq.gz")
+                def sourceR2 = file("${projectDir}/tests/data/reads/sample_a_L001_R2.fastq.gz")
+                def firstDir = new File("${outputDir}/a")
+                def secondDir = new File("${outputDir}/b")
+                firstDir.mkdirs()
+                secondDir.mkdirs()
+                def firstR1 = new File(firstDir, "R1.fastq.gz")
+                def firstR2 = new File(firstDir, "R2.fastq.gz")
+                def secondR1 = new File(secondDir, "R1.fastq.gz")
+                def secondR2 = new File(secondDir, "R2.fastq.gz")
+                firstR1.bytes = sourceR1.bytes
+                firstR2.bytes = sourceR2.bytes
+                secondR1.bytes = sourceR1.bytes
+                secondR2.bytes = sourceR2.bytes
+
+                input[0] = channel.of(
+                    [[id: 'sample_a', read_group_id: 'RG_A'], [file(firstR1.toString()), file(firstR2.toString())]],
+                    [[id: 'sample_b', read_group_id: 'RG_B'], [file(secondR1.toString()), file(secondR2.toString())]],
+                )
+                input[1] = 'raw'
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.zip.size() == 2
+
+            def zipNames = process.out.zip.collectMany { meta, reports ->
+                def reportList = reports instanceof List ? reports : [reports]
+                reportList.collect { report -> new File(report.toString()).name }
+            } as Set
+            assert zipNames == [
+                'RG_A.raw.R1_fastqc.zip',
+                'RG_A.raw.R2_fastqc.zip',
+                'RG_B.raw.R1_fastqc.zip',
+                'RG_B.raw.R2_fastqc.zip',
+            ] as Set
+
+            process.out.zip.each { meta, reports ->
+                def reportList = reports instanceof List ? reports : [reports]
+                reportList.each { report ->
+                    def zip = new java.util.zip.ZipFile(path(report).toFile())
+                    def dataEntry = zip.entries().find { entry -> entry.name.endsWith('/fastqc_data.txt') }
+                    assert dataEntry != null
+                    def data = zip.getInputStream(dataEntry).text
+                    zip.close()
+                    def mate = new File(report.toString()).name.contains('.R1_') ? 'R1' : 'R2'
+                    assert data.contains("Filename\t${meta.read_group_id}.raw.${mate}.fastq.gz")
+                }
+            }
+        }
+    }
+}
