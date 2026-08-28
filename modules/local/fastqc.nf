@@ -13,10 +13,17 @@ process FASTQC {
     tuple val(meta), path('*_fastqc.zip'), emit: zip
 
     script:
+    def read1_name = "${meta.read_group_id}.${stage}.R1.fastq.gz"
+    def read2_name = "${meta.read_group_id}.${stage}.R2.fastq.gz"
+
     """
+    ln -s ${reads[0]} ${read1_name}
+    ln -s ${reads[1]} ${read2_name}
+
     fastqc \
         --threads ${task.cpus} \
         --outdir . \
-        ${reads}
+        ${read1_name} \
+        ${read2_name}
     """
 }

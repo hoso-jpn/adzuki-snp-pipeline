@@ -1,0 +1,31 @@
+nextflow_process {
+
+    name "MULTIQC required-input contract"
+    script "modules/local/multiqc.nf"
+    process "MULTIQC"
+
+    test("an empty required QC category fails before MultiQC can emit an empty report") {
+
+        when {
+            process {
+                """
+                input[0] = []
+                input[1] = [file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz")]
+                input[2] = [file("${projectDir}/tests/modules/fixtures/mixed_type_contract.vcf.gz.tbi")]
+                input[3] = [file("${projectDir}/tests/data/reference/synthetic.fa")]
+                input[4] = [file("${projectDir}/tests/data/reference/synthetic.fa.fai")]
+                input[5] = [file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz")]
+                input[6] = [file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi")]
+                input[7] = file("${projectDir}/conf/multiqc_config.yaml")
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = (workflow.stdout + workflow.stderr).join("\n")
+            assert output.contains("MULTIQC requires at least one artifact in every QC category")
+            assert output.contains("raw_fastqc_zips")
+        }
+    }
+}
