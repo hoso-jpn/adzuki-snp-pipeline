@@ -193,6 +193,19 @@ GitHub Actionsはmainへのpush / pull requestでNextflow lint、Python unit tes
 
 Versioned research releasesは[GitHub Releases](https://github.com/hoso-jpn/adzuki-snp-pipeline/releases)で公開します。`v0.2.0`のrelease scopeとvalidation notesのreview可能な正本は[`docs/releases/v0.2.0.md`](docs/releases/v0.2.0.md)です。
 
+- [`v0.2.0`](https://github.com/hoso-jpn/adzuki-snp-pipeline/releases/tag/v0.2.0) — 最初の明示的なversioned research release。release対象commitは`dc87eb8fdba0294482fc5fdba991c2a34f1569e2`です。
+
+`v0.2.0`が固定するcontractは、synthetic profileとCIで検証されるNextflow DSL2 workflow、FastQCからGS panel生成までのmodule contract、pin済みcontainer digest、および公開WGS 20検体までのreal E2E evidenceです。reference FAI/dictionaryのname、length、order整合性は、sample依存のmappingと全variant calling processに対するhard dataflow gateです。
+
+以下は`v0.2.0`時点で未検証です。
+
+- MultiQC統合はsynthetic fixtureのみで検証しています。real 20検体でのMultiQC再実行は未実施です。
+- hard-filter thresholdの生物学的妥当性は未確立です。truth setがないため`FILTER=PASS`は「設定された規則を通過した」以上の意味を持たず、accuracy / precision / recallは主張しません。
+- 30検体stageはコストと情報量の比較により明示的にskipしており、失敗ではなく未測定です。
+- 50検体超のGenomicsDB batchingと327検体full cohortは未検証です。`genomicsdb_batch_size=50`は初期運用値であり最適化値ではありません。
+- BQSRは検証済みknown-sites未確立のため意図的に除外しています。
+- production SLAとvariant call精度の優位性は保証しません。
+
 ## Real-cohort evidence
 
 ### 5 samples — Issue #26
@@ -236,7 +249,6 @@ MAF / call-rate filtering、LD pruning、imputation、GS model trainingはこの
 
 現在までのIssueはすべて完了しました。リポジトリ全体の再監査後、次のfollow-upを起票しています。
 
-- [#41](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/41) — **P0**: `v0.2.0` releaseを切り、検証済みpipeline contractを固定する
 - [#42](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/42) — **P0**: run-level provenance manifestをNextflow DAGへ自動統合する
 - [#44](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/44) — **P0**: `BUILD_GS_PANEL`をbounded-memory化する
 - [#43](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/43) — **P1**: `SUMMARIZE_FILTER_QC`をstreaming化する
