@@ -1150,6 +1150,8 @@ nextflow_pipeline {
 
     test("a prebuilt reference_dict whose contigs are reordered relative to reference_fai fails before any process runs") {
 
+        tag "reference-validation-gate"
+
         when {
             params {
                 def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
@@ -1180,6 +1182,18 @@ nextflow_pipeline {
 
         then {
             assert !workflow.success
+
+            // Permanent structural guard for the dependency that the main
+            // push CI race exposed: the mapper must consume the read channel
+            // combined with VALIDATE_REFERENCE_CONTIGS's successful output,
+            // not FASTP.out.reads directly. The runtime assertions below then
+            // verify the observable failure contract without sleeps/timing.
+            def workflowSource = file("${projectDir}/workflows/adzuki_snp_pipeline.nf").text
+            assert workflowSource.contains(
+                "validated_mapping_reads_ch = FASTP.out.reads\n" +
+                "        .combine(reference_validation_gate_ch)"
+            )
+            assert workflowSource =~ /BWA_MEM2_MEM_SORT\(\s*validated_mapping_reads_ch,/
 
             def output = (workflow.stdout + workflow.stderr).join("\n")
             assert output.contains("reference FAI and sequence dictionary are inconsistent")

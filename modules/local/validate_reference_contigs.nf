@@ -13,11 +13,13 @@
 // This process runs once, right after reference_fai_ch/reference_dict_ch
 // are established in workflows/adzuki_snp_pipeline.nf -- for *both* the
 // generated and the prebuilt path, since both converge to the same
-// (meta, file) channel shape at that point -- and every downstream
-// reference-dependent process depends on its output rather than on the
-// pre-validation channels directly, so a mismatch fails the whole run
-// before any GATK process starts, with an actionable message identifying
-// the first point of disagreement (see bin/validate_reference_contigs.py).
+// (meta, file) channel shape at that point. Its pass-through FAI/dict outputs
+// gate variant calling, and the workflow derives a reusable completion token
+// from the validated FAI to gate sample-dependent BWA mapping. Reference-only
+// BWA index construction may proceed in parallel because it consumes only the
+// FASTA. A mismatch therefore prevents mapping and variant calling from
+// starting, with an actionable message identifying the first point of
+// disagreement (see bin/validate_reference_contigs.py).
 process VALIDATE_REFERENCE_CONTIGS {
     tag "${fai_meta.id}"
     label 'process_low'
