@@ -273,18 +273,40 @@ workflow ADZUKI_SNP_PIPELINE {
             GATK_CREATE_SEQUENCE_DICTIONARY.out.dict
     }
 
-    // Issue #11: validated once here, for both the generated and the
-    // prebuilt reference-bundle path (both have already converged to the
-    // same channel shape above) -- every downstream consumer below is
-    // rebound to this process's own pass-through output, so a contig
-    // name/order/length mismatch fails the whole run before
-    // GATK_HAPLOTYPECALLER or any other reference-dependent process starts.
+    // Issue #11 / #41: validate once here for both the generated and
+    // prebuilt reference-bundle paths. The pass-through FAI/dict outputs
+    // gate variant calling directly. In addition, reference_validation_gate_ch
+    // below gates the FASTP reads before sample-dependent mapping, so source
+    // order is not being mistaken for an execution barrier. Reference-only
+    // BWA index construction may still proceed in parallel because it consumes
+    // the FASTA, not the FAI/dict pair.
     VALIDATE_REFERENCE_CONTIGS(
         reference_fai_ch,
         reference_dict_ch,
     )
     reference_fai_ch = VALIDATE_REFERENCE_CONTIGS.out.fai
     reference_dict_ch = VALIDATE_REFERENCE_CONTIGS.out.dict
+
+    // `.first()` turns the validator's single successful emission into a
+    // reusable value channel. Every FASTP tuple is combined with that value,
+    // preserving read-group cardinality while making validation success an
+    // explicit dataflow prerequisite for every BWA_MEM2_MEM_SORT task. A
+    // validation failure emits no value, so mapping cannot be scheduled.
+    reference_validation_gate_ch = reference_fai_ch
+        .map { meta, _fai -> meta.id }
+        .first()
+    validated_mapping_reads_ch = FASTP.out.reads
+        .combine(reference_validation_gate_ch)
+        .map {
+            meta,
+            read1,
+            read2,
+            validated_reference_id ->
+            if (meta == null || validated_reference_id == null) {
+                error('reference validation gate received an invalid metadata value')
+            }
+            tuple(meta, read1, read2)
+        }
 
     if (params.bwa_index_prefix) {
         bwa_indexes_ch = reference_ch.map {
@@ -321,7 +343,7 @@ workflow ADZUKI_SNP_PIPELINE {
     }
 
     BWA_MEM2_MEM_SORT(
-        FASTP.out.reads,
+        validated_mapping_reads_ch,
         reference_ch,
         bwa_indexes_ch
     )
