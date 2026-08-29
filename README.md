@@ -189,6 +189,10 @@ NXF_VER=26.04.6 \
 
 GitHub Actionsはmainへのpush / pull requestでNextflow lint、Python unit tests、nf-testを実行します。real WGS cohortはCIでは実行しません。
 
+## Releases
+
+Versioned research releasesは[GitHub Releases](https://github.com/hoso-jpn/adzuki-snp-pipeline/releases)で公開します。`v0.2.0`のrelease scopeとvalidation notesのreview可能な正本は[`docs/releases/v0.2.0.md`](docs/releases/v0.2.0.md)です。
+
 ## Real-cohort evidence
 
 ### 5 samples — Issue #26

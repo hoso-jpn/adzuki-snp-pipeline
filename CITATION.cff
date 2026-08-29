@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "adzuki-snp-pipeline"
+type: software
+authors:
+  - family-names: "Hosokawa"
+    given-names: "Yusuke"
+repository-code: "https://github.com/hoso-jpn/adzuki-snp-pipeline"
+url: "https://github.com/hoso-jpn/adzuki-snp-pipeline"
+license: MIT
+version: 0.2.0
