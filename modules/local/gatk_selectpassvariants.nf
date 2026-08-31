@@ -2,7 +2,7 @@ process GATK_SELECTPASSVARIANTS {
     tag "${meta.id}:${meta.variant_type}"
     label 'process_medium'
 
-    container 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
+    container params.containers.gatk
 
     input:
     tuple(
@@ -18,6 +18,11 @@ process GATK_SELECTPASSVARIANTS {
         path("${meta.id}.${meta.variant_type}.pass.vcf.gz.tbi"),
         emit: vcf
     )
+    // Issue #52: see gatk_variantfiltration.nf for why this records
+    // task.container (the resolved, per-alias effective container) rather
+    // than the `container` directive's default -- this module is aliased
+    // as both GATK_SELECTPASSVARIANTS and GATK_SELECTPASSVARIANTS_GS.
+    val(task.container), emit: container_id
 
     script:
     memory_gb = Math.max(

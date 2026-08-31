@@ -37,7 +37,8 @@ workflow {
     if (gsPanelEnabled && samplePloidy != 2) {
         error(
             "params.sample_ploidy is ${params.sample_ploidy}, but params.enable_gs_panel " +
-            'is true (the default). The GS panel schema (v1) is diploid-only and would ' +
+            'is true (the default). The GS panel genotype encoding ' +
+            '(diploid_additive_dosage_v1) is diploid-only and would ' +
             'fail only after variant calling has already run, wasting that work. Set ' +
             '--enable_gs_panel false to run non-diploid variant calling without the GS ' +
             'panel, or leave sample_ploidy at its default (2) to keep the GS panel enabled.'

@@ -44,7 +44,9 @@ construction) -- is treated as missing in the matrix, but counted
 under its own specific reason so "never silently coerce" is checkable
 with real numbers, not just asserted in prose.
 
-This encoding is diploid-only by design (schema v1): `--sample-ploidy`
+This encoding is diploid-only by design (the genotype encoding schema
+`diploid_additive_dosage_v1`, which is versioned independently of the
+GS panel manifest's own `schema_version`): `--sample-ploidy`
 must equal 2, checked before any other work, because a non-diploid
 ploidy would make every genotype call "non-diploid-shaped" by
 definition, silently producing an all-missing (but successfully
@@ -495,7 +497,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.sample_ploidy != 2:
         print(
-            "build_gs_panel.py: error: this GS panel schema (v1) is diploid-only, "
+            "build_gs_panel.py: error: this GS panel genotype encoding "
+            "(diploid_additive_dosage_v1) is diploid-only, "
             f"but --sample-ploidy was {args.sample_ploidy}. Every genotype call "
             "would be classified as non-diploid-shaped and encoded as missing, "
             "which would silently produce an all-missing panel rather than a "

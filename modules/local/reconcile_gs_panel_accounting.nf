@@ -4,7 +4,7 @@ process RECONCILE_GS_PANEL_ACCOUNTING {
 
     // See modules/local/summarize_variant_qc.nf for why the full
     // (non-"-slim") Python image is required.
-    container 'python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7'
+    container params.containers.python
 
     input:
     tuple val(meta), path(raw_all_vcf), path(raw_all_vcf_index)
@@ -22,6 +22,10 @@ process RECONCILE_GS_PANEL_ACCOUNTING {
         path("${meta.id}.gs_panel.record_accounting.summary.txt"),
         emit: accounting
     )
+    // Issue #52: see modules/local/gs_normalize_variants.nf for why this
+    // records task.container (the resolved, post-override effective
+    // container) rather than trusting the `container` directive above.
+    val(task.container), emit: container_id
 
     script:
     """

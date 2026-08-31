@@ -270,7 +270,12 @@ a purely informational count of how many calls (standard or otherwise)
 used `|`, independent of whether that call was ultimately encoded as a
 dosage or as missing.
 
-### Diploid-only constraint (schema v1)
+### Diploid-only constraint (genotype encoding `diploid_additive_dosage_v1`)
+
+This constraint belongs to the *genotype encoding* schema
+(`diploid_additive_dosage_v1`), which is versioned independently of the
+manifest's own `schema_version` (2 since Issue #52) — the encoding did
+not change when the manifest's `containers` field did.
 
 This encoding is diploid-only by design, not merely by convention: the
 classification rule above has no way to assign a meaningful dosage to a
@@ -443,7 +448,7 @@ plain field-count-only check would miss.
 ## Reproducibility manifest (concern 6)
 
 `cohort.gs_panel.manifest.json` (`bin/build_gs_panel_manifest.py`) is
-schema-versioned (`schema_version: 1`) and mirrors the *shape* of the
+schema-versioned (`schema_version: 2`) and mirrors the *shape* of the
 sibling repository's own `run_manifest.py` — a sortable `run_id`
 (`<UTC-timestamp>-<uuid4-hex8>`), deterministic canonical JSON, a
 self-referential `manifest_hash`, and filename-only checksums (never an
@@ -454,13 +459,22 @@ stdlib-only Python instead.
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "run_id": "20260814T074225Z-c22d6e72",
   "generated_at": "2026-08-14T07:42:25Z",
   "cohort_id": "cohort",
   "pipeline_version": "0.2.0-dev",
   "git_commit": null,
-  "containers": { "bcftools": "...", "gatk": "...", "python": "..." },
+  "containers": {
+    "gs_normalize_variants": "...",
+    "classify_normalized_variants": "...",
+    "gs_index_classified_variants": "...",
+    "gatk_variantfiltration_gs": "...",
+    "gatk_selectpassvariants_gs": "...",
+    "build_gs_panel": "...",
+    "reconcile_gs_panel_accounting": "...",
+    "build_gs_panel_manifest": "..."
+  },
   "parameters": { "sample_ploidy": 2, "snp_filter_qd_min": 2.0, "...": "..." },
   "genotype_encoding": {
     "schema": "diploid_additive_dosage_v1",
@@ -487,10 +501,79 @@ for normalization — so a reader can reconstruct *which* inputs and
 reference a given panel came from, not only verify the panel's own
 outputs against themselves.
 
-Software versions are recorded as the pinned container image references
-already baked into each process's `container` directive — the ground
-truth for "what actually ran" in a Nextflow-plus-Docker pipeline — rather
-than by shelling out to e.g. `bcftools --version` at run time.
+**`containers` (schema v2, Issue #52): one entry per GS-lineage process,
+never merged by shared tool.** Each key is the exact GS process name
+(lowercased) of every process the GS lineage actually runs, including
+`build_gs_panel_manifest` — the process that writes this very file —
+`gs_normalize_variants` and `gs_index_classified_variants` both use
+bcftools by default; `build_gs_panel`, `classify_normalized_variants`,
+`reconcile_gs_panel_accounting`, and `build_gs_panel_manifest` all use
+Python by default; `gatk_variantfiltration_gs` and
+`gatk_selectpassvariants_gs` are the GS lineage's own aliases of the
+shared `GATK_VARIANTFILTRATION`/`GATK_SELECTPASSVARIANTS` modules — but
+each value is that specific process's own *effective* container, not a
+value shared across an entire tool category. Two processes that happen to
+use the same tool by default can still diverge (a
+`withName`/alias/fully-qualified-selector/profile override on only one of
+them) and schema v2 is designed so that can never be silently collapsed
+into a single ambiguous value.
+
+The GS lineage runs exactly these eight processes, and all eight are
+recorded: this field is the whole GS lineage, with no "except the one
+that generated the record" exclusion. Processes outside the GS lineage
+that happen to share these same images by default
+(`SUMMARIZE_VARIANT_QC`, `BCFTOOLS_STATS`, the primary lineage's own
+GATK stages) are deliberately *not* in scope here — a GS panel manifest
+describes how the GS panel was produced; run-level provenance covering
+every process in the pipeline is tracked separately as Issue #42.
+
+Each value is Nextflow's own `task.container`, captured from inside that
+exact task via a `container_id` output added to every upstream GS-lineage
+process (see `modules/local/gs_normalize_variants.nf` and its sibling GS
+modules), and — for `build_gs_panel_manifest` itself — read directly as
+`task.container` in `BUILD_GS_PANEL_MANIFEST`'s own script, since
+Nextflow resolves a task's container before rendering that task's script
+(verified on Nextflow 26.04.6 against both a default and a `withName`
+override). Either way it is the container **actually used**, already
+resolved after any `withName`/alias/fully-qualified-selector/profile
+override on top of that process's `container` directive default. The default itself now lives in
+one place, `conf/containers.config` (`params.containers.bcftools/gatk/
+python`), referenced by each module's `container` directive instead of
+repeating the literal — but the manifest never trusts that default value
+directly, precisely because a default can be overridden per-task without
+this file changing at all. `workflows/adzuki_snp_pipeline.nf` wires each
+upstream process's `container_id` output straight into
+`BUILD_GS_PANEL_MANIFEST`; no literal container digest is defined in the
+workflow file, nor in any GS module file, any more.
+
+`tests/pipeline/adzuki_snp_pipeline.nf.test` holds the end-to-end proof
+of that claim rather than restating it: one test changes
+`params.containers` from a test config alone and asserts the changed
+value appears both in the tasks' real `docker run` invocation
+(`.command.run`) and in this manifest, while a process-specific
+`withName` override on one process still wins over the changed default
+and does not leak onto its siblings. The expected default values in those
+tests are parsed out of `conf/containers.config` at test time rather than
+copied into the test, so bumping a pinned image stays a one-file change.
+
+**Schema v1 → v2: why this was a version bump, not an additive change.**
+Schema v1's `containers.bcftools/gatk/python` was keyed by *tool
+category*, one shared value for every process using that tool. That
+meaning becomes ambiguous the moment two processes sharing a tool are
+overridden differently (e.g. only `GS_NORMALIZE_VARIANTS`'s bcftools
+container, not `GS_INDEX_CLASSIFIED_VARIANTS`'s) — there would be no
+correct single value to put in `containers.bcftools`, and keeping the
+field while its meaning became unclear was rejected as worse than
+versioning: the field's own keys had to change from tool names to process
+names, which is not a shape a v1 reader could parse as an extension of
+the same field. Older, already-published `schema_version: 1` manifests
+(including historical run/scale-validation manifests referenced elsewhere
+in this repository's docs) are untouched by this change and remain valid
+schema v1 documents; only newly generated manifests use schema v2.
+
+Software versions are therefore recorded as each GS process's own
+effective container identity (see `containers` above) rather than by
+shelling out to e.g. `bcftools --version` at run time.
 
 `git_commit` is Nextflow's own `workflow.commitId`, resolved by the
 workflow and passed in as a plain argument rather than computed inside a

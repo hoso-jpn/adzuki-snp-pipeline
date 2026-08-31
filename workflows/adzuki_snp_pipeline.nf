@@ -664,17 +664,21 @@ workflow ADZUKI_SNP_PIPELINE {
             BUILD_GS_PANEL.out.sample_metadata,
         )
 
-        // Keep these in sync with the `container` directives in
-        // modules/local/gs_normalize_variants.nf, gatk_variantfiltration.nf,
-        // and build_gs_panel.nf: Nextflow has no built-in way to introspect
-        // "which container did process X actually run in" from a sibling
-        // process, so the manifest records these as literal digests rather
-        // than shelling out to e.g. `bcftools --version` at run time (which
-        // would report the tool version, not the pinned image identity).
-        gs_panel_bcftools_container = 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
-        gs_panel_gatk_container = 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
-        gs_panel_python_container = 'python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7'
-
+        // Issue #52: no literal container digests here any more. Each GS
+        // process below emits its own `container_id` -- task.container,
+        // captured from inside that exact task after Nextflow has already
+        // resolved any withName/alias/fully-qualified-selector/profile
+        // override on top of its `container` directive (itself sourced
+        // from conf/containers.config, the single default-value source of
+        // truth; see that file's header for why the default alone is not
+        // sufficient). BUILD_GS_PANEL_MANIFEST therefore records what each
+        // task actually ran in, not what the pipeline assumed it would.
+        //
+        // Seven `container_id` channels are wired below; the manifest's
+        // eighth `containers` entry is BUILD_GS_PANEL_MANIFEST's own
+        // container, which that process reads from its own task.container
+        // inside its own script rather than from a channel routed through
+        // here (see modules/local/build_gs_panel_manifest.nf).
         BUILD_GS_PANEL_MANIFEST(
             RECONCILE_GS_PANEL_ACCOUNTING.out.accounting,
             gs_pass_for_panel_ch,
@@ -688,9 +692,13 @@ workflow ADZUKI_SNP_PIPELINE {
             reference_fai_ch,
             workflow.manifest.version,
             workflow.commitId ?: '',
-            gs_panel_bcftools_container,
-            gs_panel_gatk_container,
-            gs_panel_python_container,
+            GS_NORMALIZE_VARIANTS.out.container_id,
+            CLASSIFY_NORMALIZED_VARIANTS.out.container_id,
+            GS_INDEX_CLASSIFIED_VARIANTS.out.container_id,
+            GATK_VARIANTFILTRATION_GS.out.container_id,
+            GATK_SELECTPASSVARIANTS_GS.out.container_id,
+            BUILD_GS_PANEL.out.container_id,
+            RECONCILE_GS_PANEL_ACCOUNTING.out.container_id,
         )
 
         gs_normalized_vcf_ch = GS_NORMALIZE_VARIANTS.out.vcf

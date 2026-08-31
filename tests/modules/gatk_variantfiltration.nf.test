@@ -80,6 +80,16 @@ nextflow_process {
                 .findAll { line -> line.startsWith("##FILTER=<ID=") }
                 .collect { line -> (line =~ /##FILTER=<ID=([^,>]+)/)[0][1] }
             assert filterHeaderIds.containsAll(["SNP_QD_LOW", "SNP_QUAL_LOW", "SNP_SOR_HIGH"])
+
+            // Issue #52: with no override configured, the effective
+            // container this task actually ran in must equal the single
+            // default-value source of truth in conf/containers.config --
+            // read from that file here (tests/lib/GsContainerDefaults.groovy)
+            // rather than copied into this test, so a legitimately bumped
+            // image needs no test edit and a regression back to per-module
+            // hardcoded digests could not pass by coincidence.
+            assert process.out.container_id[0] ==
+                GsContainerDefaults.read(projectDir).gatk
         }
     }
 
@@ -586,6 +596,47 @@ nextflow_process {
                 .findAll { line -> !line.startsWith("#") }
             assert records.size() == 4
             assert records.findAll { line -> line.split("\t")[6] == "SNP_QD_LOW" }.size() == 1
+            assert process.out.container_id[0] ==
+                GsContainerDefaults.read(projectDir).gatk
+        }
+    }
+
+    // Issue #52 regression: this module is aliased as both
+    // GATK_VARIANTFILTRATION (primary lineage) and
+    // GATK_VARIANTFILTRATION_GS (GS lineage) in
+    // workflows/adzuki_snp_pipeline.nf. A withName override anchored to
+    // this bare process name must be reflected in container_id -- the
+    // alias- and fully-qualified-selector cases (which only exist once
+    // this module is included into a workflow) are covered at the
+    // pipeline level in tests/pipeline/adzuki_snp_pipeline.nf.test.
+    test("a withName override changes the recorded container_id, not just the running container") {
+
+        tag "issue52_containers"
+
+        config "./fixtures/gatk_variantfiltration_container_override.config"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort', variant_type: 'snp' ],
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/variantfiltration_contract.vcf.gz.tbi"),
+                    [
+                        [ name: 'SNP_QD_LOW', expression: 'QD < 2.0' ]
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def gatkDefault = GsContainerDefaults.read(projectDir).gatk
+            assert process.out.container_id[0] ==
+                GsContainerDefaults.digestOnly(gatkDefault)
+            assert process.out.container_id[0] != gatkDefault
         }
     }
 }

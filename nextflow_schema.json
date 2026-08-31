@@ -71,7 +71,7 @@
     },
     "enable_gs_panel": {
       "type": "boolean",
-      "description": "Whether to run the GS (genomic selection) SNP panel lineage; its schema v1 is diploid-only, so this must be false whenever sample_ploidy is not 2"
+      "description": "Whether to run the GS (genomic selection) SNP panel lineage; its genotype encoding (diploid_additive_dosage_v1) is diploid-only, so this must be false whenever sample_ploidy is not 2"
     },
     "optical_duplicate_pixel_distance": {
       "type": "integer",
@@ -134,6 +134,24 @@
     "indel_filter_read_pos_rank_sum_min": {
       "type": "number",
       "description": "Minimum ReadPosRankSum for indels"
+    },
+    "containers": {
+      "type": "object",
+      "description": "Issue #52: single default-value source of truth for the GS-lineage processes' container image references (see conf/containers.config). Each process's own effective container (Nextflow's task.container, resolved after any override) is what actually gets recorded in the GS panel manifest -- this default is not itself trusted as provenance. Not intended to be set via the CLI/samplesheet in normal use; change conf/containers.config directly to bump a pinned image.",
+      "properties": {
+        "bcftools": {
+          "type": "string",
+          "description": "Default bcftools image reference for the GS lineage's bcftools-based processes"
+        },
+        "gatk": {
+          "type": "string",
+          "description": "Default GATK image reference for the GS lineage's GATK-based processes"
+        },
+        "python": {
+          "type": "string",
+          "description": "Default Python image reference for the GS lineage's Python-based processes"
+        }
+      }
     }
   },
   "required": [

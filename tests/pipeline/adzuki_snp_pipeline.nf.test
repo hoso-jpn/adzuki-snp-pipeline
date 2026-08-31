@@ -29,6 +29,53 @@ nextflow_pipeline {
         return matches
     }
 
+    // Issue #52: same walk as findCommandScripts above, but returns each
+    // matched task's sibling `.command.run` instead of `.command.sh` --
+    // that file's `nxf_launch()` function embeds the literal `docker run
+    // ... <image> ...` invocation Nextflow actually used for that task,
+    // which is how a real container override (as opposed to the
+    // GS-lineage-only `container_id` outputs this Issue adds) can be
+    // confirmed never to have leaked onto an unrelated task.
+    def findCommandRunScripts = { String testOutputDir, String needle ->
+        def testRoot = new File(testOutputDir).getParentFile()
+        def matches = []
+        def walk
+        walk = { File dir ->
+            dir.listFiles()?.each { entry ->
+                if (entry.isDirectory() && !entry.name.endsWith(".genomicsdb")) {
+                    walk(entry)
+                } else if (entry.name == ".command.sh" && entry.text.contains(needle)) {
+                    def runFile = new File(entry.getParentFile(), ".command.run")
+                    if (runFile.exists()) {
+                        matches << runFile.text
+                    }
+                }
+            }
+        }
+        walk(testRoot)
+        return matches
+    }
+
+    // Issue #52: a needle that appears in exactly one GS-lineage task's
+    // `.command.sh`, per manifest `containers` key, so a test can pull up
+    // that task's real `.command.run` (and therefore the image Nextflow
+    // actually launched it with) and compare it against the identity the
+    // manifest recorded for the very same process. Each needle is a
+    // fragment of that process's own rendered command rather than a
+    // filename it merely shares with a neighbour: `cohort_gs.normalized.vcf.gz`,
+    // for instance, appears in CLASSIFY_NORMALIZED_VARIANTS's command as an
+    // input as well as in GS_NORMALIZE_VARIANTS's as an output.
+    def GS_TASK_NEEDLES = [
+        gs_normalize_variants        : 'bcftools norm',
+        classify_normalized_variants : 'classify_normalized_variants.py',
+        gs_index_classified_variants : 'bcftools view --output-type z --output cohort_gs.classified.vcf.gz',
+        gatk_variantfiltration_gs    : '--output cohort_gs.snp.filtered.vcf.gz',
+        gatk_selectpassvariants_gs   : '--output cohort_gs.snp.pass.vcf.gz',
+        build_gs_panel               : '--matrix-output cohort.gs_panel.genotype_matrix.tsv.gz',
+        reconcile_gs_panel_accounting: 'reconcile_gs_panel_accounting.py',
+        build_gs_panel_manifest      : 'build_gs_panel_manifest.py',
+    ]
+
     test("both samples resolve confident ref/alt genotypes at both deterministic SNP loci") {
 
         when {
@@ -608,7 +655,7 @@ nextflow_pipeline {
             def manifestJson = new groovy.json.JsonSlurper().parse(
                 new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
             )
-            assert manifestJson.schema_version == 1
+            assert manifestJson.schema_version == 2
             assert manifestJson.panel_status == "empty"
             assert manifestJson.cohort_id == "cohort"
             assert manifestJson.parameters.sample_ploidy == 2
@@ -619,6 +666,279 @@ nextflow_pipeline {
             // raw_all_vcf, reference_fasta, reference_fai (Issue #18 PR
             // review, P1-4: provenance, not just self-consistency).
             assert manifestJson.checksums.size() == 11
+
+            // Issue #52: schema v2 records one effective container per
+            // GS-lineage process (never merged by shared tool), each read
+            // from that process's own task.container. With no override
+            // configured in this test, every entry must equal the single
+            // default-value source of truth in conf/containers.config --
+            // proving the wiring in workflows/adzuki_snp_pipeline.nf
+            // actually reaches every one of the eight processes the GS
+            // lineage runs, not just whichever ones happened to be
+            // non-empty before. The expected values are parsed out of
+            // conf/containers.config itself (tests/lib/GsContainerDefaults.groovy),
+            // never copied into this file: a copied digest would still pass
+            // against a pipeline that had gone back to hardcoding the same
+            // value in every module -- exactly the state Issue #52 exists
+            // to leave behind -- and would need a hand edit on every
+            // legitimate image bump.
+            def containerDefaults = GsContainerDefaults.read(projectDir)
+            def expectedContainers = [
+                gs_normalize_variants        : containerDefaults.bcftools,
+                classify_normalized_variants : containerDefaults.python,
+                gs_index_classified_variants : containerDefaults.bcftools,
+                gatk_variantfiltration_gs    : containerDefaults.gatk,
+                gatk_selectpassvariants_gs   : containerDefaults.gatk,
+                build_gs_panel               : containerDefaults.python,
+                reconcile_gs_panel_accounting: containerDefaults.python,
+                // The manifest-writing process records itself too, so the
+                // one identity a reader needs to reproduce the manifest
+                // itself is not the one entry missing from it.
+                build_gs_panel_manifest      : containerDefaults.python,
+            ]
+            assert manifestJson.containers.size() == 8
+            assert manifestJson.containers.keySet() == expectedContainers.keySet()
+            expectedContainers.each { processName, expectedReference ->
+                assert manifestJson.containers[processName] == expectedReference:
+                    "manifest recorded ${manifestJson.containers[processName]} for ${processName}, expected ${expectedReference}"
+            }
+
+            // ...and each recorded identity is the container that task
+            // really ran in, not merely the value the workflow passed
+            // along: every GS task's own `.command.run` (whose
+            // nxf_launch() embeds the literal `docker run ... <image>`
+            // Nextflow used) must name the same image recorded for it.
+            GS_TASK_NEEDLES.each { processName, needle ->
+                def runs = findCommandRunScripts(outputDir.toString(), needle)
+                assert runs.size() == 1:
+                    "expected exactly one ${processName} task for needle '${needle}', found ${runs.size()}"
+                assert runs[0].contains(expectedContainers[processName]):
+                    "${processName} did not run in ${expectedContainers[processName]}"
+            }
+        }
+    }
+
+    // Issue #52 acceptance test: `conf/containers.config` is the single
+    // source of truth for GS-lineage default containers, which means
+    // changing a value *there and nowhere else* must change both what the
+    // pipeline actually runs and what the manifest records -- the two can
+    // then never drift apart, because they are the same fact read twice.
+    //
+    // This test changes it from a config alone (no module edit, no
+    // workflow edit, no literal added anywhere) and follows the value
+    // through the whole chain:
+    //
+    //     conf/containers.config's value, transformed by the fixture
+    //       -> the image each GS task's real `docker run` used (.command.run)
+    //       -> the identity recorded in cohort.gs_panel.manifest.json
+    //
+    // Asserting only the last link would leave the first unproven: a
+    // manifest can be made to echo any value handed to it. Asserting only
+    // the first would prove the run changed while saying nothing about
+    // whether the provenance record noticed.
+    //
+    // The same run also keeps one process (GS_INDEX_CLASSIFIED_VARIANTS)
+    // pinned to the *original* reference through its own `withName`
+    // selector, so a changed default and a process-specific override can
+    // be told apart for two processes that share a tool: bcftools' two GS
+    // processes must come out on different containers, which is precisely
+    // what schema v1's single `containers.bcftools` key could not express.
+    test("changing only conf/containers.config's default reaches both the real container and the manifest, while a process-specific override still wins") {
+
+        // Runnable on its own with `nf-test test --tag issue52_containers`,
+        // so the Issue #52 container-provenance regressions can be checked
+        // without a full-suite run.
+        tag "issue52_containers"
+
+        config "./fixtures/gs_container_default_change.config"
+
+        when {
+            params {
+                // See the first test in this file for why the
+                // samplesheet's paths are rewritten to absolute paths.
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                sample_ploidy = "2"
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            def manifestJson = new groovy.json.JsonSlurper().parse(
+                new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
+            )
+            assert manifestJson.schema_version == 2
+
+            // The fixture rewrites every default to the same image
+            // referenced by digest alone; this is the identical
+            // transformation, so nothing here is a copy of a pinned
+            // production digest.
+            def containerDefaults = GsContainerDefaults.read(projectDir)
+            def changedBcftools = GsContainerDefaults.digestOnly(containerDefaults.bcftools)
+            def changedGatk = GsContainerDefaults.digestOnly(containerDefaults.gatk)
+            def changedPython = GsContainerDefaults.digestOnly(containerDefaults.python)
+
+            // Without this, an accidentally identity-shaped transform
+            // would make every assertion below pass while proving nothing.
+            assert changedBcftools != containerDefaults.bcftools
+            assert changedGatk != containerDefaults.gatk
+            assert changedPython != containerDefaults.python
+
+            def expectedContainers = [
+                gs_normalize_variants        : changedBcftools,
+                classify_normalized_variants : changedPython,
+                // Pinned back to the original by its own withName
+                // selector: a process-specific override outranks the
+                // changed default, and is recorded as such.
+                gs_index_classified_variants : containerDefaults.bcftools,
+                gatk_variantfiltration_gs    : changedGatk,
+                gatk_selectpassvariants_gs   : changedGatk,
+                build_gs_panel               : changedPython,
+                reconcile_gs_panel_accounting: changedPython,
+                build_gs_panel_manifest      : changedPython,
+            ]
+
+            assert manifestJson.containers.size() == 8
+            expectedContainers.each { processName, expectedReference ->
+                assert manifestJson.containers[processName] == expectedReference:
+                    "manifest recorded ${manifestJson.containers[processName]} for ${processName}, expected ${expectedReference}"
+            }
+
+            // Two processes, one tool, two different effective containers
+            // -- recorded separately rather than collapsed into one value.
+            assert manifestJson.containers.gs_normalize_variants !=
+                manifestJson.containers.gs_index_classified_variants
+
+            // And the recorded values are what actually ran: each GS
+            // task's own `.command.run` embeds the literal `docker run
+            // ... <image>` Nextflow launched it with.
+            GS_TASK_NEEDLES.each { processName, needle ->
+                def runs = findCommandRunScripts(outputDir.toString(), needle)
+                assert runs.size() == 1:
+                    "expected exactly one ${processName} task for needle '${needle}', found ${runs.size()}"
+                assert runs[0].contains(expectedContainers[processName]):
+                    "${processName} did not run in ${expectedContainers[processName]}"
+            }
+
+            // The digest-only and tag-plus-digest forms are not substrings
+            // of one another, so these two also prove each bcftools
+            // process ran in *only* its own image -- the changed default
+            // did not reach the overridden process, and the override did
+            // not reach the defaulted one.
+            def normalizeRuns = findCommandRunScripts(outputDir.toString(), GS_TASK_NEEDLES.gs_normalize_variants)
+            def indexRuns = findCommandRunScripts(outputDir.toString(), GS_TASK_NEEDLES.gs_index_classified_variants)
+            assert !normalizeRuns[0].contains(containerDefaults.bcftools)
+            assert !indexRuns[0].contains(changedBcftools)
+        }
+    }
+
+    // Issue #52 regression: proves the GS panel manifest records what a
+    // task actually ran in, not module-file/workflow-literal defaults.
+    // One pipeline run exercises three override mechanisms at once:
+    //   - a plain `withName` override on GS_NORMALIZE_VARIANTS (a process
+    //     with no non-GS alias), proving a simple override reaches the
+    //     manifest at all;
+    //   - a fully-qualified `withName` override
+    //     (`ADZUKI_SNP_PIPELINE:GATK_VARIANTFILTRATION_GS`) on only the GS
+    //     alias of the GATK_VARIANTFILTRATION module, while its sibling
+    //     alias GATK_VARIANTFILTRATION (used by the primary, non-GS
+    //     lineage) is left at its default -- proving a fully-qualified
+    //     selector is captured and that the two aliases are never
+    //     conflated into a single recorded value.
+    // Both overrides swap in the *same underlying image*, referenced by
+    // digest alone with its tag dropped, purely so the string differs
+    // from the default: this keeps the run itself fast and deterministic
+    // (no new image to pull, and no dependence on a mutable tag) while
+    // still being a value regression guard -- a manifest that still
+    // showed the unmodified default here would prove the override never
+    // reached the manifest at all. Changing the default itself is the
+    // separate acceptance test above.
+    test("container overrides on GS_NORMALIZE_VARIANTS and the GATK_VARIANTFILTRATION_GS alias are recorded in the GS panel manifest, not their module defaults") {
+
+        tag "issue52_containers"
+
+        config "./fixtures/gs_container_identity_override.config"
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                sample_ploidy = "2"
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            def manifestJson = new groovy.json.JsonSlurper().parse(
+                new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
+            )
+            assert manifestJson.schema_version == 2
+
+            def containerDefaults = GsContainerDefaults.read(projectDir)
+            def gatkDefault = containerDefaults.gatk
+
+            // Overridden: recorded value differs from the default and
+            // equals exactly what the fixture config set (the same
+            // digest-only transformation the fixture applies).
+            assert manifestJson.containers.gs_normalize_variants ==
+                GsContainerDefaults.digestOnly(containerDefaults.bcftools)
+            assert manifestJson.containers.gatk_variantfiltration_gs ==
+                GsContainerDefaults.digestOnly(gatkDefault)
+
+            // Not overridden: gs_index_classified_variants (the other
+            // bcftools-based GS process) and gatk_selectpassvariants_gs
+            // (the other GATK-based GS process) still show their
+            // untouched defaults -- the override did not leak onto
+            // sibling processes sharing the same tool.
+            assert manifestJson.containers.gs_index_classified_variants ==
+                containerDefaults.bcftools
+            assert manifestJson.containers.gatk_selectpassvariants_gs == gatkDefault
+
+            // The GATK_VARIANTFILTRATION_GS override must not have leaked
+            // onto the primary (non-GS) lineage's own VariantFiltration
+            // tasks: their real `.command.run` (the file whose
+            // nxf_launch() embeds the literal `docker run ... <image>`
+            // Nextflow actually used) must still show the default,
+            // digest-pinned GATK image -- never the override that was
+            // applied only via the fully-qualified GS-alias selector.
+            // The needle is `--output <filename>`, not the bare filename:
+            // GATK_SELECTPASSVARIANTS's own .command.sh also mentions
+            // cohort.snp.filtered.vcf.gz (as its `--variant` *input*), so
+            // matching on the bare filename would wrongly pull in that
+            // sibling task's .command.run too.
+            def overriddenGatk = GsContainerDefaults.digestOnly(gatkDefault)
+            def primaryFilterRuns = findCommandRunScripts(outputDir.toString(), '--output cohort.snp.filtered.vcf.gz') +
+                findCommandRunScripts(outputDir.toString(), '--output cohort.indel.filtered.vcf.gz')
+            assert primaryFilterRuns.size() == 2
+            assert primaryFilterRuns.every { it.contains(gatkDefault) }
+            assert primaryFilterRuns.every { !it.contains(overriddenGatk) }
+
+            def gsFilterRuns = findCommandRunScripts(outputDir.toString(), '--output cohort_gs.snp.filtered.vcf.gz')
+            assert gsFilterRuns.size() == 1
+            assert gsFilterRuns[0].contains(overriddenGatk)
+            assert !gsFilterRuns[0].contains(gatkDefault)
         }
     }
 
@@ -788,7 +1108,8 @@ nextflow_pipeline {
                 // enable_gs_panel is left at its default (true): this is
                 // exactly the invalid combination Issue #20 requires be
                 // rejected before any process starts, since the GS panel
-                // schema (v1) is diploid-only.
+                // genotype encoding (diploid_additive_dosage_v1) is
+                // diploid-only.
             }
         }
 
