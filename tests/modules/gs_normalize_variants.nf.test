@@ -80,9 +80,14 @@ nextflow_process {
             // Issue #52: with no override configured, the effective
             // container this task actually ran in (task.container,
             // emitted as container_id) must equal the single default-
-            // value source of truth in conf/containers.config.
+            // value source of truth in conf/containers.config. That file
+            // is read here (tests/lib/GsContainerDefaults.groovy) rather
+            // than its digest copied into this test: a copy would keep
+            // passing against a pipeline that had gone back to hardcoding
+            // the same digest per module, and would need a hand edit
+            // every time the pinned image was legitimately bumped.
             assert process.out.container_id[0] ==
-                'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
+                GsContainerDefaults.read(projectDir).bcftools
         }
     }
 
@@ -154,6 +159,8 @@ nextflow_process {
     // own `container` directive default.
     test("a withName override changes the recorded container_id, not just the running container") {
 
+        tag "issue52_containers"
+
         config "./fixtures/gs_normalize_variants_container_override.config"
 
         when {
@@ -178,9 +185,11 @@ nextflow_process {
 
         then {
             assert process.success
-            assert process.out.container_id[0] == 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2'
-            assert process.out.container_id[0] !=
-                'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
+
+            def bcftoolsDefault = GsContainerDefaults.read(projectDir).bcftools
+            assert process.out.container_id[0] ==
+                GsContainerDefaults.digestOnly(bcftoolsDefault)
+            assert process.out.container_id[0] != bcftoolsDefault
         }
     }
 }

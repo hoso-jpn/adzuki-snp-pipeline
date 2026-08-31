@@ -83,9 +83,13 @@ nextflow_process {
 
             // Issue #52: with no override configured, the effective
             // container this task actually ran in must equal the single
-            // default-value source of truth in conf/containers.config.
+            // default-value source of truth in conf/containers.config --
+            // read from that file here (tests/lib/GsContainerDefaults.groovy)
+            // rather than copied into this test, so a legitimately bumped
+            // image needs no test edit and a regression back to per-module
+            // hardcoded digests could not pass by coincidence.
             assert process.out.container_id[0] ==
-                'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
+                GsContainerDefaults.read(projectDir).gatk
         }
     }
 
@@ -593,7 +597,7 @@ nextflow_process {
             assert records.size() == 4
             assert records.findAll { line -> line.split("\t")[6] == "SNP_QD_LOW" }.size() == 1
             assert process.out.container_id[0] ==
-                'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
+                GsContainerDefaults.read(projectDir).gatk
         }
     }
 
@@ -606,6 +610,8 @@ nextflow_process {
     // this module is included into a workflow) are covered at the
     // pipeline level in tests/pipeline/adzuki_snp_pipeline.nf.test.
     test("a withName override changes the recorded container_id, not just the running container") {
+
+        tag "issue52_containers"
 
         config "./fixtures/gatk_variantfiltration_container_override.config"
 
@@ -626,9 +632,11 @@ nextflow_process {
 
         then {
             assert process.success
-            assert process.out.container_id[0] == 'broadinstitute/gatk:4.6.2.0'
-            assert process.out.container_id[0] !=
-                'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
+
+            def gatkDefault = GsContainerDefaults.read(projectDir).gatk
+            assert process.out.container_id[0] ==
+                GsContainerDefaults.digestOnly(gatkDefault)
+            assert process.out.container_id[0] != gatkDefault
         }
     }
 }

@@ -41,6 +41,9 @@ SNP_FILTER_CLI_ARGS = [
 # --python-container triple. Deliberately not all sharing one image
 # string, so a test bug that accidentally reads the wrong process's value
 # would show up as a mismatched assertion rather than passing by accident.
+# `build_gs_panel_manifest` is the manifest-writing process itself, which
+# records its own container too (BUILD_GS_PANEL_MANIFEST passes its own
+# task.container from inside its own script).
 CONTAINER_CLI_ARGS = [
     "--container-gs-normalize-variants", "bcftools:1.24-a",
     "--container-classify-normalized-variants", "python:3.12-b",
@@ -49,6 +52,7 @@ CONTAINER_CLI_ARGS = [
     "--container-gatk-selectpassvariants-gs", "gatk:4.6.2.0-e",
     "--container-build-gs-panel", "python:3.12-f",
     "--container-reconcile-gs-panel-accounting", "python:3.12-g",
+    "--container-build-gs-panel-manifest", "python:3.12-h",
 ]
 
 CONTAINERS_KWARG = {
@@ -59,6 +63,7 @@ CONTAINERS_KWARG = {
     "gatk_selectpassvariants_gs": "gatk:4.6.2.0-e",
     "build_gs_panel": "python:3.12-f",
     "reconcile_gs_panel_accounting": "python:3.12-g",
+    "build_gs_panel_manifest": "python:3.12-h",
 }
 
 
@@ -170,6 +175,23 @@ class BuildManifestTests(unittest.TestCase):
 
     def test_schema_version_is_two(self) -> None:
         self.assertEqual(self._build()["schema_version"], 2)
+
+    def test_recorded_processes_are_the_whole_gs_lineage_including_this_one(
+        self,
+    ) -> None:
+        # Issue #52 review (P2): the manifest's `containers` contract is
+        # "every process the GS lineage runs", which includes the process
+        # that writes the manifest. A regression that quietly dropped the
+        # self-entry would otherwise still satisfy every other test here.
+        self.assertEqual(
+            set(manifest_module.CONTAINER_PROCESS_NAMES),
+            set(CONTAINERS_KWARG),
+        )
+        self.assertIn(
+            "build_gs_panel_manifest", manifest_module.CONTAINER_PROCESS_NAMES
+        )
+        self.assertEqual(len(manifest_module.CONTAINER_PROCESS_NAMES), 8)
+        self.assertIn("build_gs_panel_manifest", self._build()["containers"])
 
     def test_containers_are_recorded_per_process_not_merged_by_tool(self) -> None:
         manifest = self._build()
@@ -326,6 +348,16 @@ class CliTests(unittest.TestCase):
         self.assertFalse(output_path.exists())
         self.assertIn("diploid", stderr)
 
+    def test_ploidy_error_names_the_current_schema_version(self) -> None:
+        # Issue #52 review (P3): this message hardcoded "(v1)" while
+        # SCHEMA_VERSION had already moved to 2. Asserting against the
+        # constant (rather than a literal "v2") keeps the message and the
+        # schema version from ever being two independently edited facts.
+        _exit_code, _output_path, stderr = self._run_main_with_ploidy("3")
+
+        self.assertIn(f"v{manifest_module.SCHEMA_VERSION}", stderr)
+        self.assertNotIn("(v1)", stderr)
+
     def test_cli_subprocess_runs_end_to_end(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -383,6 +415,40 @@ class CliTests(unittest.TestCase):
             self.assertEqual(exit_code, 1)
             self.assertFalse(output_path.exists())
             self.assertIn("build_gs_panel", stderr.getvalue())
+            self.assertIn("host filesystem path", stderr.getvalue())
+
+    def test_main_fails_fast_when_a_container_identity_is_a_file_uri(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            accounting_path = tmp_path / "accounting.tsv"
+            _write_record_accounting(accounting_path, "empty")
+            output_path = tmp_path / "manifest.json"
+            stderr = io.StringIO()
+
+            args = [
+                "--cohort-id", "cohort",
+                "--pipeline-version", "0.2.0-dev",
+                *CONTAINER_CLI_ARGS,
+                *PLOIDY_CLI_ARGS,
+                *SNP_FILTER_CLI_ARGS,
+                "--record-accounting", str(accounting_path),
+                "--output", str(output_path),
+            ]
+            # Issue #52 review (P1): a Singularity/Apptainer image path
+            # wrapped in a file:// URI discloses host filesystem layout
+            # exactly as fully as the bare path above, but starts with
+            # none of `/`, `./`, `../`, `~` -- so the prefix check alone
+            # let it straight through into a shareable manifest.
+            index = args.index("--container-gatk-variantfiltration-gs") + 1
+            args[index] = "file:///opt/images/gatk.sif"
+
+            with contextlib.redirect_stderr(stderr):
+                exit_code = manifest_module.main(args)
+
+            self.assertEqual(exit_code, 1)
+            self.assertFalse(output_path.exists())
+            self.assertIn("gatk_variantfiltration_gs", stderr.getvalue())
+            self.assertIn("file://", stderr.getvalue())
             self.assertIn("host filesystem path", stderr.getvalue())
 
     def test_main_fails_fast_when_a_container_identity_embeds_credentials(self) -> None:
@@ -448,6 +514,32 @@ class ValidateContainerIdentityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             manifest_module.validate_container_identity(
                 "gatk_variantfiltration_gs", "~/images/gatk.sif"
+            )
+
+    def test_rejects_file_uri_host_path(self) -> None:
+        with self.assertRaises(ValueError) as raised:
+            manifest_module.validate_container_identity(
+                "gatk_variantfiltration_gs", "file:///opt/images/gatk.sif"
+            )
+        message = str(raised.exception)
+        self.assertIn("file://", message)
+        self.assertIn("host filesystem path", message)
+        self.assertIn("/opt/images/gatk.sif", message)
+
+    def test_rejects_file_uri_home_directory_path(self) -> None:
+        with self.assertRaises(ValueError) as raised:
+            manifest_module.validate_container_identity(
+                "classify_normalized_variants",
+                "file:///home/user/containers/python.sif",
+            )
+        self.assertIn("host filesystem path", str(raised.exception))
+
+    def test_rejects_file_uri_regardless_of_scheme_case(self) -> None:
+        # A `file://` URI is scheme-case-insensitive per RFC 3986, so a
+        # `FILE://`-cased value leaks exactly as much host layout.
+        with self.assertRaises(ValueError):
+            manifest_module.validate_container_identity(
+                "build_gs_panel_manifest", "FILE:///opt/images/python.sif"
             )
 
     def test_rejects_embedded_registry_credentials(self) -> None:
