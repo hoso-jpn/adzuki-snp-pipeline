@@ -71,7 +71,7 @@
     },
     "enable_gs_panel": {
       "type": "boolean",
-      "description": "Whether to run the GS (genomic selection) SNP panel lineage; its schema v1 is diploid-only, so this must be false whenever sample_ploidy is not 2"
+      "description": "Whether to run the GS (genomic selection) SNP panel lineage; its genotype encoding (diploid_additive_dosage_v1) is diploid-only, so this must be false whenever sample_ploidy is not 2"
     },
     "optical_duplicate_pixel_distance": {
       "type": "integer",

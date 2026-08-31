@@ -100,7 +100,7 @@ Longxiaodou 4の設定例は[`conf/references/longxiaodou4.config.example`](conf
 | Parameter | Default | Contract |
 | --- | ---: | --- |
 | `sample_ploidy` | `2` | run全体のglobal ploidy。HaplotypeCaller / GenotypeGVCFsへ明示伝播 |
-| `enable_gs_panel` | `true` | GS lineageのON/OFF。GS schema v1はdiploid-only |
+| `enable_gs_panel` | `true` | GS lineageのON/OFF。GS panelのgenotype encoding (diploid_additive_dosage_v1) はdiploid-only |
 | `optical_duplicate_pixel_distance` | `100` | GATK MarkDuplicatesへ伝播。flowcell特性に応じて設定 |
 | `genomicsdb_batch_size` | `50` | GenomicsDBImportへ伝播。50+ sampleでの実batching性能は未検証 |
 

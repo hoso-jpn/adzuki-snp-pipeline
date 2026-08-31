@@ -673,6 +673,12 @@ workflow ADZUKI_SNP_PIPELINE {
         // truth; see that file's header for why the default alone is not
         // sufficient). BUILD_GS_PANEL_MANIFEST therefore records what each
         // task actually ran in, not what the pipeline assumed it would.
+        //
+        // Seven `container_id` channels are wired below; the manifest's
+        // eighth `containers` entry is BUILD_GS_PANEL_MANIFEST's own
+        // container, which that process reads from its own task.container
+        // inside its own script rather than from a channel routed through
+        // here (see modules/local/build_gs_panel_manifest.nf).
         BUILD_GS_PANEL_MANIFEST(
             RECONCILE_GS_PANEL_ACCOUNTING.out.accounting,
             gs_pass_for_panel_ch,

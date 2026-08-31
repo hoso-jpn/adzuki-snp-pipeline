@@ -19,11 +19,17 @@ value source of truth). This is the ground truth for "what actually
 ran" in a Nextflow-plus-Docker pipeline, and cannot silently drift from
 reality the way a hand-copied literal digest could -- this script does
 not shell out to `bcftools --version` or similar at run time; the
-values are passed in via `--container-<process-name>` (one per GS
-process; see `CONTAINER_PROCESS_NAMES` below), wired from
-`workflows/adzuki_snp_pipeline.nf`. `validate_container_identity()`
-fails fast if any value looks like a host filesystem path or embeds
-registry credentials, since this manifest is a shareable artifact.
+values are passed in via `--container-<process-name>` (one per
+recorded process; see `CONTAINER_PROCESS_NAMES` below), wired from
+`workflows/adzuki_snp_pipeline.nf` -- except
+`--container-build-gs-panel-manifest`, which `BUILD_GS_PANEL_MANIFEST`
+reads from its own `task.container` inside its own script, so the
+process that writes this manifest records its own container too rather
+than leaving the one entry a reader most needs to reproduce the
+manifest itself unrecorded. `validate_container_identity()` fails fast
+if any value looks like a host filesystem path (bare or `file://`-
+wrapped) or embeds registry credentials, since this manifest is a
+shareable artifact.
 
 Schema v1 recorded these under a single `containers.bcftools/gatk/
 python` triple, one shared value per *tool category* -- ambiguous the
@@ -98,6 +104,16 @@ SNP_FILTER_PARAM_NAMES: tuple[str, ...] = (
 # same tool that are overridden differently can never be silently merged
 # into one value. Order here is call order in
 # workflows/adzuki_snp_pipeline.nf's GS lineage, not alphabetical.
+#
+# The list ends with `build_gs_panel_manifest`: this manifest's own
+# generating process runs in a container too, and a provenance record
+# that silently omitted the one process that wrote it would be a gap in
+# exactly the claim this file makes. Its value is passed the same way as
+# every other -- a real `task.container` resolved by Nextflow after any
+# override -- read inside BUILD_GS_PANEL_MANIFEST's own script (Nextflow
+# resolves `task.container` before rendering a task's script, so a
+# process can read its own effective container; verified against
+# Nextflow 26.04.6 with both a default and a `withName` override).
 CONTAINER_PROCESS_NAMES: tuple[str, ...] = (
     "gs_normalize_variants",
     "classify_normalized_variants",
@@ -106,6 +122,7 @@ CONTAINER_PROCESS_NAMES: tuple[str, ...] = (
     "gatk_selectpassvariants_gs",
     "build_gs_panel",
     "reconcile_gs_panel_accounting",
+    "build_gs_panel_manifest",
 )
 
 # A container identity is expected to be a plain, shareable image
@@ -113,7 +130,16 @@ CONTAINER_PROCESS_NAMES: tuple[str, ...] = (
 # filesystem path (a Singularity `.sif` path would leak host layout) or a
 # URL embedding registry credentials -- this manifest is a shareable
 # artifact.
+#
+# A host path reaches this function in two shapes, not one: bare
+# (`/opt/images/gatk.sif`, `./gatk.sif`, `~/gatk.sif`) and wrapped in a
+# `file://` URI (`file:///opt/images/gatk.sif`), which is what a
+# Singularity/Apptainer `container` directive or an image cache can
+# legitimately hold. Both disclose host filesystem layout just as fully,
+# so both are rejected; a prefix-only check would have let the `file://`
+# form through, since it starts with neither `/` nor `.` nor `~`.
 _HOST_PATH_PREFIX_RE = re.compile(r"^(/|\./|\.\./|~)")
+_FILE_URI_SCHEME_RE = re.compile(r"^file://", re.IGNORECASE)
 _URL_CREDENTIALS_RE = re.compile(r"://[^/@\s]+:[^/@\s]+@")
 
 
@@ -125,10 +151,22 @@ def validate_container_identity(process_name: str, value: str) -> str:
         raise ValueError(
             f"container identity for '{process_name}' contains whitespace: {value!r}"
         )
+    if _FILE_URI_SCHEME_RE.match(value):
+        raise ValueError(
+            f"container identity for '{process_name}' is a file:// URI, which "
+            "records a host filesystem path rather than a shareable image "
+            f"reference: {value!r}. This manifest is published as a shareable "
+            "artifact and must not disclose the host's image layout; pin the "
+            "image by registry reference (e.g. 'registry/image@sha256:...') "
+            "instead."
+        )
     if _HOST_PATH_PREFIX_RE.match(value):
         raise ValueError(
             f"container identity for '{process_name}' looks like a host filesystem "
-            f"path rather than an image reference: {value!r}"
+            f"path rather than an image reference: {value!r}. This manifest is "
+            "published as a shareable artifact and must not disclose the host's "
+            "image layout; pin the image by registry reference (e.g. "
+            "'registry/image@sha256:...') instead."
         )
     if _URL_CREDENTIALS_RE.search(value):
         raise ValueError(
@@ -349,9 +387,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.sample_ploidy != 2:
         print(
-            "build_gs_panel_manifest.py: error: this GS panel schema (v1) is "
-            f"diploid-only, but --sample-ploidy was {args.sample_ploidy}. Writing "
-            "a manifest with parameters.sample_ploidy set to this value alongside "
+            "build_gs_panel_manifest.py: error: this GS panel manifest schema "
+            f"(v{SCHEMA_VERSION}) is diploid-only, but --sample-ploidy was "
+            f"{args.sample_ploidy}. Writing a manifest with "
+            "parameters.sample_ploidy set to this value alongside "
             "genotype_encoding.ploidy=\"diploid_only\" would record self-"
             "contradictory provenance. In the normal pipeline this is unreachable "
             "because build_gs_panel.py already fails fast on the same input, but "
