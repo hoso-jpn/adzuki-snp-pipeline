@@ -2,7 +2,7 @@ process GS_INDEX_CLASSIFIED_VARIANTS {
     tag "${meta.id}"
     label 'process_low'
 
-    container 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
+    container params.containers.bcftools
 
     input:
     tuple val(meta), path(classified_vcf)
@@ -14,6 +14,10 @@ process GS_INDEX_CLASSIFIED_VARIANTS {
         path("${meta.id}.classified.vcf.gz.tbi"),
         emit: vcf
     )
+    // Issue #52: see gs_normalize_variants.nf for why this records
+    // task.container (the resolved, post-override effective container)
+    // rather than trusting the `container` directive above.
+    val(task.container), emit: container_id
 
     script:
     """

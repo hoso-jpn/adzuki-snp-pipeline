@@ -9,14 +9,29 @@ pipeline has no reason to import a model-training repository's Python
 package, so the pattern is replicated here in stdlib-only Python
 instead.
 
-Software versions are recorded as the pinned container image
-references already baked into each process's `container` directive
-(`modules/local/gs_normalize_variants.nf`, `gatk_variantfiltration.nf`,
-`build_gs_panel.nf`, ...), which are the ground truth for "what
-actually ran" in a Nextflow-plus-Docker pipeline; this script does not
-shell out to `bcftools --version` or similar at run time; passed in
-via `--bcftools-container`/`--gatk-container`/`--python-container`
-instead.
+Software versions are recorded as each GS-lineage process's own
+*effective* container identity (schema v2, Issue #52): Nextflow's
+`task.container`, captured from inside that exact task after any
+`withName`/alias/fully-qualified-selector/profile override has already
+been resolved on top of that process's `container` directive default
+(itself sourced from `conf/containers.config`, the single default-
+value source of truth). This is the ground truth for "what actually
+ran" in a Nextflow-plus-Docker pipeline, and cannot silently drift from
+reality the way a hand-copied literal digest could -- this script does
+not shell out to `bcftools --version` or similar at run time; the
+values are passed in via `--container-<process-name>` (one per GS
+process; see `CONTAINER_PROCESS_NAMES` below), wired from
+`workflows/adzuki_snp_pipeline.nf`. `validate_container_identity()`
+fails fast if any value looks like a host filesystem path or embeds
+registry credentials, since this manifest is a shareable artifact.
+
+Schema v1 recorded these under a single `containers.bcftools/gatk/
+python` triple, one shared value per *tool category* -- ambiguous the
+moment two processes using the same tool are overridden differently
+(e.g. only `GS_NORMALIZE_VARIANTS`'s bcftools container, not
+`GS_INDEX_CLASSIFIED_VARIANTS`'s). Schema v2's `containers` is instead
+keyed by GS process name, one entry per process, so two processes
+sharing a tool can never be silently collapsed into one value.
 
 The git commit is passed in via `--git-commit`, resolved by the
 workflow from Nextflow's own `workflow.commitId` rather than by
@@ -58,12 +73,13 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SNP_FILTER_PARAM_NAMES: tuple[str, ...] = (
     "snp_filter_qd_min",
@@ -74,6 +90,52 @@ SNP_FILTER_PARAM_NAMES: tuple[str, ...] = (
     "snp_filter_mq_rank_sum_min",
     "snp_filter_read_pos_rank_sum_min",
 )
+
+# Issue #52: every GS-lineage process whose effective container identity
+# (Nextflow's task.container, resolved after any override) this manifest
+# records -- one manifest `containers` entry per process, never collapsed
+# by shared tool ("bcftools"/"gatk"/"python"), so two processes using the
+# same tool that are overridden differently can never be silently merged
+# into one value. Order here is call order in
+# workflows/adzuki_snp_pipeline.nf's GS lineage, not alphabetical.
+CONTAINER_PROCESS_NAMES: tuple[str, ...] = (
+    "gs_normalize_variants",
+    "classify_normalized_variants",
+    "gs_index_classified_variants",
+    "gatk_variantfiltration_gs",
+    "gatk_selectpassvariants_gs",
+    "build_gs_panel",
+    "reconcile_gs_panel_accounting",
+)
+
+# A container identity is expected to be a plain, shareable image
+# reference (e.g. `registry/image:tag` or `...@sha256:...`), never a host
+# filesystem path (a Singularity `.sif` path would leak host layout) or a
+# URL embedding registry credentials -- this manifest is a shareable
+# artifact.
+_HOST_PATH_PREFIX_RE = re.compile(r"^(/|\./|\.\./|~)")
+_URL_CREDENTIALS_RE = re.compile(r"://[^/@\s]+:[^/@\s]+@")
+
+
+def validate_container_identity(process_name: str, value: str) -> str:
+    """Fail fast if a container identity leaks a host path or credential."""
+    if not value or not value.strip():
+        raise ValueError(f"container identity for '{process_name}' is empty")
+    if any(character.isspace() for character in value):
+        raise ValueError(
+            f"container identity for '{process_name}' contains whitespace: {value!r}"
+        )
+    if _HOST_PATH_PREFIX_RE.match(value):
+        raise ValueError(
+            f"container identity for '{process_name}' looks like a host filesystem "
+            f"path rather than an image reference: {value!r}"
+        )
+    if _URL_CREDENTIALS_RE.search(value):
+        raise ValueError(
+            f"container identity for '{process_name}' appears to embed registry "
+            f"credentials: {value!r}"
+        )
+    return value
 
 # A fixed description of this schema's genotype encoding (see
 # bin/build_gs_panel.py and docs/gs_panel_data_contract.md for the
@@ -178,9 +240,7 @@ def build_manifest(
     cohort_id: str,
     pipeline_version: str,
     git_commit: str,
-    bcftools_container: str,
-    gatk_container: str,
-    python_container: str,
+    containers: dict[str, str],
     sample_ploidy: int,
     snp_filter_params: dict[str, float],
     panel_status: str,
@@ -198,11 +258,7 @@ def build_manifest(
         "cohort_id": cohort_id,
         "pipeline_version": pipeline_version,
         "git_commit": git_commit or None,
-        "containers": {
-            "bcftools": bcftools_container,
-            "gatk": gatk_container,
-            "python": python_container,
-        },
+        "containers": containers,
         "parameters": parameters,
         "genotype_encoding": GENOTYPE_ENCODING_SCHEMA,
         "panel_status": panel_status,
@@ -245,9 +301,16 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         default="",
         help="Nextflow workflow.commitId; empty string is recorded as null.",
     )
-    parser.add_argument("--bcftools-container", required=True, help="Pinned bcftools image reference.")
-    parser.add_argument("--gatk-container", required=True, help="Pinned GATK image reference.")
-    parser.add_argument("--python-container", required=True, help="Pinned Python image reference.")
+    for name in CONTAINER_PROCESS_NAMES:
+        parser.add_argument(
+            f"--container-{name.replace('_', '-')}",
+            required=True,
+            help=(
+                f"Effective container identity ({name.upper()}'s own task.container, "
+                "resolved after any override) -- not that process's `container` "
+                "directive default."
+            ),
+        )
     parser.add_argument(
         "--sample-ploidy",
         required=True,
@@ -300,6 +363,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         panel_status = read_panel_status(args.record_accounting)
         checksums = checksum_files(args.checksum_file)
+        containers = {
+            name: validate_container_identity(
+                name, getattr(args, f"container_{name}")
+            )
+            for name in CONTAINER_PROCESS_NAMES
+        }
     except OSError as error:
         print(f"build_gs_panel_manifest.py: error: {error}", file=sys.stderr)
         return 1
@@ -313,9 +382,7 @@ def main(argv: list[str] | None = None) -> int:
         cohort_id=args.cohort_id,
         pipeline_version=args.pipeline_version,
         git_commit=args.git_commit,
-        bcftools_container=args.bcftools_container,
-        gatk_container=args.gatk_container,
-        python_container=args.python_container,
+        containers=containers,
         sample_ploidy=args.sample_ploidy,
         snp_filter_params=snp_filter_params,
         panel_status=panel_status,

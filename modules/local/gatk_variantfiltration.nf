@@ -176,7 +176,7 @@ process GATK_VARIANTFILTRATION {
     tag "${meta.id}:${meta.variant_type}"
     label 'process_medium'
 
-    container 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
+    container params.containers.gatk
 
     input:
     tuple(
@@ -193,6 +193,15 @@ process GATK_VARIANTFILTRATION {
         path("${meta.id}.${meta.variant_type}.filtered.vcf.gz.tbi"),
         emit: vcf
     )
+    // Issue #52: this process is aliased as both GATK_VARIANTFILTRATION
+    // (primary lineage) and GATK_VARIANTFILTRATION_GS (GS lineage) in
+    // workflows/adzuki_snp_pipeline.nf, and each alias can be overridden
+    // independently (withName selectors match by the included name, not
+    // the module's own process name). Emitting task.container -- read from
+    // whichever alias actually invoked this task -- rather than the
+    // `container` directive's default lets a consumer distinguish the two
+    // aliases' effective containers instead of assuming they always match.
+    val(task.container), emit: container_id
 
     script:
     memory_gb = Math.max(

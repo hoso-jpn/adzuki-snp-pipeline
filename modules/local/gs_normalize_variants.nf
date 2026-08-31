@@ -2,7 +2,7 @@ process GS_NORMALIZE_VARIANTS {
     tag "${meta.id}"
     label 'process_medium'
 
-    container 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
+    container params.containers.bcftools
 
     input:
     tuple val(meta), path(vcf), path(vcf_index)
@@ -17,6 +17,12 @@ process GS_NORMALIZE_VARIANTS {
         emit: vcf
     )
     path("${meta.id}.normalize.report.txt"), emit: report
+    // Issue #52: this process's *effective* container -- Nextflow's own
+    // task.container, resolved after any withName/alias/fully-qualified-
+    // selector/profile override on top of the `container` directive above
+    // -- so a consumer (BUILD_GS_PANEL_MANIFEST) can record what actually
+    // ran rather than trusting the directive's default value.
+    val(task.container), emit: container_id
 
     script:
     """

@@ -19,9 +19,19 @@ process BUILD_GS_PANEL_MANIFEST {
     tuple val(reference_fai_meta), path(reference_fai)
     val(pipeline_version)
     val(git_commit)
-    val(bcftools_container)
-    val(gatk_container)
-    val(python_container)
+    // Issue #52: one effective container identity per GS-lineage process,
+    // each read from that process's own `container_id` output (Nextflow's
+    // task.container, resolved after any withName/alias/fully-qualified-
+    // selector/profile override) rather than a shared per-tool literal --
+    // see workflows/adzuki_snp_pipeline.nf for how these are wired and
+    // docs/gs_panel_data_contract.md for the schema v2 rationale.
+    val(gs_normalize_variants_container)
+    val(classify_normalized_variants_container)
+    val(gs_index_classified_variants_container)
+    val(gatk_variantfiltration_gs_container)
+    val(gatk_selectpassvariants_gs_container)
+    val(build_gs_panel_container)
+    val(reconcile_gs_panel_accounting_container)
 
     output:
     tuple(val(meta), path("${meta.id}.gs_panel.manifest.json"), emit: manifest)
@@ -32,9 +42,13 @@ process BUILD_GS_PANEL_MANIFEST {
         --cohort-id '${meta.id}' \
         --pipeline-version '${pipeline_version}' \
         --git-commit '${git_commit}' \
-        --bcftools-container '${bcftools_container}' \
-        --gatk-container '${gatk_container}' \
-        --python-container '${python_container}' \
+        --container-gs-normalize-variants '${gs_normalize_variants_container}' \
+        --container-classify-normalized-variants '${classify_normalized_variants_container}' \
+        --container-gs-index-classified-variants '${gs_index_classified_variants_container}' \
+        --container-gatk-variantfiltration-gs '${gatk_variantfiltration_gs_container}' \
+        --container-gatk-selectpassvariants-gs '${gatk_selectpassvariants_gs_container}' \
+        --container-build-gs-panel '${build_gs_panel_container}' \
+        --container-reconcile-gs-panel-accounting '${reconcile_gs_panel_accounting_container}' \
         --sample-ploidy ${params.sample_ploidy} \
         --snp-filter-qd-min ${params.snp_filter_qd_min} \
         --snp-filter-qual-min ${params.snp_filter_qual_min} \

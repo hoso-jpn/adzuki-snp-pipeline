@@ -15,7 +15,7 @@ process CLASSIFY_NORMALIZED_VARIANTS {
     // bgzip/tabix, which is why this process writes a plain-text VCF;
     // modules/local/gs_index_classified_variants.nf compresses and
     // indexes it in a separate, bcftools-based process.
-    container 'python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7'
+    container params.containers.python
 
     input:
     tuple val(meta), path(normalized_vcf), path(normalized_vcf_index)
@@ -24,6 +24,10 @@ process CLASSIFY_NORMALIZED_VARIANTS {
     tuple(val(meta), path("${meta.id}.classified.vcf"), emit: vcf)
     path("${meta.id}.classification_accounting.tsv"), emit: accounting
     path("${meta.id}.classification_accounting.summary.txt"), emit: summary
+    // Issue #52: see gs_normalize_variants.nf for why this records
+    // task.container (the resolved, post-override effective container)
+    // rather than trusting the `container` directive above.
+    val(task.container), emit: container_id
 
     script:
     """
