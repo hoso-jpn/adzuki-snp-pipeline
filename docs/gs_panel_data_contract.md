@@ -443,7 +443,7 @@ plain field-count-only check would miss.
 ## Reproducibility manifest (concern 6)
 
 `cohort.gs_panel.manifest.json` (`bin/build_gs_panel_manifest.py`) is
-schema-versioned (`schema_version: 1`) and mirrors the *shape* of the
+schema-versioned (`schema_version: 2`) and mirrors the *shape* of the
 sibling repository's own `run_manifest.py` — a sortable `run_id`
 (`<UTC-timestamp>-<uuid4-hex8>`), deterministic canonical JSON, a
 self-referential `manifest_hash`, and filename-only checksums (never an
@@ -454,13 +454,21 @@ stdlib-only Python instead.
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "run_id": "20260814T074225Z-c22d6e72",
   "generated_at": "2026-08-14T07:42:25Z",
   "cohort_id": "cohort",
   "pipeline_version": "0.2.0-dev",
   "git_commit": null,
-  "containers": { "bcftools": "...", "gatk": "...", "python": "..." },
+  "containers": {
+    "gs_normalize_variants": "...",
+    "classify_normalized_variants": "...",
+    "gs_index_classified_variants": "...",
+    "gatk_variantfiltration_gs": "...",
+    "gatk_selectpassvariants_gs": "...",
+    "build_gs_panel": "...",
+    "reconcile_gs_panel_accounting": "..."
+  },
   "parameters": { "sample_ploidy": 2, "snp_filter_qd_min": 2.0, "...": "..." },
   "genotype_encoding": {
     "schema": "diploid_additive_dosage_v1",
@@ -487,10 +495,53 @@ for normalization — so a reader can reconstruct *which* inputs and
 reference a given panel came from, not only verify the panel's own
 outputs against themselves.
 
-Software versions are recorded as the pinned container image references
-already baked into each process's `container` directive — the ground
-truth for "what actually ran" in a Nextflow-plus-Docker pipeline — rather
-than by shelling out to e.g. `bcftools --version` at run time.
+**`containers` (schema v2, Issue #52): one entry per GS-lineage process,
+never merged by shared tool.** Each key is the exact GS process name
+(lowercased) of every process the GS lineage actually runs —
+`gs_normalize_variants` and `gs_index_classified_variants` both use
+bcftools by default; `build_gs_panel`, `classify_normalized_variants`,
+and `reconcile_gs_panel_accounting` all use Python by default;
+`gatk_variantfiltration_gs` and `gatk_selectpassvariants_gs` are the GS
+lineage's own aliases of the shared `GATK_VARIANTFILTRATION`/
+`GATK_SELECTPASSVARIANTS` modules — but each value is that specific
+process's own *effective* container, not a value shared across an entire
+tool category. Two processes that happen to use the same tool by default
+can still diverge (a `withName`/alias/fully-qualified-selector/profile
+override on only one of them) and schema v2 is designed so that can never
+be silently collapsed into a single ambiguous value.
+
+Each value is Nextflow's own `task.container`, captured from inside that
+exact task via a `container_id` output added to every GS-lineage process
+(see `modules/local/gs_normalize_variants.nf` and its sibling GS modules)
+— i.e. the container **actually used**, already resolved after any
+`withName`/alias/fully-qualified-selector/profile override on top of that
+process's `container` directive default. The default itself now lives in
+one place, `conf/containers.config` (`params.containers.bcftools/gatk/
+python`), referenced by each module's `container` directive instead of
+repeating the literal — but the manifest never trusts that default value
+directly, precisely because a default can be overridden per-task without
+this file changing at all. `workflows/adzuki_snp_pipeline.nf` wires each
+process's `container_id` output straight into `BUILD_GS_PANEL_MANIFEST`;
+no literal container digest is defined in the workflow file any more.
+
+**Schema v1 → v2: why this was a version bump, not an additive change.**
+Schema v1's `containers.bcftools/gatk/python` was keyed by *tool
+category*, one shared value for every process using that tool. That
+meaning becomes ambiguous the moment two processes sharing a tool are
+overridden differently (e.g. only `GS_NORMALIZE_VARIANTS`'s bcftools
+container, not `GS_INDEX_CLASSIFIED_VARIANTS`'s) — there would be no
+correct single value to put in `containers.bcftools`, and keeping the
+field while its meaning became unclear was rejected as worse than
+versioning: the field's own keys had to change from tool names to process
+names, which is not a shape a v1 reader could parse as an extension of
+the same field. Older, already-published `schema_version: 1` manifests
+(including historical run/scale-validation manifests referenced elsewhere
+in this repository's docs) are untouched by this change and remain valid
+schema v1 documents; only newly generated manifests use schema v2.
+
+Software versions are therefore recorded as each GS process's own
+effective container identity (see `containers` above) rather than by
+shelling out to e.g. `bcftools --version` at run time.
 
 `git_commit` is Nextflow's own `workflow.commitId`, resolved by the
 workflow and passed in as a plain argument rather than computed inside a
