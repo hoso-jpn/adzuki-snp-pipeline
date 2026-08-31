@@ -29,6 +29,33 @@ nextflow_pipeline {
         return matches
     }
 
+    // Issue #52: same walk as findCommandScripts above, but returns each
+    // matched task's sibling `.command.run` instead of `.command.sh` --
+    // that file's `nxf_launch()` function embeds the literal `docker run
+    // ... <image> ...` invocation Nextflow actually used for that task,
+    // which is how a real container override (as opposed to the
+    // GS-lineage-only `container_id` outputs this Issue adds) can be
+    // confirmed never to have leaked onto an unrelated task.
+    def findCommandRunScripts = { String testOutputDir, String needle ->
+        def testRoot = new File(testOutputDir).getParentFile()
+        def matches = []
+        def walk
+        walk = { File dir ->
+            dir.listFiles()?.each { entry ->
+                if (entry.isDirectory() && !entry.name.endsWith(".genomicsdb")) {
+                    walk(entry)
+                } else if (entry.name == ".command.sh" && entry.text.contains(needle)) {
+                    def runFile = new File(entry.getParentFile(), ".command.run")
+                    if (runFile.exists()) {
+                        matches << runFile.text
+                    }
+                }
+            }
+        }
+        walk(testRoot)
+        return matches
+    }
+
     test("both samples resolve confident ref/alt genotypes at both deterministic SNP loci") {
 
         when {
@@ -608,7 +635,7 @@ nextflow_pipeline {
             def manifestJson = new groovy.json.JsonSlurper().parse(
                 new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
             )
-            assert manifestJson.schema_version == 1
+            assert manifestJson.schema_version == 2
             assert manifestJson.panel_status == "empty"
             assert manifestJson.cohort_id == "cohort"
             assert manifestJson.parameters.sample_ploidy == 2
@@ -619,6 +646,117 @@ nextflow_pipeline {
             // raw_all_vcf, reference_fasta, reference_fai (Issue #18 PR
             // review, P1-4: provenance, not just self-consistency).
             assert manifestJson.checksums.size() == 11
+
+            // Issue #52: schema v2 records one effective container per
+            // GS-lineage process (never merged by shared tool), each read
+            // from that process's own task.container. With no override
+            // configured in this test, every entry must equal the single
+            // default-value source of truth in conf/containers.config --
+            // proving the wiring in workflows/adzuki_snp_pipeline.nf
+            // actually reaches every one of the seven processes, not just
+            // whichever ones happened to be non-empty before.
+            def bcftoolsDefault = 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
+            def gatkDefault = 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
+            def pythonDefault = 'python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7'
+            assert manifestJson.containers.size() == 7
+            assert manifestJson.containers.gs_normalize_variants == bcftoolsDefault
+            assert manifestJson.containers.classify_normalized_variants == pythonDefault
+            assert manifestJson.containers.gs_index_classified_variants == bcftoolsDefault
+            assert manifestJson.containers.gatk_variantfiltration_gs == gatkDefault
+            assert manifestJson.containers.gatk_selectpassvariants_gs == gatkDefault
+            assert manifestJson.containers.build_gs_panel == pythonDefault
+            assert manifestJson.containers.reconcile_gs_panel_accounting == pythonDefault
+        }
+    }
+
+    // Issue #52 regression: proves the GS panel manifest records what a
+    // task actually ran in, not module-file/workflow-literal defaults.
+    // One pipeline run exercises three override mechanisms at once:
+    //   - a plain `withName` override on GS_NORMALIZE_VARIANTS (a process
+    //     with no non-GS alias), proving a simple override reaches the
+    //     manifest at all;
+    //   - a fully-qualified `withName` override
+    //     (`ADZUKI_SNP_PIPELINE:GATK_VARIANTFILTRATION_GS`) on only the GS
+    //     alias of the GATK_VARIANTFILTRATION module, while its sibling
+    //     alias GATK_VARIANTFILTRATION (used by the primary, non-GS
+    //     lineage) is left at its default -- proving a fully-qualified
+    //     selector is captured and that the two aliases are never
+    //     conflated into a single recorded value.
+    // Both overrides swap in the *same underlying image*, referenced
+    // without its `@sha256:...` digest suffix, purely so the string
+    // differs from the hardcoded default: this keeps the run itself
+    // fast and deterministic (no new image to pull) while still being a
+    // literal-value regression guard -- a manifest that still showed the
+    // old digest-pinned default here would prove the override never
+    // reached the manifest at all.
+    test("container overrides on GS_NORMALIZE_VARIANTS and the GATK_VARIANTFILTRATION_GS alias are recorded in the GS panel manifest, not their module defaults") {
+
+        config "./fixtures/gs_container_identity_override.config"
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll(
+                        "tests/data/reads/",
+                        "${projectDir}/tests/data/reads/"
+                    )
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                sample_ploidy = "2"
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            def manifestJson = new groovy.json.JsonSlurper().parse(
+                new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
+            )
+            assert manifestJson.schema_version == 2
+
+            def gatkDefault = 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
+
+            // Overridden: recorded value differs from the hardcoded
+            // default and equals exactly what the fixture config set.
+            assert manifestJson.containers.gs_normalize_variants == 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2'
+            assert manifestJson.containers.gatk_variantfiltration_gs == 'broadinstitute/gatk:4.6.2.0'
+
+            // Not overridden: gs_index_classified_variants (the other
+            // bcftools-based GS process) and gatk_selectpassvariants_gs
+            // (the other GATK-based GS process) still show their
+            // untouched defaults -- the override did not leak onto
+            // sibling processes sharing the same tool.
+            assert manifestJson.containers.gs_index_classified_variants ==
+                'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
+            assert manifestJson.containers.gatk_selectpassvariants_gs == gatkDefault
+
+            // The GATK_VARIANTFILTRATION_GS override must not have leaked
+            // onto the primary (non-GS) lineage's own VariantFiltration
+            // tasks: their real `.command.run` (the file whose
+            // nxf_launch() embeds the literal `docker run ... <image>`
+            // Nextflow actually used) must still show the default,
+            // digest-pinned GATK image -- never the override that was
+            // applied only via the fully-qualified GS-alias selector.
+            // The needle is `--output <filename>`, not the bare filename:
+            // GATK_SELECTPASSVARIANTS's own .command.sh also mentions
+            // cohort.snp.filtered.vcf.gz (as its `--variant` *input*), so
+            // matching on the bare filename would wrongly pull in that
+            // sibling task's .command.run too.
+            def primaryFilterRuns = findCommandRunScripts(outputDir.toString(), '--output cohort.snp.filtered.vcf.gz') +
+                findCommandRunScripts(outputDir.toString(), '--output cohort.indel.filtered.vcf.gz')
+            assert primaryFilterRuns.size() == 2
+            assert primaryFilterRuns.every { it.contains(gatkDefault) }
+            assert primaryFilterRuns.every { !it.contains('broadinstitute/gatk:4.6.2.0 ') }
+
+            def gsFilterRuns = findCommandRunScripts(outputDir.toString(), '--output cohort_gs.snp.filtered.vcf.gz')
+            assert gsFilterRuns.size() == 1
+            assert gsFilterRuns[0].contains('broadinstitute/gatk:4.6.2.0 ')
+            assert !gsFilterRuns[0].contains(gatkDefault)
         }
     }
 

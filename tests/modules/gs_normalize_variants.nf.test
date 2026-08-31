@@ -76,6 +76,13 @@ nextflow_process {
             assert snpShapedGenotypes[1].startsWith("0/0")
             assert indelShapedGenotypes[0].startsWith("0/0")
             assert indelShapedGenotypes[1].startsWith("0/1")
+
+            // Issue #52: with no override configured, the effective
+            // container this task actually ran in (task.container,
+            // emitted as container_id) must equal the single default-
+            // value source of truth in conf/containers.config.
+            assert process.out.container_id[0] ==
+                'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
         }
     }
 
@@ -135,6 +142,45 @@ nextflow_process {
                 .linesGzip
                 .findAll { line -> !line.startsWith("#") }
             assert records.size() == 0
+        }
+    }
+
+    // Issue #52 regression: a previous version of the GS panel manifest
+    // recorded a hardcoded literal here rather than this process's own
+    // effective container, so a `withName` override on GS_NORMALIZE_VARIANTS
+    // would have gone completely unnoticed. This proves task.container
+    // itself (not yet the manifest -- see tests/pipeline/adzuki_snp_pipeline.nf.test
+    // for the end-to-end wiring) reflects the override, not the module's
+    // own `container` directive default.
+    test("a withName override changes the recorded container_id, not just the running container") {
+
+        config "./fixtures/gs_normalize_variants_container_override.config"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'empty' ],
+                    file("${projectDir}/tests/modules/fixtures/gs_normalize_empty.vcf.gz"),
+                    file("${projectDir}/tests/modules/fixtures/gs_normalize_empty.vcf.gz.tbi"),
+                ]
+                input[1] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa"),
+                ]
+                input[2] = [
+                    [ id: 'synthetic' ],
+                    file("${projectDir}/tests/data/reference/synthetic.fa.fai"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.container_id[0] == 'quay.io/biocontainers/bcftools:1.24--h118bc1c_2'
+            assert process.out.container_id[0] !=
+                'quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3'
         }
     }
 }
