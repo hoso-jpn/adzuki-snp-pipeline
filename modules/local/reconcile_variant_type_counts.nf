@@ -20,6 +20,16 @@ process RECONCILE_VARIANT_TYPE_COUNTS {
         emit: accounting
     )
 
+    // Issue #42: this process's *effective* container -- Nextflow's own
+    // task.container, resolved after any withName/alias/fully-qualified-
+    // selector/profile override on top of the `container` directive above
+    // -- so the run-level provenance manifest records what this task
+    // actually ran in rather than a default the pipeline assumed. See
+    // workflows/adzuki_snp_pipeline.nf for the canonical process key this
+    // invocation is recorded under, and docs/run_manifest_data_contract.md
+    // for the schema v2 contract.
+    val(task.container), emit: container_id
+
     script:
     """
     reconcile_variant_type_counts.py \
