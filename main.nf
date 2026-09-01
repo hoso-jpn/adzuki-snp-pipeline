@@ -70,6 +70,27 @@ def resolvePipelineCommit(projectDirectory, declaredCommitId) {
         )
     }
 
+    // `git -C <dir>` walks *up* to the nearest enclosing repository, so a
+    // project directory that is not itself under version control -- an
+    // unpacked tarball that happens to sit inside some unrelated checkout,
+    // say -- would otherwise resolve that repository's HEAD and record it
+    // as the code that ran. Requiring the pipeline's own entry point to be
+    // a tracked file of the repository whose commit is about to be
+    // recorded rules that out, while still allowing the legitimate case
+    // where the pipeline lives in a subdirectory of a larger repository
+    // that genuinely versions it. (`mainScript` in nextflow.config.)
+    def tracked = gitCommandOutput(projectPath, ['ls-files', '--error-unmatch', 'main.nf'])
+    if (tracked.exit_code != 0) {
+        error(
+            "the pipeline's own source is not tracked by the git repository " +
+            'its commit would be read from, so that commit does not identify ' +
+            'the code being run. The run-level provenance manifest (Issue #42) ' +
+            'records the exact commit a result came from, so this run stops ' +
+            'before doing any analysis. Run the pipeline from a git checkout ' +
+            'of this repository, or from a git-hosted revision.'
+        )
+    }
+
     if (declaredCommitId && declaredCommitId.toString() != head.output) {
         error(
             'the revision Nextflow reports for this run does not match the ' +

@@ -165,12 +165,19 @@ nextflow_function {
         }
     }
 
-    test("a directory that is not a git checkout fails rather than recording nothing") {
+    test("a project directory that is not itself a checkout does not borrow an enclosing repository's commit") {
 
         when {
             function {
+                // `git -C <dir>` walks up to the nearest enclosing
+                // repository. This directory is not version controlled,
+                // but it sits inside one (the test's own output tree,
+                // under this checkout), so a naive HEAD lookup would
+                // happily return a commit that has nothing to do with
+                // the code in it.
                 def plain = new File("${outputDir}/not_a_repository")
                 plain.mkdirs()
+                new File(plain, 'main.nf').text = "workflow {}\n"
                 """
                 input[0] = '${plain.absolutePath}'
                 input[1] = null
@@ -180,6 +187,32 @@ nextflow_function {
 
         then {
             assert !function.success
+        }
+    }
+
+    test("a pipeline in a subdirectory of a repository that tracks it still resolves") {
+
+        when {
+            function {
+                // The legitimate counterpart of the case above: the
+                // enclosing repository really does version this code, so
+                // its commit does identify what ran.
+                def repository = newRepository(outputDir.toString(), 'monorepo')
+                def nested = new File("${repository}/pipelines/adzuki")
+                nested.mkdirs()
+                new File(nested, 'main.nf').text = "workflow {}\n"
+                runCommand(repository, ['git', 'add', '.'])
+                runCommand(repository, ['git', 'commit', '-m', 'add nested pipeline'])
+                """
+                input[0] = '${nested.absolutePath}'
+                input[1] = null
+                """
+            }
+        }
+
+        then {
+            assert function.success
+            assert function.result ==~ /^[0-9a-f]{40}\z/
         }
     }
 
