@@ -144,6 +144,86 @@ def validate_container_identity(process_name: str, value: str) -> str:
     return value
 
 
+# Issue #42: a published manifest must not disclose where a run happened
+# or how to reach the machine it happened on. The real defense is that
+# nothing host-specific is passed into a payload in the first place --
+# every file is recorded by basename, every identity by checksum, and no
+# caller hands these builders a working directory, a launch directory, a
+# command line, or a user name. `assert_no_host_metadata()` below is the
+# backstop for that discipline, not a substitute for it: it walks a
+# finished document and refuses to let one be written if a host path, a
+# `file://` URI, a credential-bearing URL, or a private/loopback network
+# location reached it anyway through some field nobody thought about.
+#
+# The patterns are deliberately narrow. Values in these manifests are
+# basenames, checksums, container references, scientific identifiers and
+# numbers -- none of which legitimately begin with `/` or `~`, name a
+# `file://` URI, or point at a private address. A broader heuristic (say,
+# treating any value containing a personal-name-shaped token as a
+# username leak) would reject legitimate sample and reference
+# identifiers, which is worse than useless: it would push callers toward
+# renaming their science to satisfy a privacy check.
+_ABSOLUTE_OR_RELATIVE_PATH_RE = re.compile(r"^(/|~|\./|\.\./)")
+_PRIVATE_HOST_RE = re.compile(
+    r"(?:^|[/@])"
+    r"(?:localhost"
+    r"|127(?:\.\d{1,3}){3}"
+    r"|10(?:\.\d{1,3}){3}"
+    r"|192\.168(?:\.\d{1,3}){2}"
+    r"|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}"
+    r"|0\.0\.0\.0"
+    r"|\[?::1\]?)"
+    r"(?::\d+)?(?:[/:]|$)",
+    re.IGNORECASE,
+)
+
+
+class HostMetadataLeakError(Exception):
+    """Raised when a finished manifest would disclose host-specific detail."""
+
+
+def _assert_string_is_publishable(location: str, value: str) -> None:
+    if _ABSOLUTE_OR_RELATIVE_PATH_RE.match(value):
+        raise HostMetadataLeakError(
+            f"{location} looks like a host filesystem path: {value!r}. A published "
+            "manifest records basenames and checksums, never where a file lived on "
+            "the machine that produced it."
+        )
+    if _FILE_URI_SCHEME_RE.match(value):
+        raise HostMetadataLeakError(
+            f"{location} is a file:// URI, which encodes a host filesystem path: "
+            f"{value!r}."
+        )
+    if _URL_CREDENTIALS_RE.search(value):
+        raise HostMetadataLeakError(
+            f"{location} embeds credentials in a URL: {value!r}. A published "
+            "manifest must never carry a secret."
+        )
+    if _PRIVATE_HOST_RE.search(value):
+        raise HostMetadataLeakError(
+            f"{location} names a private or loopback network location: {value!r}. "
+            "That describes the network the run happened on, not the run."
+        )
+
+
+def assert_no_host_metadata(payload: object, location: str = "manifest") -> None:
+    """Walk a finished manifest and refuse host-specific values anywhere in it.
+
+    Checks dictionary keys as well as values: a checksum map is keyed by
+    filename, and a key is just as published as the value beside it.
+    """
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if isinstance(key, str):
+                _assert_string_is_publishable(f"{location} key '{key}'", key)
+            assert_no_host_metadata(value, f"{location}.{key}")
+    elif isinstance(payload, (list, tuple)):
+        for index, item in enumerate(payload):
+            assert_no_host_metadata(item, f"{location}[{index}]")
+    elif isinstance(payload, str):
+        _assert_string_is_publishable(location, payload)
+
+
 def _json_default(value: object) -> object:
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 

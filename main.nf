@@ -10,6 +10,58 @@ include {
     ADZUKI_SNP_PIPELINE
 } from './workflows/adzuki_snp_pipeline'
 
+// Issue #42: the full 40-character commit this run executed from.
+//
+// The run manifest is a provenance artifact the pipeline produces for
+// itself, so "which code produced this result" is not allowed to be
+// unknown. Nextflow's own `workflow.commitId` is only populated when
+// Nextflow pulled the pipeline from a git host (`nextflow run
+// owner/repo`); for this repository's own documented `nextflow run .`
+// invocation it is null -- measured on Nextflow 26.04.6, along with
+// nf-test, which runs the same way. Rather than record that as a null
+// and call the manifest done, the commit is resolved from the project
+// directory's own git checkout, which is the same repository Nextflow
+// is executing.
+//
+// Only the resolved SHA is used. The project directory, the git
+// command's stderr, and anything else that would describe the host are
+// deliberately not carried into the error message or the manifest.
+// The pattern is spelled out at each use rather than hoisted into a
+// constant: Nextflow 26's strict script syntax does not allow a
+// top-level variable declaration in a script file.
+def resolvePipelineCommit() {
+    if (workflow.commitId && workflow.commitId ==~ /^[0-9a-f]{40}$/) {
+        return workflow.commitId
+    }
+
+    def git = [
+        'git',
+        '-C',
+        workflow.projectDir.toString(),
+        'rev-parse',
+        'HEAD',
+    ].execute()
+    git.waitFor()
+    def resolved = git.text.trim()
+
+    if (git.exitValue() != 0 || !(resolved ==~ /^[0-9a-f]{40}$/)) {
+        error(
+            'could not resolve the full git commit this pipeline is running ' +
+            'from. Nextflow reported ' +
+            "workflow.commitId=${workflow.commitId ?: 'null'} (it is populated " +
+            'only for a git-hosted `nextflow run owner/repo`), and reading the ' +
+            'commit from the project directory did not produce a 40-character ' +
+            'SHA either. The run-level provenance manifest (Issue #42) records ' +
+            'the exact commit a result came from and will not record an unknown ' +
+            'or abbreviated one, so this run stops here rather than producing a ' +
+            'manifest that cannot identify its own code. Run the pipeline from a ' +
+            'git checkout, or from a git-hosted revision.'
+        )
+    }
+
+    return resolved
+}
+
 workflow {
     validateParameters()
     log.info paramsSummaryLog(workflow)
@@ -77,6 +129,20 @@ workflow {
     }
 
     samples_ch = channel.fromList(sample_rows)
+
+    // Issue #42: a provenance-only view of the same rows, each tagged
+    // with its zero-based samplesheet position. Built from the already
+    // materialized `sample_rows` list rather than by transforming
+    // samples_ch, so the scientific channel's own cardinality and
+    // ordering contract is untouched: Nextflow makes no ordering promise
+    // across parallel tasks, and this rank is how the run manifest
+    // restores samplesheet order afterwards. The rank is a transport
+    // detail -- bin/build_run_manifest.py sorts on it and drops it.
+    input_provenance_rows_ch = channel.fromList(
+        sample_rows.withIndex().collect { row, index ->
+            tuple(row[0] + [rank: index], row[1], row[2])
+        }
+    )
 
     // Issue #8: computed once, synchronously, directly from the fully
     // materialized samplesheet list -- before any channel operation
@@ -171,6 +237,8 @@ workflow {
     ADZUKI_SNP_PIPELINE(
         samples_ch,
         reference_ch,
-        read_group_counts_by_sample
+        read_group_counts_by_sample,
+        input_provenance_rows_ch,
+        resolvePipelineCommit()
     )
 }

@@ -1,0 +1,12 @@
+Issue #42 placeholder. This file exists so BUILD_RUN_MANIFEST can keep a
+single, uniform input arity whether or not the GS panel lineage ran.
+
+When `enable_gs_panel = false`, no GS panel manifest is produced, but a
+Nextflow `path` input still requires a file (a process input cannot be
+declared optional in Nextflow 26.04.6 -- `arity: '0..1'` is rejected for
+inputs). This placeholder is staged in that case and never read: the
+workflow passes `--no-gs-panel` to bin/build_run_manifest.py, which
+records `"gs_panel": null` without opening any file. The flag is
+explicit rather than inferred from a missing argument so that a wiring
+mistake cannot quietly produce a manifest which understates what the run
+actually did.
