@@ -131,16 +131,32 @@ SNP / indel hard-filter thresholdもparameter化されています。現在値�
 │   ├── gs_classified/
 │   ├── gs_filtered/
 │   └── gs_pass/
-└── gs_panel/
-    ├── cohort.gs_panel.genotype_matrix.tsv.gz
-    ├── cohort.gs_panel.sample_metadata.tsv
-    ├── cohort.gs_panel.variant_metadata.tsv
-    ├── cohort.gs_panel.genotype_encoding_accounting.tsv
-    ├── cohort.gs_panel.record_accounting.tsv
-    └── cohort.gs_panel.manifest.json
+├── gs_panel/
+│   ├── cohort.gs_panel.genotype_matrix.tsv.gz
+│   ├── cohort.gs_panel.sample_metadata.tsv
+│   ├── cohort.gs_panel.variant_metadata.tsv
+│   ├── cohort.gs_panel.genotype_encoding_accounting.tsv
+│   ├── cohort.gs_panel.record_accounting.tsv
+│   └── cohort.gs_panel.manifest.json
+└── provenance/
+    └── cohort.run_manifest.json
 ```
 
-詳細なGS contractは[`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md)、MultiQC contractは[`docs/multiqc.md`](docs/multiqc.md)を参照してください。
+詳細なGS contractは[`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md)、run-level provenance contractは[`docs/run_manifest_data_contract.md`](docs/run_manifest_data_contract.md)、MultiQC contractは[`docs/multiqc.md`](docs/multiqc.md)を参照してください。
+
+### Run provenance manifest
+
+Issue #42 / PR #56で、run-level provenance manifestをNextflow DAGの正式な最終工程にしました。成功したrunは必ず`provenance/cohort.run_manifest.json` (schema v2) を生成します。手動のpost-run CLI実行は不要です。
+
+記録内容は、入力FASTQのbasename + SHA256 (samplesheet順)、reference bundle (FASTA / FAI / dict / BWA-MEM2 index 5本) のbasename + SHA256、pipelineのfull 40桁git SHA、実行時のNextflow version、material parameters、cohort / sample / variant type accounting、GS panel manifestのsummary (GS無効時は`null`)、主要成果物のchecksumです。
+
+`containers`は**そのrunで実際に実行されたprocess単位**で、各processのeffective `task.container` (override解決後の実測値) を記録します。tool種別へまとめず、`fastqc_raw`と`fastqc_trimmed`、`gatk_variantfiltration`と`gatk_variantfiltration_gs`のようなaliasも分離します。実行されなかったprocess (prebuilt reference使用時の`bwa_mem2_index`、GS無効時のGS 8 process) はkeyごと出しません。
+
+manifest生成はbest-effortではありません。BUILD_RUN_MANIFESTは通常の必須processで、失敗すればpipelineも失敗します。「解析は成功したが証跡が無い」状態を正常終了にしないためです。またmanifestは実行された全processのcontainer provenanceに依存するため、MultiQCを含むQC branchが完了する前には生成できません。
+
+manifestにはhost絶対path、username、workDir/launchDir、private IP、credential、生sequenceを記録しません。
+
+過去のIssue #26/#33のreal-cohort manifest (schema v1) は書き換えていません。standalone CLI (`--mode legacy-v1`、既定) もそのまま使えます。
 
 ### GS dosage contract
 
@@ -185,7 +201,14 @@ NXF_VER=26.04.6 \
   --profile "test,docker"
 ```
 
-現在のtest suiteは、synthetic 2 sample / 3 read-group E2E、diploid/haploid genotype contract、mapping + sort、duplicate marking、reference FAI/dict整合、single-input GenomicsDBImport/GatherVcfs、MIXED variant contract、GS normalization、MultiQC input/output semanticsなどを自動検証します。
+現在のtest suiteは、synthetic 2 sample / 3 read-group E2E、diploid/haploid genotype contract、mapping + sort、duplicate marking、reference FAI/dict整合、single-input GenomicsDBImport/GatherVcfs、MIXED variant contract、GS normalization、MultiQC input/output semantics、run-level provenance manifestなどを自動検証します。
+
+Issue単位でfocused runもできます。
+
+```bash
+nf-test test --tag issue42_run_manifest   # run-level provenance manifest
+nf-test test --tag issue52_containers     # container identity provenance
+```
 
 GitHub Actionsはmainへのpush / pull requestでNextflow lint、Python unit tests、nf-testを実行します。real WGS cohortはCIでは実行しません。
 
@@ -249,7 +272,6 @@ MAF / call-rate filtering、LD pruning、imputation、GS model trainingはこの
 
 現在までのIssueはすべて完了しました。リポジトリ全体の再監査後、次のfollow-upを起票しています。
 
-- [#42](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/42) — **P0**: run-level provenance manifestをNextflow DAGへ自動統合する
 - [#44](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/44) — **P0**: `BUILD_GS_PANEL`をbounded-memory化する
 - [#43](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/43) — **P1**: `SUMMARIZE_FILTER_QC`をstreaming化する
 - [#45](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/45) — **P1**: 50検体超のJoint Genotyping scale strategyをtargeted検証する
