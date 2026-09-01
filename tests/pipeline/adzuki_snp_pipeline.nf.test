@@ -69,6 +69,29 @@ nextflow_pipeline {
         }.join()
     }
 
+    // Issue #42: the canonical process keys of every process Nextflow
+    // actually executed, derived from its own task trace rather than
+    // from a list maintained by hand here.
+    //
+    // This is what makes "the manifest records every executed process"
+    // self-maintaining: a process added to the workflow later but never
+    // wired into the run-level provenance channel would show up in the
+    // trace and not in the manifest, and the comparison below would
+    // fail -- whereas a hand-written expected list would simply not
+    // mention it, and would pass.
+    //
+    // A trace name looks like `ADZUKI_SNP_PIPELINE:FASTQC_RAW (tag)`;
+    // the canonical key is the invocation name (which is the *alias*,
+    // not the module's own process name) lowercased.
+    def executedProcessKeys = { taskNames ->
+        return taskNames.collect { name ->
+            name.replaceAll(/\s*\(.*\)\s*$/, '')
+                .tokenize(':')
+                .last()
+                .toLowerCase()
+        } as Set
+    }
+
     // Issue #42: the run-level provenance manifest a successful run now
     // always publishes, at its stable public path.
     def readRunManifest = { String testOutputDir ->
@@ -988,14 +1011,22 @@ nextflow_pipeline {
             assert runManifest.containers.containsKey("gatk_selectpassvariants")
             assert runManifest.containers.containsKey("gatk_selectpassvariants_gs")
 
-            // Every executed process, and nothing else: the union of the
-            // keys checked above is the whole `containers` map.
-            def expectedRunManifestKeys = (
+            // Every executed process, and nothing else -- compared
+            // against Nextflow's own trace of what ran, so a process
+            // added later without being wired into the provenance
+            // channel fails here instead of being silently omitted.
+            assert runManifest.containers.keySet() ==
+                executedProcessKeys(workflow.trace.tasks().collect { task -> task.name }):
+                "run manifest containers do not match the processes Nextflow executed"
+
+            // The hand-checked keys above are a subset of that, so the
+            // two agree by construction; assert it rather than assume it.
+            def individuallyCheckedKeys = (
                 RUN_TASK_NEEDLES.keySet()
                 + OPTIONAL_REFERENCE_TASK_NEEDLES.keySet()
                 + expectedContainers.keySet()
             ) as Set
-            assert runManifest.containers.keySet() == expectedRunManifestKeys
+            assert runManifest.containers.keySet().containsAll(individuallyCheckedKeys)
 
             // Privacy: no host path, no file:// URI, no credential, and
             // nothing naming where this run happened.
@@ -1453,6 +1484,11 @@ nextflow_pipeline {
             assert runManifest.containers.containsKey("gatk_selectpassvariants")
             assert runManifest.containers.containsKey("multiqc")
             assert runManifest.containers.containsKey("build_run_manifest")
+
+            // ...and the recorded set is exactly what Nextflow executed
+            // in this configuration -- no more, no less.
+            assert runManifest.containers.keySet() ==
+                executedProcessKeys(workflow.trace.tasks().collect { task -> task.name })
 
             // Accounting and checksums still cover the whole run.
             assert runManifest.sample_accounting.collect { row -> row.sample } ==
