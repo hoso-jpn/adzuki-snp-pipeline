@@ -56,6 +56,72 @@ nextflow_pipeline {
         return matches
     }
 
+    // Issue #42: an independent SHA-256 of a file on disk, so a manifest
+    // checksum can be checked against the actual bytes of the fixture
+    // rather than against a value copied out of the manifest itself.
+    def sha256Of = { String filePath ->
+        def digest = java.security.MessageDigest.getInstance("SHA-256")
+        new File(filePath).eachByte(1048576) { buffer, length ->
+            digest.update(buffer, 0, length)
+        }
+        return "sha256:" + digest.digest().collect { byteValue ->
+            String.format("%02x", byteValue)
+        }.join()
+    }
+
+    // Issue #42: the run-level provenance manifest a successful run now
+    // always publishes, at its stable public path.
+    def readRunManifest = { String testOutputDir ->
+        def manifestFile = new File("${testOutputDir}/provenance/cohort.run_manifest.json")
+        assert manifestFile.exists(): "no run manifest at ${manifestFile}"
+        return new groovy.json.JsonSlurper().parse(manifestFile)
+    }
+
+    // Issue #42: one needle per *non-GS* process key, matching exactly one
+    // task's rendered `.command.sh`, so the manifest's recorded container
+    // for that process can be compared against the image Nextflow really
+    // launched it with. The GS lineage's own keys are covered by
+    // GS_TASK_NEEDLES below; MULTIQC's presence is what proves the
+    // manifest cannot be written before the QC side branch finishes.
+    def RUN_TASK_NEEDLES = [
+        fastqc_raw                   : '.raw.R1.fastq.gz',
+        fastqc_trimmed               : '.trimmed.R1.fastq.gz',
+        fastp                        : '--detect_adapter_for_pe',
+        validate_reference_contigs   : 'validate_reference_contigs.py',
+        bwa_mem2_mem_sort            : 'bwa-mem2 mem',
+        samtools_merge               : 'samtools merge',
+        gatk_markduplicates          : 'MarkDuplicates',
+        samtools_index               : 'samtools index',
+        samtools_qc                  : 'samtools flagstat',
+        multiqc                      : 'multiqc',
+        gatk_haplotypecaller         : 'HaplotypeCaller',
+        gatk_genomicsdbimport        : 'GenomicsDBImport',
+        gatk_genotypegvcfs           : 'GenotypeGVCFs',
+        gatk_gathervcfs              : 'GatherVcfs',
+        gatk_selectvariants          : '--output cohort.snp.vcf.gz',
+        gatk_variantfiltration       : '--output cohort.snp.filtered.vcf.gz',
+        gatk_selectpassvariants      : '--output cohort.snp.pass.vcf.gz',
+        bcftools_stats               : 'bcftools stats',
+        summarize_variant_qc         : 'summarize_variant_qc.py',
+        summarize_filter_qc          : 'summarize_filter_qc.py',
+        reconcile_variant_type_counts: 'reconcile_variant_type_counts.py',
+        hash_input_fastqs            : 'hash_input_fastqs.py',
+        hash_reference_bundle        : 'hash_reference_bundle.py',
+        hash_run_artifacts           : 'hash_run_artifacts.py',
+        build_run_manifest           : 'build_run_manifest.py',
+    ]
+
+    // Issue #42: the reference-preparation processes that run only when
+    // the pipeline was not given a prebuilt bundle. Their keys must be
+    // present in a run that generated them and absent from one that did
+    // not -- the manifest lists processes this run executed, not
+    // processes it could have.
+    def OPTIONAL_REFERENCE_TASK_NEEDLES = [
+        samtools_faidx                 : 'samtools faidx',
+        gatk_create_sequence_dictionary: 'CreateSequenceDictionary',
+        bwa_mem2_index                 : 'bwa-mem2 index',
+    ]
+
     // Issue #52: a needle that appears in exactly one GS-lineage task's
     // `.command.sh`, per manifest `containers` key, so a test can pull up
     // that task's real `.command.run` (and therefore the image Nextflow
@@ -77,6 +143,12 @@ nextflow_pipeline {
     ]
 
     test("both samples resolve confident ref/alt genotypes at both deterministic SNP loci") {
+
+        // Also the Issue #42 acceptance case: this run publishes the
+        // run-level provenance manifest, asserted at the end of the
+        // `then` block below.
+        tag "issue42_run_manifest"
+
 
         when {
             params {
@@ -715,6 +787,227 @@ nextflow_pipeline {
                 assert runs[0].contains(expectedContainers[processName]):
                     "${processName} did not run in ${expectedContainers[processName]}"
             }
+
+            // ---------------------------------------------------------
+            // Issue #42: the run-level provenance manifest.
+            //
+            // A successful run publishes it on its own, at a stable
+            // path, with no manual post-run CLI step. Everything below
+            // checks it against something independent -- the fixture
+            // bytes on disk, the QC artifacts the pipeline published, or
+            // the image Nextflow actually launched each task with --
+            // rather than against values copied out of the manifest.
+            // ---------------------------------------------------------
+            def runManifest = readRunManifest(outputDir.toString())
+
+            assert runManifest.schema_version == 2
+            assert runManifest.cohort_id == "cohort"
+
+            // The pipeline version is read from nextflow.config's own
+            // manifest block rather than copied here, so bumping the
+            // release version needs no test edit. (nf-test's `workflow`
+            // object is its own WorkflowMeta and does not expose
+            // Nextflow's `workflow.manifest`.)
+            def declaredPipelineVersion = (
+                new File("${projectDir}/nextflow.config").text
+                    =~ /(?m)^\s*version\s*=\s*'([^']+)'/
+            )[0][1]
+            assert runManifest.pipeline_version == declaredPipelineVersion
+
+            // A full 40-character SHA, not an abbreviation and not null:
+            // workflow.commitId is null for a local `nextflow run .`, so
+            // this also proves main.nf's explicit resolution ran.
+            assert runManifest.git_commit ==~ /^[0-9a-f]{40}\z/
+
+            // The engine's own version, which has previously been the
+            // root cause of a real failure in this pipeline (Issue #11).
+            // Checked by shape, and against the minimum this repository
+            // declares it needs, rather than pinned to a literal: the
+            // engine version is pinned in .github/workflows/test.yml, and
+            // duplicating it here would turn an engine upgrade into a
+            // test edit. What matters for provenance is that a real
+            // runtime version was recorded, not a placeholder.
+            assert runManifest.nextflow_version ==~ /^\d+\.\d+\.\d+\z/
+
+            def declaredMinimumNextflow = (
+                new File("${projectDir}/nextflow.config").text
+                    =~ /(?m)^\s*nextflowVersion\s*=\s*'>=([0-9.]+)'/
+            )[0][1]
+            // Zero-padded per component so a plain string comparison
+            // orders versions numerically (10 after 9, not before it).
+            def comparableVersion = { String version ->
+                version.split(/\./).collect { part -> part.padLeft(6, '0') }.join('.')
+            }
+            assert comparableVersion(runManifest.nextflow_version) >=
+                comparableVersion(declaredMinimumNextflow):
+                "recorded Nextflow version ${runManifest.nextflow_version} is below " +
+                "this pipeline's declared minimum ${declaredMinimumNextflow}"
+
+            assert runManifest.manifest_hash.startsWith("sha256:")
+
+            // Material parameters, with their real types.
+            assert runManifest.parameters.sample_ploidy == 2
+            assert runManifest.parameters.enable_gs_panel == true
+            assert runManifest.parameters.genomicsdb_batch_size == 50
+            // This run overrides optical_duplicate_pixel_distance to a
+            // non-default 2500 (see the params block above), and passes
+            // it as the String a real CLI invocation would produce. The
+            // manifest must record the value this run actually used, as
+            // a number -- not the pipeline default, and not "2500".
+            assert runManifest.parameters.optical_duplicate_pixel_distance == 2500
+            assert runManifest.parameters.snp_filter_qd_min == 2.0
+            assert runManifest.parameters.snp_filter_qual_min == 30.0
+            assert runManifest.parameters.indel_filter_fs_max == 200.0
+            assert runManifest.parameters.indel_filter_read_pos_rank_sum_min == -20.0
+
+            // Reference identity, and every reference file the run
+            // actually consumed -- checksums compared against this test's
+            // own hash of the fixture, not against the manifest itself.
+            assert runManifest.reference.reference_id == "synthetic-adzuki-v1"
+            assert runManifest.reference.reference_name == "Synthetic adzuki test reference"
+            assert runManifest.reference.reference_species == "Vigna angularis"
+            assert runManifest.reference.fasta.filename == "synthetic.fa"
+            assert runManifest.reference.fasta.checksum ==
+                sha256Of("${projectDir}/tests/data/reference/synthetic.fa")
+            assert runManifest.reference.fai.filename == "synthetic.fa.fai"
+            assert runManifest.reference.fai.checksum ==
+                sha256Of("${projectDir}/tests/data/reference/synthetic.fa.fai")
+            assert runManifest.reference.dict.filename == "synthetic.dict"
+            assert runManifest.reference.dict.checksum ==
+                sha256Of("$outputDir/reference/synthetic.dict")
+
+            // The BWA-MEM2 index this run generated and mapped against.
+            assert runManifest.reference.bwa_index.collect { entry -> entry.filename } == [
+                "synthetic.fa.0123",
+                "synthetic.fa.amb",
+                "synthetic.fa.ann",
+                "synthetic.fa.bwt.2bit.64",
+                "synthetic.fa.pac",
+            ]
+            runManifest.reference.bwa_index.each { entry ->
+                assert entry.checksum == sha256Of("$outputDir/reference/${entry.filename}"):
+                    "reference index ${entry.filename} checksum does not match the file the run produced"
+            }
+
+            // Input FASTQ provenance, in samplesheet order, by basename,
+            // with checksums of the real fixture reads.
+            assert runManifest.samples.collect { entry -> entry.read_group_id } == [
+                "sample_a_L001",
+                "sample_a_L002",
+                "sample_b_L001",
+            ]
+            assert runManifest.samples[0].sample_id == "sample_a"
+            assert runManifest.samples[0].library_id == "lib_a"
+            assert runManifest.samples[0].platform == "ILLUMINA"
+            assert runManifest.samples[0].platform_unit == "flowcell1.L001.ATCACG"
+            runManifest.samples.each { entry ->
+                assert entry.fastq_1.checksum ==
+                    sha256Of("${projectDir}/tests/data/reads/${entry.fastq_1.filename}")
+                assert entry.fastq_2.checksum ==
+                    sha256Of("${projectDir}/tests/data/reads/${entry.fastq_2.filename}")
+            }
+
+            // Output checksums: the artifact set the historical schema v1
+            // manifests recorded, hashed from what this run produced.
+            assert runManifest.checksums.keySet() == [
+                "sample_a.g.vcf.gz",
+                "sample_b.g.vcf.gz",
+                "cohort.raw.vcf.gz",
+                "cohort.snp.pass.vcf.gz",
+                "cohort.indel.pass.vcf.gz",
+            ] as Set
+            assert runManifest.checksums["cohort.raw.vcf.gz"] ==
+                sha256Of("$outputDir/variants/raw/cohort.raw.vcf.gz")
+            assert runManifest.checksums["sample_a.g.vcf.gz"] ==
+                sha256Of("$outputDir/variants/gvcf/sample_a.g.vcf.gz")
+
+            // Accounting is the QC the pipeline already published, not a
+            // second computation of the same numbers.
+            assert runManifest.cohort_accounting.number_of_samples == "2"
+            assert runManifest.cohort_accounting.sample_names == "sample_a,sample_b"
+            assert runManifest.sample_accounting.collect { row -> row.sample } ==
+                ["sample_a", "sample_b"]
+            assert runManifest.sample_accounting[0].keySet() == [
+                "sample",
+                "reference_homozygous",
+                "non_reference_homozygous",
+                "heterozygous",
+                "missing",
+                "missingness_rate",
+                "average_depth",
+                "singletons",
+            ] as Set
+            assert runManifest.variant_type_accounting.raw_all_records == "2"
+            assert runManifest.variant_type_accounting.raw_snp_records == "2"
+            assert runManifest.variant_type_accounting.raw_indel_records == "0"
+
+            // With the GS panel enabled the run manifest points at the GS
+            // manifest this same run produced, by its own hash.
+            assert runManifest.gs_panel != null
+            assert runManifest.gs_panel.cohort_id == "cohort"
+            assert runManifest.gs_panel.schema_version == manifestJson.schema_version
+            assert runManifest.gs_panel.run_id == manifestJson.run_id
+            assert runManifest.gs_panel.panel_status == manifestJson.panel_status
+            assert runManifest.gs_panel.manifest_hash == manifestJson.manifest_hash
+
+            // Every process key the manifest records must be one this run
+            // actually executed, and must name the image Nextflow really
+            // launched that process with -- compared against each task's
+            // own `.command.run`, not against the manifest itself.
+            (RUN_TASK_NEEDLES + OPTIONAL_REFERENCE_TASK_NEEDLES).each { processName, needle ->
+                assert runManifest.containers.containsKey(processName):
+                    "run manifest has no container entry for executed process ${processName}"
+
+                def runs = findCommandRunScripts(outputDir.toString(), needle)
+                assert runs.size() >= 1:
+                    "expected at least one ${processName} task for needle '${needle}'"
+                assert runs.every { run -> run.contains(runManifest.containers[processName]) }:
+                    "a ${processName} task did not run in ${runManifest.containers[processName]}"
+            }
+
+            // The GS lineage's own eight keys, checked the same way
+            // against the GS manifest's own recorded identities.
+            expectedContainers.each { processName, expectedReference ->
+                assert runManifest.containers[processName] == expectedReference:
+                    "run manifest and GS manifest disagree about ${processName}"
+            }
+
+            // Terminal barrier: MULTIQC is a side branch that produces
+            // nothing the manifest's content depends on, so it would be
+            // free to still be running when the manifest was written --
+            // unless the manifest depends on its container identity, as
+            // it does. Its presence here is what makes "the run manifest
+            // is the last thing that happens" true rather than hoped for.
+            assert runManifest.containers.containsKey("multiqc")
+
+            // Aliases of one module stay distinct identities.
+            assert runManifest.containers.containsKey("fastqc_raw")
+            assert runManifest.containers.containsKey("fastqc_trimmed")
+            assert runManifest.containers.containsKey("gatk_variantfiltration")
+            assert runManifest.containers.containsKey("gatk_variantfiltration_gs")
+            assert runManifest.containers.containsKey("gatk_selectpassvariants")
+            assert runManifest.containers.containsKey("gatk_selectpassvariants_gs")
+
+            // Every executed process, and nothing else: the union of the
+            // keys checked above is the whole `containers` map.
+            def expectedRunManifestKeys = (
+                RUN_TASK_NEEDLES.keySet()
+                + OPTIONAL_REFERENCE_TASK_NEEDLES.keySet()
+                + expectedContainers.keySet()
+            ) as Set
+            assert runManifest.containers.keySet() == expectedRunManifestKeys
+
+            // Privacy: no host path, no file:// URI, no credential, and
+            // nothing naming where this run happened.
+            def serializedRunManifest =
+                new File("$outputDir/provenance/cohort.run_manifest.json").text
+            assert !serializedRunManifest.contains(projectDir.toString())
+            assert !serializedRunManifest.contains(outputDir.toString())
+            assert !serializedRunManifest.contains("file://")
+            assert !serializedRunManifest.contains(System.getProperty("user.home"))
+            assert !serializedRunManifest.contains(System.getProperty("user.name"))
+            assert !serializedRunManifest.contains("workDir")
+            assert !serializedRunManifest.contains("launchDir")
         }
     }
 
@@ -867,6 +1160,7 @@ nextflow_pipeline {
     test("container overrides on GS_NORMALIZE_VARIANTS and the GATK_VARIANTFILTRATION_GS alias are recorded in the GS panel manifest, not their module defaults") {
 
         tag "issue52_containers"
+        tag "issue42_run_manifest"
 
         config "./fixtures/gs_container_identity_override.config"
 
@@ -939,10 +1233,44 @@ nextflow_pipeline {
             assert gsFilterRuns.size() == 1
             assert gsFilterRuns[0].contains(overriddenGatk)
             assert !gsFilterRuns[0].contains(gatkDefault)
+
+            // Issue #42: the run-level manifest records effective
+            // containers per process too, so the same two overrides must
+            // reach it -- and must not leak onto the sibling alias or
+            // onto any other process. This is the run-level counterpart
+            // of the GS-manifest assertions above: a manifest that showed
+            // the module default here would prove the override never
+            // reached it.
+            def runManifest = readRunManifest(outputDir.toString())
+
+            assert runManifest.containers.gs_normalize_variants ==
+                GsContainerDefaults.digestOnly(containerDefaults.bcftools)
+            assert runManifest.containers.gatk_variantfiltration_gs == overriddenGatk
+
+            // The primary lineage's own alias of the same module was not
+            // overridden and must still show the default.
+            assert runManifest.containers.gatk_variantfiltration == gatkDefault
+            assert runManifest.containers.gatk_selectpassvariants_gs == gatkDefault
+            assert runManifest.containers.gs_index_classified_variants ==
+                containerDefaults.bcftools
+
+            // ...and each recorded value is the image Nextflow really
+            // launched that process with.
+            def runManifestFilterRuns = findCommandRunScripts(
+                outputDir.toString(),
+                RUN_TASK_NEEDLES.gatk_variantfiltration,
+            )
+            assert runManifestFilterRuns.every { run ->
+                run.contains(runManifest.containers.gatk_variantfiltration)
+            }
+            assert gsFilterRuns[0].contains(runManifest.containers.gatk_variantfiltration_gs)
         }
     }
 
     test("haploid sample_ploidy with the GS panel disabled resolves correct hemizygous genotypes end to end") {
+
+        tag "issue42_run_manifest"
+
 
         when {
             params {
@@ -1082,6 +1410,56 @@ nextflow_pipeline {
             // the primary (non-GS) lineage still runs to completion
             assert path("$outputDir/variants/filtered/cohort.snp.filtered.vcf.gz").exists()
             assert path("$outputDir/variants/pass/cohort.snp.pass.vcf.gz").exists()
+
+            // Issue #42: a run with the GS panel disabled still produces
+            // a run-level provenance manifest -- provenance is not a
+            // property of the GS lineage. `gs_panel` is an explicit null
+            // rather than a missing field, so a reader can tell "this run
+            // had no GS panel" apart from "this manifest predates the
+            // field".
+            def runManifest = readRunManifest(outputDir.toString())
+
+            assert runManifest.schema_version == 2
+            assert runManifest.cohort_id == "cohort"
+            assert runManifest.containsKey("gs_panel")
+            assert runManifest.gs_panel == null
+
+            // The parameters that made this run different are recorded
+            // as they were actually used.
+            assert runManifest.parameters.enable_gs_panel == false
+            assert runManifest.parameters.sample_ploidy == 1
+
+            // No GS process ran, so no GS process key exists. A manifest
+            // that listed them with their default images would be
+            // claiming software touched this data when none did.
+            def gsProcessKeys = [
+                "gs_normalize_variants",
+                "classify_normalized_variants",
+                "gs_index_classified_variants",
+                "gatk_variantfiltration_gs",
+                "gatk_selectpassvariants_gs",
+                "build_gs_panel",
+                "reconcile_gs_panel_accounting",
+                "build_gs_panel_manifest",
+            ]
+            gsProcessKeys.each { processKey ->
+                assert !runManifest.containers.containsKey(processKey):
+                    "run manifest recorded ${processKey}, but the GS lineage did not run"
+            }
+
+            // The primary lineage's own processes are still recorded,
+            // including the QC side branch's terminal barrier.
+            assert runManifest.containers.containsKey("gatk_variantfiltration")
+            assert runManifest.containers.containsKey("gatk_selectpassvariants")
+            assert runManifest.containers.containsKey("multiqc")
+            assert runManifest.containers.containsKey("build_run_manifest")
+
+            // Accounting and checksums still cover the whole run.
+            assert runManifest.sample_accounting.collect { row -> row.sample } ==
+                ["sample_a", "sample_b"]
+            assert runManifest.checksums.containsKey("cohort.raw.vcf.gz")
+            assert runManifest.checksums["cohort.raw.vcf.gz"] ==
+                sha256Of("$outputDir/variants/raw/cohort.raw.vcf.gz")
         }
     }
 
@@ -1179,6 +1557,9 @@ nextflow_pipeline {
     }
 
     test("a fully prebuilt (non-generated) BWA-MEM2 index completes the whole pipeline and skips BWA_MEM2_INDEX") {
+
+        tag "issue42_run_manifest"
+
 
         when {
             params {
@@ -1278,6 +1659,36 @@ nextflow_pipeline {
                 assert altSample["DP"] == expected.alt_sample_dp
                 assert refSample["GT"] == expected.ref_genotype
                 assert refSample["DP"] == expected.ref_sample_dp
+            }
+
+            // Issue #42: BWA_MEM2_INDEX never ran in this configuration,
+            // so the run manifest must not carry a `bwa_mem2_index`
+            // entry -- `containers` lists the processes this run
+            // executed, not the processes it could have executed under a
+            // different configuration. The reference-preparation
+            // processes that *did* run (this run supplies neither a
+            // prebuilt FAI nor a prebuilt dictionary) are still recorded.
+            def runManifest = readRunManifest(outputDir.toString())
+
+            assert !runManifest.containers.containsKey("bwa_mem2_index")
+            assert runManifest.containers.containsKey("samtools_faidx")
+            assert runManifest.containers.containsKey("gatk_create_sequence_dictionary")
+            assert runManifest.containers.containsKey("bwa_mem2_mem_sort")
+
+            // The prebuilt index files this run actually mapped against
+            // are still recorded, by basename and by a checksum this test
+            // computes independently from the fixture on disk.
+            assert runManifest.reference.bwa_index.collect { entry -> entry.filename } == [
+                "synthetic.fa.0123",
+                "synthetic.fa.amb",
+                "synthetic.fa.ann",
+                "synthetic.fa.bwt.2bit.64",
+                "synthetic.fa.pac",
+            ]
+            runManifest.reference.bwa_index.each { entry ->
+                assert entry.checksum == sha256Of(
+                    "${projectDir}/tests/data/reference/prebuilt_bwa_index/${entry.filename}"
+                ): "prebuilt index ${entry.filename} is not the file the manifest recorded"
             }
         }
     }

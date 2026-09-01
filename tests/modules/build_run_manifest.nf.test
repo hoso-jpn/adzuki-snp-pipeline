@@ -1,0 +1,172 @@
+nextflow_process {
+
+    name "BUILD_RUN_MANIFEST run-level provenance contract"
+    script "modules/local/build_run_manifest.nf"
+    process "BUILD_RUN_MANIFEST"
+
+    tag "issue42_run_manifest"
+
+    // Issue #42: driven directly at the module boundary, with staged
+    // provenance fixtures, so the behaviors that only matter when
+    // something has gone wrong -- a malformed prerequisite, an
+    // unresolvable commit -- are actually executed. The pipeline never
+    // builds those inputs, so at the pipeline level they are unreachable.
+    //
+    // The happy path here also proves something no unit test can: that
+    // bin/manifest_utils.py is importable from inside a real Nextflow
+    // task container. The bin/ scripts import it as a plain sibling
+    // module with no packaging and no PYTHONPATH, which works because
+    // Nextflow stages the project's whole bin/ directory and Python puts
+    // the running script's own directory first on sys.path. If that ever
+    // stopped being true, build_run_manifest.py would fail on import and
+    // this test would be the thing that noticed.
+    def FIXTURES = 'tests/modules/fixtures/run_manifest'
+    def FULL_SHA = '402f437b4a4f00023e0571bbe6d73dab3a83fadf'
+
+    def manifestInputs = { String projectDirPath, Map overrides ->
+        def defaults = [
+            variantQc      : "${projectDirPath}/${FIXTURES}/variant_qc.tsv",
+            sampleQc       : "${projectDirPath}/${FIXTURES}/sample_qc.tsv",
+            variantType    : "${projectDirPath}/${FIXTURES}/variant_type_accounting.tsv",
+            runtime        : "${projectDirPath}/${FIXTURES}/runtime_container_provenance.tsv",
+            inputProvenance: "${projectDirPath}/${FIXTURES}/input_provenance.tsv",
+            reference      : "${projectDirPath}/${FIXTURES}/reference_provenance.tsv",
+            artifacts      : "${projectDirPath}/${FIXTURES}/artifact_checksums.tsv",
+            gitCommit      : FULL_SHA,
+            gsEnabled      : true,
+            gsManifest     : "${projectDirPath}/${FIXTURES}/gs_panel.manifest.json",
+        ]
+        def values = defaults + overrides
+        return """
+            input[0] = [
+                [ id: 'cohort' ],
+                file("${values.variantQc}"),
+                file("${values.sampleQc}"),
+            ]
+            input[1] = [ [ id: 'cohort' ], file("${values.variantType}") ]
+            input[2] = file("${values.runtime}")
+            input[3] = [ file("${values.inputProvenance}") ]
+            input[4] = file("${values.reference}")
+            input[5] = [ file("${values.artifacts}") ]
+            input[6] = '0.2.0'
+            input[7] = '${values.gitCommit}'
+            input[8] = '26.04.6'
+            input[9] = ${values.gsEnabled}
+            input[10] = file("${values.gsManifest}")
+        """
+    }
+
+    test("a complete set of staged provenance produces a schema v2 manifest that records this process's own container") {
+
+        when {
+            process {
+                manifestInputs(projectDir.toString(), [:])
+            }
+        }
+
+        then {
+            assert process.success
+
+            def manifestFile = new File(process.out.manifest[0][1])
+            def manifest = new groovy.json.JsonSlurper().parse(manifestFile)
+
+            assert manifest.schema_version == 2
+            assert manifest.cohort_id == 'cohort'
+            assert manifest.git_commit == FULL_SHA
+            assert manifest.nextflow_version == '26.04.6'
+            assert manifest.pipeline_version == '0.2.0'
+
+            // The staged runtime provenance named two processes; this
+            // process adds itself from its own task.container, which is
+            // the whole point of the third key being here.
+            assert manifest.containers.keySet() == ['fastqc_raw', 'multiqc', 'build_run_manifest'] as Set
+            assert manifest.containers.build_run_manifest ==
+                GsContainerDefaults.read(projectDir).python
+
+            // Accounting is embedded from the existing QC artifacts, not
+            // recomputed, and cross-checked before being recorded.
+            assert manifest.cohort_accounting.number_of_samples == '2'
+            assert manifest.sample_accounting.collect { row -> row.sample } == ['sample_a', 'sample_b']
+            assert manifest.variant_type_accounting.raw_all_records == '2'
+
+            assert manifest.gs_panel.cohort_id == 'cohort'
+            assert manifest.gs_panel.panel_status == 'empty'
+
+            assert manifest.reference.bwa_index.size() == 5
+            assert manifest.samples[0].read_group_id == 'sample_a_L001'
+
+            // The final JSON is the only file left behind: write_json_atomic
+            // renames its temp file into place and leaves no `.tmp` beside it.
+            def workDir = manifestFile.getParentFile()
+            assert workDir.listFiles().findAll { entry ->
+                entry.name.endsWith('.tmp')
+            }.isEmpty()
+
+            // Nothing host-specific reached the published document.
+            def serialized = manifestFile.text
+            assert !serialized.contains(projectDir.toString())
+            assert !serialized.contains('file://')
+        }
+    }
+
+    test("the GS panel placeholder produces a null gs_panel rather than a missing field") {
+
+        when {
+            process {
+                manifestInputs(
+                    projectDir.toString(),
+                    [
+                        gsEnabled : false,
+                        gsManifest: "${projectDir}/assets/NO_GS_PANEL_MANIFEST",
+                    ]
+                )
+            }
+        }
+
+        then {
+            assert process.success
+
+            def manifest = new groovy.json.JsonSlurper().parse(
+                new File(process.out.manifest[0][1])
+            )
+            assert manifest.schema_version == 2
+            assert manifest.gs_panel == null
+            // The placeholder is staged but never read into the document.
+            assert !new File(process.out.manifest[0][1]).text.contains('NO_GS_PANEL_MANIFEST')
+        }
+    }
+
+    test("a malformed prerequisite fails the process and publishes no manifest") {
+
+        when {
+            process {
+                manifestInputs(
+                    projectDir.toString(),
+                    [
+                        variantType: "${projectDir}/${FIXTURES}/variant_type_accounting_missing_metric.tsv",
+                    ]
+                )
+            }
+        }
+
+        then {
+            // A provenance artifact built from accounting that does not
+            // meet its own contract would be worse than none: it would
+            // look authoritative. The process fails instead.
+            assert !process.success
+        }
+    }
+
+    test("an unresolved git commit fails the process rather than recording an unknown one") {
+
+        when {
+            process {
+                manifestInputs(projectDir.toString(), [gitCommit: ''])
+            }
+        }
+
+        then {
+            assert !process.success
+        }
+    }
+}

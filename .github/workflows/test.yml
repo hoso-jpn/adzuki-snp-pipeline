@@ -45,4 +45,6 @@ jobs:
           tests/modules/gatk_gathervcfs.nf.test
           tests/modules/fastqc.nf.test
           tests/modules/multiqc.nf.test
+          tests/modules/hash_input_fastqs.nf.test
+          tests/modules/build_run_manifest.nf.test
           --ci

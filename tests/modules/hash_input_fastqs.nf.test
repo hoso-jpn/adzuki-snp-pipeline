@@ -1,0 +1,114 @@
+nextflow_process {
+
+    name "HASH_INPUT_FASTQS input provenance contract"
+    script "modules/local/hash_input_fastqs.nf"
+    process "HASH_INPUT_FASTQS"
+
+    tag "issue42_run_manifest"
+
+    // Issue #42: this process is what keeps the run manifest from having
+    // to stage a whole cohort's raw reads into one terminal task. What it
+    // publishes is deliberately narrow, and this test checks the narrow
+    // part specifically: the checksum must be a real SHA-256 of the real
+    // fixture (computed independently here, not copied from the process's
+    // own output), and the row must carry basenames only -- a path would
+    // put the host's directory layout into a shareable artifact.
+    def sha256Of = { String filePath ->
+        def digest = java.security.MessageDigest.getInstance("SHA-256")
+        new File(filePath).eachByte(1048576) { buffer, length ->
+            digest.update(buffer, 0, length)
+        }
+        return digest.digest().collect { byteValue ->
+            String.format("%02x", byteValue)
+        }.join()
+    }
+
+    test("a read group's FASTQ pair is recorded by basename and real SHA-256, with no host path") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [
+                        id           : 'sample_a',
+                        sample_id    : 'sample_a',
+                        read_group_id: 'sample_a_L001',
+                        library_id   : 'lib_a',
+                        platform     : 'ILLUMINA',
+                        platform_unit: 'flowcell1.L001.ATCACG',
+                        rank         : 0,
+                    ],
+                    file("${projectDir}/tests/data/reads/sample_a_L001_R1.fastq.gz"),
+                    file("${projectDir}/tests/data/reads/sample_a_L001_R2.fastq.gz"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def rows = path(process.out.provenance[0][1]).readLines()
+            assert rows.size() == 1
+
+            def fields = rows[0].split("\t")
+            assert fields.size() == 10
+
+            // rank, then the samplesheet metadata, unaltered
+            assert fields[0] == "00000000"
+            assert fields[1] == "sample_a"
+            assert fields[2] == "sample_a_L001"
+            assert fields[3] == "lib_a"
+            assert fields[4] == "ILLUMINA"
+            assert fields[5] == "flowcell1.L001.ATCACG"
+
+            // Basenames, never paths.
+            assert fields[6] == "sample_a_L001_R1.fastq.gz"
+            assert fields[8] == "sample_a_L001_R2.fastq.gz"
+
+            // The checksums are this test's own independent hash of the
+            // same fixture files, so a process that hashed the wrong file
+            // (or echoed a value handed to it) could not pass.
+            def expectedRead1 = sha256Of("${projectDir}/tests/data/reads/sample_a_L001_R1.fastq.gz")
+            def expectedRead2 = sha256Of("${projectDir}/tests/data/reads/sample_a_L001_R2.fastq.gz")
+            assert fields[7] == "sha256:${expectedRead1}"
+            assert fields[9] == "sha256:${expectedRead2}"
+
+            // Nothing in the row discloses where the run happened.
+            assert !rows[0].contains("/")
+            assert !rows[0].contains(projectDir.toString())
+
+            // Issue #42: with no override configured, the effective
+            // container this task ran in must equal the single
+            // default-value source of truth in conf/containers.config.
+            assert process.out.container_id[0] == GsContainerDefaults.read(projectDir).python
+        }
+    }
+
+    test("a metadata value containing a tab is rejected rather than shifting every later column") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [
+                        id           : 'sample_a',
+                        sample_id    : 'sample\\ta',
+                        read_group_id: 'sample_a_L001',
+                        library_id   : 'lib_a',
+                        platform     : 'ILLUMINA',
+                        platform_unit: '',
+                        rank         : 0,
+                    ],
+                    file("${projectDir}/tests/data/reads/sample_a_L001_R1.fastq.gz"),
+                    file("${projectDir}/tests/data/reads/sample_a_L001_R2.fastq.gz"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+        }
+    }
+}
