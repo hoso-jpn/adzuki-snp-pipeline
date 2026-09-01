@@ -10,56 +10,96 @@ include {
     ADZUKI_SNP_PIPELINE
 } from './workflows/adzuki_snp_pipeline'
 
-// Issue #42: the full 40-character commit this run executed from.
+// Issue #42: the full 40-character commit this run executed from, and
+// proof that the working tree it ran from is that commit.
 //
 // The run manifest is a provenance artifact the pipeline produces for
 // itself, so "which code produced this result" is not allowed to be
-// unknown. Nextflow's own `workflow.commitId` is only populated when
-// Nextflow pulled the pipeline from a git host (`nextflow run
-// owner/repo`); for this repository's own documented `nextflow run .`
-// invocation it is null -- measured on Nextflow 26.04.6, along with
-// nf-test, which runs the same way. Rather than record that as a null
-// and call the manifest done, the commit is resolved from the project
-// directory's own git checkout, which is the same repository Nextflow
-// is executing.
+// unknown -- or, worse, confidently wrong. Two things have to hold, and
+// both are checked before any analysis process starts:
 //
-// Only the resolved SHA is used. The project directory, the git
-// command's stderr, and anything else that would describe the host are
-// deliberately not carried into the error message or the manifest.
-// The pattern is spelled out at each use rather than hoisted into a
-// constant: Nextflow 26's strict script syntax does not allow a
-// top-level variable declaration in a script file.
-def resolvePipelineCommit() {
-    if (workflow.commitId && workflow.commitId ==~ /^[0-9a-f]{40}$/) {
-        return workflow.commitId
-    }
+//   * a full 40-character commit can be resolved at all. Nextflow's own
+//     `workflow.commitId` is populated only when Nextflow pulled the
+//     pipeline from a git host (`nextflow run owner/repo`); for this
+//     repository's own documented `nextflow run .` invocation it is null
+//     (measured on Nextflow 26.04.6, and the same under nf-test), so the
+//     commit is read from the project directory's git checkout instead.
+//   * the working tree is *clean*. This is the part a HEAD lookup alone
+//     cannot give: with uncommitted changes the code that actually ran is
+//     not the code at HEAD, and a manifest recording that SHA would be
+//     false provenance -- the most damaging kind, because it looks
+//     authoritative and is checkable by nobody.
+//
+// `git status --porcelain` covers all three ways a tree can differ from
+// its commit -- unstaged changes to tracked files, staged changes, and
+// untracked files -- in one check, and honors .gitignore, so a run's own
+// `work/`, `results/` and `.nf-test/` output does not count as a
+// modification of the pipeline.
+//
+// Nothing host-specific reaches the error messages: no project path, no
+// list of dirty files, no user name, and none of git's own stderr. A
+// provenance guard that leaked the layout of the machine it guarded would
+// be self-defeating.
+def gitCommandOutput(String projectPath, List<String> arguments) {
+    def process = (['git', '-C', projectPath] + arguments).execute()
+    def standardOutput = new StringBuilder()
+    def errorOutput = new StringBuilder()
+    // Consume both streams while waiting: a `git status` in a repository
+    // with many changes can fill a pipe buffer and deadlock a bare
+    // waitFor().
+    process.waitForProcessOutput(standardOutput, errorOutput)
 
-    def git = [
-        'git',
-        '-C',
-        workflow.projectDir.toString(),
-        'rev-parse',
-        'HEAD',
-    ].execute()
-    git.waitFor()
-    def resolved = git.text.trim()
+    return [
+        exit_code: process.exitValue(),
+        output: standardOutput.toString().trim(),
+    ]
+}
 
-    if (git.exitValue() != 0 || !(resolved ==~ /^[0-9a-f]{40}$/)) {
+def resolvePipelineCommit(projectDirectory, declaredCommitId) {
+    def projectPath = projectDirectory.toString()
+
+    def head = gitCommandOutput(projectPath, ['rev-parse', 'HEAD'])
+    if (head.exit_code != 0 || !(head.output ==~ /^[0-9a-f]{40}$/)) {
         error(
-            'could not resolve the full git commit this pipeline is running ' +
-            'from. Nextflow reported ' +
-            "workflow.commitId=${workflow.commitId ?: 'null'} (it is populated " +
-            'only for a git-hosted `nextflow run owner/repo`), and reading the ' +
-            'commit from the project directory did not produce a 40-character ' +
-            'SHA either. The run-level provenance manifest (Issue #42) records ' +
-            'the exact commit a result came from and will not record an unknown ' +
-            'or abbreviated one, so this run stops here rather than producing a ' +
-            'manifest that cannot identify its own code. Run the pipeline from a ' +
-            'git checkout, or from a git-hosted revision.'
+            'could not resolve the git commit this pipeline is running from. ' +
+            'The run-level provenance manifest (Issue #42) records the exact ' +
+            'commit a result came from and will not record an unknown or ' +
+            'abbreviated one, so this run stops before doing any analysis. Run ' +
+            'the pipeline from a git checkout of this repository, or from a ' +
+            'git-hosted revision.'
         )
     }
 
-    return resolved
+    if (declaredCommitId && declaredCommitId.toString() != head.output) {
+        error(
+            'the revision Nextflow reports for this run does not match the ' +
+            "commit checked out in the pipeline's project directory. Refusing " +
+            'to record either one as the code that produced this run.'
+        )
+    }
+
+    def status = gitCommandOutput(projectPath, ['status', '--porcelain'])
+    if (status.exit_code != 0) {
+        error(
+            "could not determine whether the pipeline's working tree matches " +
+            'its git commit. The run-level provenance manifest (Issue #42) ' +
+            'records that commit as the code that produced the run, so this ' +
+            'run stops rather than recording a claim it cannot support.'
+        )
+    }
+
+    if (!status.output.isEmpty()) {
+        error(
+            "the pipeline's working tree has uncommitted changes (modified, " +
+            'staged, or untracked files). The run-level provenance manifest ' +
+            '(Issue #42) would record the HEAD commit as the code that ' +
+            'produced this run, which is not true while the working tree ' +
+            'differs from it. Commit, stash, or remove the changes before a ' +
+            'formal provenance run.'
+        )
+    }
+
+    return head.output
 }
 
 workflow {
@@ -239,6 +279,6 @@ workflow {
         reference_ch,
         read_group_counts_by_sample,
         input_provenance_rows_ch,
-        resolvePipelineCommit()
+        resolvePipelineCommit(workflow.projectDir, workflow.commitId)
     )
 }

@@ -30,6 +30,12 @@ results/
 /nf-test
 .nf-test/
 .nf-test.log
+# nf-test writes a generated mock script per process test into the project
+# root while it runs. Issue #42 made an unclean working tree a hard failure
+# (a provenance manifest must not claim a HEAD commit that is not the code
+# that ran), so these scratch files have to be ignored or nf-test would make
+# the tree dirty against itself.
+.nf-test-*.nf
 
 # Synthetic test fixtures
 !tests/data/reads/*.fastq.gz

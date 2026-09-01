@@ -1,0 +1,214 @@
+nextflow_function {
+
+    name "resolvePipelineCommit dirty-tree provenance guard"
+    script "main.nf"
+    function "resolvePipelineCommit"
+
+    tag "issue42_run_manifest"
+
+    // Issue #42 review (P1): a schema v2 manifest records the HEAD commit
+    // as "the code that produced this run". That claim is only true if the
+    // working tree matched HEAD when the run started, so the guard is
+    // exercised here against real, throwaway git repositories rather than
+    // being asserted in prose.
+    //
+    // Each case builds its own repository under the test's own output
+    // directory, so nothing here touches this checkout.
+    def runCommand = { String workingDirectory, List<String> command ->
+        def process = new ProcessBuilder(command)
+            .directory(new File(workingDirectory))
+            .redirectErrorStream(true)
+            .start()
+        def output = process.inputStream.text
+        process.waitFor()
+        assert process.exitValue() == 0: "command ${command} failed: ${output}"
+        return output.trim()
+    }
+
+    def newRepository = { String testOutputDir, String name ->
+        def repository = new File("${testOutputDir}/${name}")
+        repository.mkdirs()
+        def path = repository.absolutePath
+
+        runCommand(path, ['git', 'init', '--initial-branch=main'])
+        runCommand(path, ['git', 'config', 'user.email', 'test@example.invalid'])
+        runCommand(path, ['git', 'config', 'user.name', 'Provenance Test'])
+        runCommand(path, ['git', 'config', 'commit.gpgsign', 'false'])
+
+        new File(repository, 'main.nf').text = "workflow {}\n"
+        // The same ignore rules a real run relies on: a pipeline's own
+        // outputs must not make its tree look modified.
+        new File(repository, '.gitignore').text = "work/\nresults/\n.nf-test/\n"
+        runCommand(path, ['git', 'add', '.'])
+        runCommand(path, ['git', 'commit', '-m', 'initial'])
+
+        return path
+    }
+
+    test("a clean checkout resolves the full 40-character HEAD commit") {
+
+        when {
+            function {
+                """
+                input[0] = '${newRepository(outputDir.toString(), 'clean')}'
+                input[1] = null
+                """
+            }
+        }
+
+        then {
+            assert function.success
+            assert function.result ==~ /^[0-9a-f]{40}\z/
+        }
+    }
+
+    test("a modified tracked file fails the run before any analysis") {
+
+        when {
+            function {
+                def repository = newRepository(outputDir.toString(), 'modified_tracked')
+                new File("${repository}/main.nf").text = "workflow {}\n// edited\n"
+                """
+                input[0] = '${repository}'
+                input[1] = null
+                """
+            }
+        }
+
+        then {
+            assert !function.success
+        }
+    }
+
+    test("a staged-but-uncommitted change fails the run") {
+
+        when {
+            function {
+                def repository = newRepository(outputDir.toString(), 'staged')
+                new File("${repository}/main.nf").text = "workflow {}\n// staged edit\n"
+                runCommand(repository, ['git', 'add', 'main.nf'])
+                """
+                input[0] = '${repository}'
+                input[1] = null
+                """
+            }
+        }
+
+        then {
+            // `git rev-parse HEAD` is perfectly happy here -- the commit
+            // exists and is unambiguous. Only the working-tree check
+            // catches this, which is why it exists.
+            assert !function.success
+        }
+    }
+
+    test("an untracked, non-ignored file fails the run") {
+
+        when {
+            function {
+                def repository = newRepository(outputDir.toString(), 'untracked')
+                new File("${repository}/extra_module.nf").text = "process X {}\n"
+                """
+                input[0] = '${repository}'
+                input[1] = null
+                """
+            }
+        }
+
+        then {
+            assert !function.success
+        }
+    }
+
+    test("a run's own ignored output directories do not count as a dirty tree") {
+
+        when {
+            function {
+                def repository = newRepository(outputDir.toString(), 'ignored_outputs')
+                new File("${repository}/work/ab/cd").mkdirs()
+                new File("${repository}/work/ab/cd/.command.sh").text = "true\n"
+                new File("${repository}/results/variants").mkdirs()
+                new File("${repository}/results/variants/cohort.raw.vcf.gz").text = "x\n"
+                new File("${repository}/.nf-test/tests").mkdirs()
+                new File("${repository}/.nf-test/tests/output.json").text = "{}\n"
+                """
+                input[0] = '${repository}'
+                input[1] = null
+                """
+            }
+        }
+
+        then {
+            // A pipeline that refused to run because it had produced
+            // output would be unusable; only differences from the
+            // *pipeline's own source* count.
+            assert function.success
+            assert function.result ==~ /^[0-9a-f]{40}\z/
+        }
+    }
+
+    test("a declared revision that disagrees with the checked-out commit fails") {
+
+        when {
+            function {
+                """
+                input[0] = '${newRepository(outputDir.toString(), 'mismatched_revision')}'
+                input[1] = '${'0' * 40}'
+                """
+            }
+        }
+
+        then {
+            // Recording either value would be a guess about which one
+            // actually ran.
+            assert !function.success
+        }
+    }
+
+    test("a directory that is not a git checkout fails rather than recording nothing") {
+
+        when {
+            function {
+                def plain = new File("${outputDir}/not_a_repository")
+                plain.mkdirs()
+                """
+                input[0] = '${plain.absolutePath}'
+                input[1] = null
+                """
+            }
+        }
+
+        then {
+            assert !function.success
+        }
+    }
+
+    test("the dirty-tree failure discloses no host path, file name, or user name") {
+
+        when {
+            function {
+                def repository = newRepository(outputDir.toString(), 'dirty_message')
+                new File("${repository}/secret_local_notes.nf").text = "process Y {}\n"
+                """
+                input[0] = '${repository}'
+                input[1] = null
+                """
+            }
+        }
+
+        then {
+            assert !function.success
+
+            // A provenance guard that leaked the layout of the machine it
+            // guards would be self-defeating, so the message names the
+            // problem and the fix, and nothing else.
+            def message = (function.stdout + function.stderr).join("\n")
+            assert message.contains("uncommitted changes")
+            assert message.contains("Commit, stash, or remove")
+            assert !message.contains("secret_local_notes.nf")
+            assert !message.contains(outputDir.toString())
+            assert !message.contains(System.getProperty("user.name"))
+            assert !message.contains(System.getProperty("user.home"))
+        }
+    }
+}
