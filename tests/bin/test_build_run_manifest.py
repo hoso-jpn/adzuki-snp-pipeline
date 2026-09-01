@@ -20,6 +20,15 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "build_run_manifest.py"
 
+# Issue #42: bin/ scripts import their shared helpers as a plain sibling
+# module (`from manifest_utils import ...`), which resolves on its own
+# both from a source checkout and inside a Nextflow task container --
+# in each case Python puts the *running script's* own directory first on
+# sys.path. Loading a script by file path from a test does not go
+# through that mechanism, so bin/ is put on sys.path here. This is a
+# test-harness detail only: production invocations need no PYTHONPATH.
+sys.path.insert(0, str(REPO_ROOT / "bin"))
+
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 
 REFERENCE_CLI_ARGS = [

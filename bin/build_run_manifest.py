@@ -8,9 +8,12 @@ which reference, which container/tool versions, which Nextflow
 parameters, and what the cohort/variant accounting came out to. This
 script builds exactly that, following the same shape as
 `build_gs_panel_manifest.py` (schema_version, a sortable run_id,
-deterministic canonical JSON, filename-only checksums, atomic writes)
-so the two manifests are consistent with each other without one
-depending on the other's code.
+deterministic canonical JSON, filename-only checksums, atomic writes).
+Those shared mechanics live in `bin/manifest_utils.py` (Issue #42) --
+one implementation both manifests import, rather than two copies that
+could drift into disagreeing about what a `manifest_hash` means. The
+two manifests' *payloads* remain separate: neither document's schema,
+parameter set, or CLI is generalized into the other's.
 
 This is a standalone CLI, not wired into the Nextflow workflow: it is
 run once, by hand, against a completed run's own already-published
@@ -45,13 +48,24 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
-import os
 import sys
-import uuid
-from datetime import UTC, datetime
 from pathlib import Path
+
+# Issue #42: the hashing/serialization mechanics this manifest and
+# bin/build_gs_panel_manifest.py both depend on live in one module now
+# (they were previously duplicated character for character). See
+# bin/manifest_utils.py for why a plain sibling import needs no
+# packaging or PYTHONPATH in either place these scripts run.
+from manifest_utils import (
+    _json_default,
+    canonical_json_hash,
+    checksum_files,
+    new_run_id,
+    sha256_file,
+    utc_now_iso,
+    write_json_atomic,
+)
 
 SCHEMA_VERSION = 1
 
@@ -89,44 +103,6 @@ class MalformedSamplesheetError(Exception):
 
 class MalformedAccountingError(Exception):
     """Raised when a metric TSV is missing required data or malformed."""
-
-
-def new_run_id(now: datetime | None = None, suffix: str | None = None) -> str:
-    """Build a sortable, human-readable run identifier."""
-    moment = now if now is not None else datetime.now(UTC)
-    timestamp = moment.strftime("%Y%m%dT%H%M%SZ")
-    token = suffix if suffix is not None else uuid.uuid4().hex[:8]
-    return f"{timestamp}-{token}"
-
-
-def utc_now_iso(now: datetime | None = None) -> str:
-    """Format a UTC timestamp as an ISO-8601 string with a 'Z' suffix."""
-    moment = now if now is not None else datetime.now(UTC)
-    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def sha256_file(path: Path, chunk_size: int = 1_048_576) -> str:
-    """Compute a file's SHA-256 hex digest without loading it fully into memory."""
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(chunk_size), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def checksum_files(paths: list[Path]) -> dict[str, str]:
-    """Checksum each path, keyed by filename only (never an absolute path).
-
-    Raises if two paths share a filename: silently keeping only the
-    last one would drop a checksum without any indication it happened.
-    """
-    checksums: dict[str, str] = {}
-    for path in paths:
-        name = Path(path).name
-        if name in checksums:
-            raise ValueError(f"duplicate checksum file name: '{name}'")
-        checksums[name] = f"sha256:{sha256_file(Path(path))}"
-    return checksums
 
 
 def parse_samplesheet(path: Path) -> list[dict[str, str]]:
@@ -280,24 +256,6 @@ def read_gs_panel_manifest(path: Path) -> dict[str, object]:
     }
 
 
-def _json_default(value: object) -> object:
-    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
-
-
-def canonical_json_hash(payload: dict[str, object]) -> str:
-    """Hash a JSON-serializable document deterministically, order-sensitive."""
-    canonical = json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-        allow_nan=False,
-        default=_json_default,
-    )
-    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-    return f"sha256:{digest}"
-
-
 def build_manifest(
     *,
     cohort_id: str,
@@ -335,25 +293,6 @@ def build_manifest(
     }
     manifest["manifest_hash"] = canonical_json_hash(manifest)
     return manifest
-
-
-def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
-    """Write JSON via a same-directory temp file, then rename it into place.
-
-    A failure partway through leaves the original file (if any)
-    untouched and no partially-written file at the final path.
-    """
-    text = json.dumps(
-        payload,
-        indent=2,
-        sort_keys=True,
-        ensure_ascii=True,
-        allow_nan=False,
-        default=_json_default,
-    )
-    tmp_path = path.with_name(f".{path.name}.tmp")
-    tmp_path.write_text(text + "\n", encoding="utf-8")
-    os.replace(tmp_path, path)
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
