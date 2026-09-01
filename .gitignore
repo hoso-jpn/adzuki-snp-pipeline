@@ -37,6 +37,13 @@ results/
 # the tree dirty against itself.
 .nf-test-*.nf
 
+# CI tooling that installs itself *inside* the workspace, for the same
+# reason: `nf-core/setup-nextflow` checks its own action repository out to
+# `<workspace>/setup-nextflow` before installing the engine, which is CI
+# scaffolding, not a change to this pipeline's source. (The `/nf-test`
+# entry above exists for the same class of thing.)
+/setup-nextflow/
+
 # Synthetic test fixtures
 !tests/data/reads/*.fastq.gz
 !tests/bin/fixtures/*.vcf.gz
