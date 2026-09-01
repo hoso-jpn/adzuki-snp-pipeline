@@ -1,3 +1,23 @@
+// Issue #42 review (P1): quote a value so the shell hands it to Python
+// as one argument with exactly the bytes it started with.
+//
+// The run manifest records scientific metadata the user supplies --
+// `reference_name` is free text by schema, and a reference legitimately
+// called "Vigna angularis 'Erimo shouzu'" is data, not an attack. Wrapping
+// such a value in a bare pair of single quotes in the script template
+// breaks the command the moment the value contains one of its own quotes,
+// and turns anything after it into shell syntax.
+//
+// The fix is to quote correctly rather than to narrow what the pipeline
+// will accept as a reference name: single-quote the whole value, and
+// render each embedded single quote as `'\''` (close, escaped quote,
+// reopen) -- the standard POSIX construction. Inside single quotes the
+// shell expands nothing at all, so `$(...)`, backticks, `;`, newlines and
+// whitespace all arrive as literal characters.
+def shellQuote(value) {
+    return "'" + value.toString().replace("'", "'\\''") + "'"
+}
+
 process BUILD_RUN_MANIFEST {
     tag "${meta.id}"
     label 'process_low'
@@ -63,35 +83,35 @@ process BUILD_RUN_MANIFEST {
         : '--no-enable-gs-panel'
 
     """
-    printf 'build_run_manifest\\t%s\\n' '${task.container}' \\
+    printf 'build_run_manifest\\t%s\\n' ${shellQuote(task.container)} \\
         > build_run_manifest.container.tsv
 
     build_run_manifest.py \
         --mode dag-v2 \
-        --cohort-id '${meta.id}' \
-        --pipeline-version '${pipeline_version}' \
-        --git-commit '${git_commit}' \
-        --nextflow-version '${nextflow_version}' \
-        --reference-id '${params.reference_id}' \
-        --reference-name '${params.reference_name}' \
-        --reference-species '${params.reference_species}' \
-        --reference-cultivar '${params.reference_cultivar}' \
-        --reference-accession '${params.reference_accession}' \
-        --sample-ploidy ${params.sample_ploidy} \
-        --genomicsdb-batch-size ${params.genomicsdb_batch_size} \
-        --optical-duplicate-pixel-distance ${params.optical_duplicate_pixel_distance} \
+        --cohort-id ${shellQuote(meta.id)} \
+        --pipeline-version ${shellQuote(pipeline_version)} \
+        --git-commit ${shellQuote(git_commit)} \
+        --nextflow-version ${shellQuote(nextflow_version)} \
+        --reference-id ${shellQuote(params.reference_id)} \
+        --reference-name ${shellQuote(params.reference_name)} \
+        --reference-species ${shellQuote(params.reference_species)} \
+        --reference-cultivar ${shellQuote(params.reference_cultivar)} \
+        --reference-accession ${shellQuote(params.reference_accession)} \
+        --sample-ploidy ${shellQuote(params.sample_ploidy)} \
+        --genomicsdb-batch-size ${shellQuote(params.genomicsdb_batch_size)} \
+        --optical-duplicate-pixel-distance ${shellQuote(params.optical_duplicate_pixel_distance)} \
         ${enable_gs_panel_flag} \
-        --snp-filter-qd-min ${params.snp_filter_qd_min} \
-        --snp-filter-qual-min ${params.snp_filter_qual_min} \
-        --snp-filter-sor-max ${params.snp_filter_sor_max} \
-        --snp-filter-fs-max ${params.snp_filter_fs_max} \
-        --snp-filter-mq-min ${params.snp_filter_mq_min} \
-        --snp-filter-mq-rank-sum-min ${params.snp_filter_mq_rank_sum_min} \
-        --snp-filter-read-pos-rank-sum-min ${params.snp_filter_read_pos_rank_sum_min} \
-        --indel-filter-qd-min ${params.indel_filter_qd_min} \
-        --indel-filter-qual-min ${params.indel_filter_qual_min} \
-        --indel-filter-fs-max ${params.indel_filter_fs_max} \
-        --indel-filter-read-pos-rank-sum-min ${params.indel_filter_read_pos_rank_sum_min} \
+        --snp-filter-qd-min ${shellQuote(params.snp_filter_qd_min)} \
+        --snp-filter-qual-min ${shellQuote(params.snp_filter_qual_min)} \
+        --snp-filter-sor-max ${shellQuote(params.snp_filter_sor_max)} \
+        --snp-filter-fs-max ${shellQuote(params.snp_filter_fs_max)} \
+        --snp-filter-mq-min ${shellQuote(params.snp_filter_mq_min)} \
+        --snp-filter-mq-rank-sum-min ${shellQuote(params.snp_filter_mq_rank_sum_min)} \
+        --snp-filter-read-pos-rank-sum-min ${shellQuote(params.snp_filter_read_pos_rank_sum_min)} \
+        --indel-filter-qd-min ${shellQuote(params.indel_filter_qd_min)} \
+        --indel-filter-qual-min ${shellQuote(params.indel_filter_qual_min)} \
+        --indel-filter-fs-max ${shellQuote(params.indel_filter_fs_max)} \
+        --indel-filter-read-pos-rank-sum-min ${shellQuote(params.indel_filter_read_pos_rank_sum_min)} \
         ${runtime_provenance_args} \
         --runtime-provenance build_run_manifest.container.tsv \
         ${input_provenance_args} \

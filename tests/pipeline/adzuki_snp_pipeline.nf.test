@@ -1867,6 +1867,8 @@ nextflow_pipeline {
 
     test("a matching prebuilt reference_fai/reference_dict pair completes the whole pipeline") {
 
+        tag "issue42_run_manifest"
+
         when {
             params {
                 def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
@@ -1913,6 +1915,26 @@ nextflow_pipeline {
                 .linesGzip
                 .findAll { line -> !line.startsWith("#") }
             assert data_lines.size() == 2
+
+            // Issue #42: this run was handed both a prebuilt FAI and a
+            // prebuilt dictionary, so neither reference-preparation
+            // process ran -- and the run manifest must not list them.
+            // Recording a container for software that never touched the
+            // data would be a claim about a step that did not happen.
+            def runManifest = readRunManifest(outputDir.toString())
+
+            assert !runManifest.containers.containsKey("samtools_faidx")
+            assert !runManifest.containers.containsKey("gatk_create_sequence_dictionary")
+
+            // BWA_MEM2_INDEX *did* run here (no prebuilt index was
+            // supplied), which is what makes the two absences above a
+            // statement about this run rather than about optional
+            // processes in general.
+            assert runManifest.containers.containsKey("bwa_mem2_index")
+
+            // ...and the recorded set is exactly what Nextflow executed.
+            assert runManifest.containers.keySet() ==
+                executedProcessKeys(taskNames)
         }
     }
 

@@ -184,6 +184,12 @@ class HashReferenceBundleTests(unittest.TestCase):
                 self.assertNotIn(tmp, row)
                 self.assertNotIn("/", row.split("\t")[1])
 
+    def test_the_complete_five_file_index_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            rows = hash_reference_bundle.build_rows(**self._bundle(Path(tmp)))
+            index_rows = [row for row in rows if row.startswith("bwa_index\t")]
+            self.assertEqual(len(index_rows), 5)
+
     def test_missing_bwa_index_is_rejected(self) -> None:
         # An empty index set means the caller did not wire the real
         # mapping input through, which would silently under-record.
@@ -193,12 +199,75 @@ class HashReferenceBundleTests(unittest.TestCase):
             with self.assertRaises(hash_reference_bundle.MalformedReferenceBundleError):
                 hash_reference_bundle.build_rows(**bundle)
 
-    def test_duplicate_reference_filename_is_rejected(self) -> None:
+    def test_partial_bwa_index_is_rejected(self) -> None:
+        # Issue #42 review (P2): four of the five files is the dangerous
+        # case -- a partially staged or partially copied index bundle
+        # would otherwise be recorded as though it were the whole mapping
+        # input.
         with tempfile.TemporaryDirectory() as tmp:
             bundle = self._bundle(Path(tmp))
-            bundle["bwa_indexes"] = [*bundle["bwa_indexes"], bundle["fasta"]]
-            with self.assertRaises(hash_reference_bundle.MalformedReferenceBundleError):
+            bundle["bwa_indexes"] = bundle["bwa_indexes"][:4]
+            with self.assertRaises(
+                hash_reference_bundle.MalformedReferenceBundleError
+            ) as raised:
                 hash_reference_bundle.build_rows(**bundle)
+            self.assertIn("exactly 5", str(raised.exception))
+
+    def test_extra_bwa_index_file_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            bundle = self._bundle(directory)
+            extra = directory / "synthetic.fa.sa"
+            extra.write_text("extra\n", encoding="utf-8")
+            bundle["bwa_indexes"] = [*bundle["bwa_indexes"], extra]
+            with self.assertRaises(
+                hash_reference_bundle.MalformedReferenceBundleError
+            ) as raised:
+                hash_reference_bundle.build_rows(**bundle)
+            self.assertIn("exactly 5", str(raised.exception))
+
+    def test_five_files_with_the_wrong_suffixes_are_rejected(self) -> None:
+        # The right count of the wrong files is still not this
+        # pipeline's index (main.nf enforces the same five suffixes on a
+        # prebuilt --bwa_index_prefix).
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            bundle = self._bundle(directory)
+            wrong = directory / "synthetic.fa.sa"
+            wrong.write_text("wrong\n", encoding="utf-8")
+            bundle["bwa_indexes"] = [*bundle["bwa_indexes"][:4], wrong]
+            with self.assertRaises(
+                hash_reference_bundle.MalformedReferenceBundleError
+            ) as raised:
+                hash_reference_bundle.build_rows(**bundle)
+            self.assertIn("suffixes", str(raised.exception))
+
+    def test_multi_part_index_suffix_is_classified_whole(self) -> None:
+        # `.bwt.2bit.64` is three dot-separated pieces; anything that
+        # split on the last dot would call it `.64`.
+        self.assertEqual(
+            hash_reference_bundle._index_suffix("synthetic.fa.bwt.2bit.64"),
+            ".bwt.2bit.64",
+        )
+
+    def test_duplicate_reference_filename_is_rejected(self) -> None:
+        # A misrouted argument -- here the sequence dictionary pointing at
+        # a second file that shares the FAI's basename -- must not quietly
+        # drop one of the two checksums.
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            bundle = self._bundle(directory)
+            elsewhere = directory / "elsewhere"
+            elsewhere.mkdir()
+            collision = elsewhere / "synthetic.fa.fai"
+            collision.write_text("different content\n", encoding="utf-8")
+            bundle["dict_file"] = collision
+
+            with self.assertRaises(
+                hash_reference_bundle.MalformedReferenceBundleError
+            ) as raised:
+                hash_reference_bundle.build_rows(**bundle)
+            self.assertIn("duplicate reference file name", str(raised.exception))
 
 
 class HashRunArtifactsTests(unittest.TestCase):

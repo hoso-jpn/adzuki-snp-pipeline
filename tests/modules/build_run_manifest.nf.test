@@ -136,6 +136,56 @@ nextflow_process {
         }
     }
 
+    test("reference metadata containing shell metacharacters is passed through as a literal value") {
+
+        // Issue #42 review (P1): `reference_name` is free text by schema.
+        // A reference legitimately named with an apostrophe is data, and
+        // narrowing the accepted character set to make the command
+        // template safe would be fixing the wrong thing -- so the value is
+        // quoted properly instead, and this proves it end to end through a
+        // real Nextflow task shell. A Python-level unit test cannot: the
+        // bug this guards against lives at the shell boundary, before
+        // Python is reached at all.
+        when {
+            params {
+                reference_id = "synthetic's-id"
+                reference_name = "Synthetic adzuki's \$(touch SHOULD_NOT_EXIST); `touch ALSO_NOT`; reference"
+                reference_species = "Vigna angularis"
+                reference_cultivar = "Erimo shouzu; rm -rf ."
+                reference_accession = "GCF_000000000.1 & echo pwned"
+            }
+            process {
+                manifestInputs(projectDir.toString(), [:])
+            }
+        }
+
+        then {
+            // Nothing was broken by the value: the command still ran.
+            assert process.success
+
+            def manifestFile = new File(process.out.manifest[0][1])
+            def manifest = new groovy.json.JsonSlurper().parse(manifestFile)
+
+            // Every value arrives byte-for-byte, as one argument.
+            assert manifest.reference.reference_id == "synthetic's-id"
+            assert manifest.reference.reference_name ==
+                "Synthetic adzuki's \$(touch SHOULD_NOT_EXIST); `touch ALSO_NOT`; reference"
+            assert manifest.reference.reference_species == "Vigna angularis"
+            assert manifest.reference.reference_cultivar == "Erimo shouzu; rm -rf ."
+            assert manifest.reference.reference_accession == "GCF_000000000.1 & echo pwned"
+
+            // ...and none of it was executed. Command substitution inside
+            // the value would have created these in the task directory.
+            def taskDirectory = manifestFile.getParentFile()
+            assert !new File(taskDirectory, "SHOULD_NOT_EXIST").exists()
+            assert !new File(taskDirectory, "ALSO_NOT").exists()
+
+            // The task's own staged inputs are still there, i.e. the
+            // `rm -rf .` fragment was never a command either.
+            assert new File(taskDirectory, ".command.sh").exists()
+        }
+    }
+
     test("a malformed prerequisite fails the process and publishes no manifest") {
 
         when {
@@ -154,6 +204,30 @@ nextflow_process {
             // meet its own contract would be worse than none: it would
             // look authoritative. The process fails instead.
             assert !process.success
+        }
+    }
+
+    test("a truncated BWA-MEM2 index bundle fails the process and publishes no manifest") {
+
+        // Issue #42 review (P2): the reference provenance TSV here names
+        // two of the five index files. A manifest built from it would
+        // look complete while describing a mapping input that could not
+        // reproduce the run, so the process fails instead -- and leaves
+        // no final JSON behind.
+        when {
+            process {
+                manifestInputs(
+                    projectDir.toString(),
+                    [
+                        reference: "${projectDir}/${FIXTURES}/reference_provenance_truncated_index.tsv",
+                    ]
+                )
+            }
+        }
+
+        then {
+            assert !process.success
+            assert process.out.manifest == null || process.out.manifest.isEmpty()
         }
     }
 

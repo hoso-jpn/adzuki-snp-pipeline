@@ -139,8 +139,26 @@ own documented `nextflow run .` invocation it is null (measured on
 Nextflow 26.04.6, and the same under nf-test). `main.nf`'s
 `resolvePipelineCommit()` therefore falls back to reading the commit
 from the project directory's git checkout, and the run fails if it
-cannot resolve a full SHA. Only the SHA is used — not the project
-directory, not the git command's output.
+cannot resolve a full SHA.
+
+**The working tree must also be clean.** Resolving HEAD is not enough on
+its own: with uncommitted changes, the code that ran is not the code at
+HEAD, and recording that SHA would be false provenance — the most
+damaging kind, because it looks authoritative and nobody can check it.
+Before any analysis process starts, `resolvePipelineCommit()` requires
+`git status --porcelain` to be empty, which covers all three ways a tree
+can differ from its commit (unstaged changes to tracked files, staged
+changes, and untracked files) and honors `.gitignore`, so a run's own
+`work/`, `results/` and `.nf-test/` output is not mistaken for a
+modification of the pipeline. If Nextflow *did* report a revision, it
+must agree with the checked-out commit. A dirty tree, a disagreement, or
+a project directory that is not a git checkout stops the run before it
+does any work.
+
+Only the SHA is used. The failure messages name the problem and the fix
+and nothing else — no project path, no list of changed files, no user
+name, and none of git's own stderr: a provenance guard that disclosed
+the layout of the machine it guards would be self-defeating.
 
 `nextflow_version` is the engine version that actually ran, recorded
 separately from any container: Nextflow runs on the host, outside every
@@ -175,6 +193,21 @@ run generated the index or was given a prebuilt one. A stale or
 mismatched prebuilt index changes alignment while leaving `reference_id`
 and the FASTA checksum identical, so recording only the FASTA could not
 tell two such runs apart.
+
+The index is **exactly five files** — `.0123`, `.amb`, `.ann`,
+`.bwt.2bit.64`, `.pac` — which is the same contract `main.nf` already
+enforces on a prebuilt `--bwa_index_prefix` and that `BWA_MEM2_INDEX`
+produces. Both ends check it: `hash_reference_bundle.py` validates the
+count and the suffix set of the files it can see, and
+`build_run_manifest.py` validates the count of rows that reached it, so
+a provenance TSV truncated in transit cannot yield a manifest that looks
+complete while describing a mapping input that could not reproduce the
+run.
+
+Identity values are free text by schema — a reference legitimately named
+`Vigna angularis 'Erimo shouzu'` is data — so they are passed to the
+manifest builder as properly quoted single shell arguments rather than
+by narrowing what the pipeline will accept as a reference name.
 
 ### `cohort_accounting`, `sample_accounting`, `variant_type_accounting`
 

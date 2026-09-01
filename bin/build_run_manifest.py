@@ -175,6 +175,17 @@ RUNTIME_PROVENANCE_FIELD_COUNT = 2
 REFERENCE_SINGLE_FILE_ROLES: tuple[str, ...] = ("fasta", "fai", "dict")
 REFERENCE_MULTI_FILE_ROLES: tuple[str, ...] = ("bwa_index",)
 
+# How many files each multi-file reference role must carry. The BWA-MEM2
+# index is exactly five files -- the same contract `main.nf` enforces on a
+# prebuilt `--bwa_index_prefix` and `hash_reference_bundle.py` enforces on
+# the files themselves. Checked again here because this side reads a
+# staged TSV: a truncated or partially written provenance file would
+# otherwise produce a manifest that silently understates the mapping input
+# it claims to describe. (The suffix names are validated by the writer,
+# which sees the real files; this side validates the shape of what
+# reached it.)
+REFERENCE_MULTI_FILE_ROLE_COUNTS: dict[str, int] = {"bwa_index": 5}
+
 # summarize_variant_qc.py's sample_qc.tsv header, in order. The run
 # manifest re-uses that existing artifact as its per-sample accounting
 # rather than recomputing per-sample statistics: a second implementation
@@ -581,9 +592,11 @@ def parse_reference_provenance(path: Path) -> dict[str, object]:
             f"{path}: missing required reference role(s): {missing}"
         )
     for role in REFERENCE_MULTI_FILE_ROLES:
-        if not multi[role]:
+        expected_count = REFERENCE_MULTI_FILE_ROLE_COUNTS[role]
+        if len(multi[role]) != expected_count:
             raise MalformedProvenanceError(
-                f"{path}: missing required reference role: '{role}'"
+                f"{path}: reference role '{role}' must have exactly "
+                f"{expected_count} files, found {len(multi[role])}"
             )
         # Sorted by filename so the manifest is byte-identical across
         # runs regardless of the order Nextflow staged the index files.

@@ -350,6 +350,72 @@ class ContainerProvenanceTests(unittest.TestCase):
         self.assertIn("canonical process key", stderr)
 
 
+class ReferenceProvenanceTests(unittest.TestCase):
+    """Issue #42 review (P2): the reader rejects a truncated index bundle.
+
+    The writer checks the files it can see; this side checks the shape of
+    the TSV that reached it. A provenance file truncated in transit --
+    partially written, partially staged -- would otherwise yield a
+    manifest that silently understates the mapping input it claims to
+    describe.
+    """
+
+    def _reference_rows(self, index_count: int) -> list[str]:
+        index_rows = [
+            f"bwa_index\tsynthetic.fa{suffix}\tsha256:i{number}"
+            for number, suffix in enumerate(
+                (".0123", ".amb", ".ann", ".bwt.2bit.64", ".pac", ".sa")
+            )
+        ]
+        return [*REFERENCE_PROVENANCE_ROWS[:3], *index_rows[:index_count]]
+
+    def _run_with_index_count(self, index_count: int) -> tuple[int, str, bool]:
+        with fixture() as fake:
+            fake.reference.write_text(
+                "\n".join(self._reference_rows(index_count)) + "\n", encoding="utf-8"
+            )
+            exit_code, stderr = run_main(fake.argv())
+            return exit_code, stderr, fake.output.exists()
+
+    def test_the_complete_five_file_index_is_accepted(self) -> None:
+        exit_code, stderr, written = self._run_with_index_count(5)
+        self.assertEqual(exit_code, 0, stderr)
+        self.assertTrue(written)
+
+    def test_no_index_files_is_rejected(self) -> None:
+        exit_code, stderr, written = self._run_with_index_count(0)
+        self.assertEqual(exit_code, 1)
+        self.assertFalse(written)
+        self.assertIn("exactly 5 files", stderr)
+
+    def test_a_truncated_four_file_index_is_rejected(self) -> None:
+        exit_code, stderr, written = self._run_with_index_count(4)
+        self.assertEqual(exit_code, 1)
+        self.assertFalse(written)
+        self.assertIn("exactly 5 files", stderr)
+
+    def test_a_six_file_index_is_rejected(self) -> None:
+        exit_code, stderr, written = self._run_with_index_count(6)
+        self.assertEqual(exit_code, 1)
+        self.assertFalse(written)
+        self.assertIn("exactly 5 files", stderr)
+
+    def test_a_missing_single_file_role_is_rejected(self) -> None:
+        with fixture() as fake:
+            fake.reference.write_text(
+                "\n".join(
+                    row for row in REFERENCE_PROVENANCE_ROWS if not row.startswith("fai\t")
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            exit_code, stderr = run_main(fake.argv())
+
+            self.assertEqual(exit_code, 1)
+            self.assertFalse(fake.output.exists())
+            self.assertIn("missing required reference role", stderr)
+
+
 class InputProvenanceTests(unittest.TestCase):
     def test_read_groups_are_restored_to_samplesheet_order(self) -> None:
         with fixture() as fake:

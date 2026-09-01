@@ -44,20 +44,63 @@ REFERENCE_PROVENANCE_COLUMNS: tuple[str, ...] = ("role", "filename", "checksum")
 # them. `bwa_index` is handled separately: it is a set of five files.
 SINGLE_FILE_ROLES: tuple[str, ...] = ("fasta", "fai", "dict")
 
+# The BWA-MEM2 index is exactly these five files, and this is the
+# pipeline's existing contract, not a new rule invented here: `main.nf`
+# validates the same five suffixes before accepting a prebuilt
+# `--bwa_index_prefix`, and `BWA_MEM2_INDEX` produces exactly this set.
+#
+# The count is checked because a short index is a real, silent failure
+# mode: a partially staged or partially copied index bundle would
+# otherwise be recorded as if it were the whole mapping input, and the
+# manifest would understate what would be needed to reproduce the run.
+# The suffixes are checked here, rather than in the manifest reader,
+# because this is the side that sees the actual files.
+BWA_INDEX_SUFFIXES: tuple[str, ...] = (
+    ".0123",
+    ".amb",
+    ".ann",
+    ".bwt.2bit.64",
+    ".pac",
+)
+
 
 class MalformedReferenceBundleError(Exception):
     """Raised when the reference bundle cannot be recorded unambiguously."""
+
+
+def _index_suffix(filename: str) -> str:
+    """Return the BWA-MEM2 index suffix a filename carries, or the empty string.
+
+    Matched against the known suffixes rather than parsed off the end of
+    the name: `.bwt.2bit.64` is three dot-separated pieces, so anything
+    that split on the last dot would classify it as `.64`.
+    """
+    for suffix in BWA_INDEX_SUFFIXES:
+        if filename.endswith(suffix):
+            return suffix
+    return ""
 
 
 def build_rows(
     *, fasta: Path, fai: Path, dict_file: Path, bwa_indexes: list[Path]
 ) -> list[str]:
     """Build one `role<TAB>filename<TAB>checksum` row per reference file."""
-    if not bwa_indexes:
+    if len(bwa_indexes) != len(BWA_INDEX_SUFFIXES):
         raise MalformedReferenceBundleError(
-            "no BWA-MEM2 index files were given; the run manifest records the "
-            "index actually used for mapping, so an empty set means the caller "
-            "did not wire the mapping input through"
+            f"expected exactly {len(BWA_INDEX_SUFFIXES)} BWA-MEM2 index files "
+            f"({', '.join(BWA_INDEX_SUFFIXES)}), got {len(bwa_indexes)}. The run "
+            "manifest records the index actually used for mapping; a partial "
+            "set would be recorded as though it were the whole mapping input"
+        )
+
+    actual_suffixes = sorted(
+        _index_suffix(Path(index).name) for index in bwa_indexes
+    )
+    if actual_suffixes != sorted(BWA_INDEX_SUFFIXES):
+        raise MalformedReferenceBundleError(
+            "the BWA-MEM2 index files do not match this pipeline's index "
+            f"contract: expected suffixes {sorted(BWA_INDEX_SUFFIXES)}, got "
+            f"{actual_suffixes}"
         )
 
     files_by_role: list[tuple[str, Path]] = [
