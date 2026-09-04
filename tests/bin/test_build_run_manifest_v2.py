@@ -281,12 +281,22 @@ class ContainerProvenanceTests(unittest.TestCase):
             manifest = json.loads(fake.output.read_text(encoding="utf-8"))
             return manifest["containers"]
 
-    def _expect_failure(self, rows: list[str]) -> str:
+    def _expect_failure(self, rows: list[str], *forbidden: str) -> str:
+        """Run an invalid runtime provenance file and return its stderr.
+
+        `forbidden` names substrings of the rejected value that must not
+        appear in what the process printed. This stderr becomes the
+        task's `.command.err` and the CI log, so a rejection that quoted
+        the value would publish it more widely than the manifest would
+        have (PR #56 review, P1).
+        """
         with fixture() as fake:
             fake.runtime.write_text("\n".join(rows) + "\n", encoding="utf-8")
             exit_code, stderr = run_main(fake.argv())
             self.assertEqual(exit_code, 1)
             self.assertFalse(fake.output.exists())
+            for secret in forbidden:
+                self.assertNotIn(secret, stderr)
             return stderr
 
     def test_containers_are_keyed_by_process(self) -> None:
@@ -326,20 +336,43 @@ class ContainerProvenanceTests(unittest.TestCase):
         self.assertIn("multiqc", stderr)
 
     def test_host_path_container_is_rejected(self) -> None:
-        stderr = self._expect_failure([*RUNTIME_PROVENANCE_ROWS, "fastp\t/opt/images/fastp.sif"])
+        stderr = self._expect_failure(
+            [*RUNTIME_PROVENANCE_ROWS, "fastp\t/opt/images/fastp.sif"],
+            "/opt/images",
+            "fastp.sif",
+        )
         self.assertIn("host filesystem path", stderr)
+        self.assertIn("fastp", stderr)
 
     def test_file_uri_container_is_rejected(self) -> None:
+        # The scheme is the category and stays; the path after it does not.
         stderr = self._expect_failure(
-            [*RUNTIME_PROVENANCE_ROWS, "fastp\tfile:///opt/images/fastp.sif"]
+            [*RUNTIME_PROVENANCE_ROWS, "fastp\tfile:///opt/images/fastp.sif"],
+            "/opt/images",
+            "fastp.sif",
         )
         self.assertIn("file://", stderr)
 
     def test_credential_bearing_container_is_rejected(self) -> None:
         stderr = self._expect_failure(
-            [*RUNTIME_PROVENANCE_ROWS, "fastp\thttps://svc:s3cr3t@registry.internal/fastp:1.3.6"]
+            [*RUNTIME_PROVENANCE_ROWS, "fastp\thttps://svc:s3cr3t@registry.internal/fastp:1.3.6"],
+            "s3cr3t",
+            "registry.internal",
         )
         self.assertIn("credentials", stderr)
+
+    def test_a_credential_caught_by_an_earlier_branch_is_still_redacted(self) -> None:
+        # A credential-bearing `file://` reference never reaches the
+        # credential check -- the `file://` check fires first. Redaction
+        # therefore has to hold on every rejecting branch, not just that
+        # one (PR #56 review, P1).
+        stderr = self._expect_failure(
+            [*RUNTIME_PROVENANCE_ROWS, "fastp\tfile://svc:s3cr3t@10.0.0.5/opt/images/fastp.sif"],
+            "s3cr3t",
+            "10.0.0.5",
+            "/opt/images",
+        )
+        self.assertIn("file://", stderr)
 
     def test_malformed_row_width_is_rejected(self) -> None:
         stderr = self._expect_failure([*RUNTIME_PROVENANCE_ROWS, "fastp"])
@@ -586,6 +619,113 @@ class AccountingTests(unittest.TestCase):
             self.assertIn("missing required metric", stderr)
 
 
+class DuplicateAccountingMetricTests(unittest.TestCase):
+    """PR #56 review (P2): a metric stated twice has no single answer.
+
+    Both v2 accounting readers built their result with a plain
+    `metrics[metric] = value`, so a file repeating a metric silently
+    resolved to whichever row came last. A provenance document claims to
+    report what the run measured; a number chosen by file order is not
+    that, and nothing downstream could tell the difference.
+
+    Agreement between the two rows does not rescue the input, so the
+    identical-value case is pinned here alongside the conflicting one:
+    two matching rows still say the accounting came from something that
+    can emit a metric more than once, which is the same defect with its
+    symptom hidden.
+    """
+
+    def _expect_duplicate_failure(self, fake: _Fixture, metric: str) -> str:
+        exit_code, stderr = run_main(fake.argv())
+
+        self.assertEqual(exit_code, 1)
+        # A partial or last-row-wins manifest must not be left behind.
+        self.assertFalse(fake.output.exists())
+        self.assertIn("appears more than once", stderr)
+        self.assertIn(metric, stderr)
+        return stderr
+
+    def test_duplicate_cohort_metric_with_a_conflicting_value_fails(self) -> None:
+        with fixture() as fake:
+            fake.variant_qc.write_text(
+                "\n".join(
+                    [*VARIANT_QC_ROWS, "cohort\traw\tall\tcohort_total_genotypes\t9"]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._expect_duplicate_failure(fake, "cohort_total_genotypes")
+
+    def test_duplicate_cohort_metric_with_an_identical_value_also_fails(self) -> None:
+        with fixture() as fake:
+            fake.variant_qc.write_text(
+                "\n".join(
+                    [*VARIANT_QC_ROWS, "cohort\traw\tall\tcohort_total_genotypes\t4"]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._expect_duplicate_failure(fake, "cohort_total_genotypes")
+
+    def test_duplicate_variant_type_metric_with_a_conflicting_value_fails(self) -> None:
+        with fixture() as fake:
+            fake.variant_type.write_text(
+                "\n".join([*VARIANT_TYPE_ROWS, "cohort\traw_snp_records\t7"]) + "\n",
+                encoding="utf-8",
+            )
+            self._expect_duplicate_failure(fake, "raw_snp_records")
+
+    def test_duplicate_variant_type_metric_with_an_identical_value_also_fails(self) -> None:
+        with fixture() as fake:
+            fake.variant_type.write_text(
+                "\n".join([*VARIANT_TYPE_ROWS, "cohort\traw_snp_records\t2"]) + "\n",
+                encoding="utf-8",
+            )
+            self._expect_duplicate_failure(fake, "raw_snp_records")
+
+    def test_the_duplicate_refusal_does_not_echo_a_host_path(self) -> None:
+        # P2's diagnostics name the file and the metric, which are both
+        # part of this pipeline's own published accounting contract. They
+        # must not reintroduce what P1 just removed: the fixture's
+        # temporary directory stands in for any host layout the staged
+        # path could disclose.
+        with fixture() as fake:
+            fake.variant_type.write_text(
+                "\n".join([*VARIANT_TYPE_ROWS, "cohort\traw_snp_records\t7"]) + "\n",
+                encoding="utf-8",
+            )
+            stderr = self._expect_duplicate_failure(fake, "raw_snp_records")
+            self.assertNotIn("hunter2", stderr)
+            self.assertNotIn("/home/alice", stderr)
+
+    def test_a_metric_repeated_across_two_stages_is_not_a_duplicate(self) -> None:
+        # The stage/type guard rejects a foreign stage before the
+        # duplicate check ever sees it, so this stays a stage error --
+        # the new check must not have changed which failure a caller gets.
+        with fixture() as fake:
+            fake.variant_qc.write_text(
+                "\n".join(
+                    [*VARIANT_QC_ROWS, "cohort\tfiltered\tsnp\tcohort_total_genotypes\t4"]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            exit_code, stderr = run_main(fake.argv())
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("must come from the raw/all", stderr)
+            self.assertNotIn("appears more than once", stderr)
+
+    def test_accounting_without_duplicates_still_succeeds(self) -> None:
+        with fixture() as fake:
+            exit_code, stderr = run_main(fake.argv())
+
+            self.assertEqual(exit_code, 0, stderr)
+            manifest = json.loads(fake.output.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["cohort_accounting"]["cohort_total_genotypes"], "4")
+            self.assertEqual(manifest["variant_type_accounting"]["raw_snp_records"], "2")
+
+
 class GsPanelTests(unittest.TestCase):
     def test_enabled_run_embeds_the_gs_manifest_summary(self) -> None:
         with fixture() as fake:
@@ -668,25 +808,44 @@ class GitCommitTests(unittest.TestCase):
 class PrivacyRegressionTests(unittest.TestCase):
     """Nothing host-specific may reach the serialized manifest."""
 
-    def _assert_rejected(self, fake: _Fixture, needle: str) -> None:
+    def _assert_rejected(self, fake: _Fixture, needle: str, *forbidden: str) -> str:
+        """Assert the run failed for `needle`'s reason without naming names.
+
+        Refusing to write the value into the manifest is only half the
+        guarantee. The other half is that refusing does not print it
+        either: this stderr is the task's `.command.err`, is copied into
+        the Nextflow log, and in CI is published in a build log that
+        outlives the run (PR #56 review, P1). So each caller passes the
+        substrings of its planted value that must not survive into the
+        message, alongside the category that must.
+        """
         exit_code, stderr = run_main(fake.argv())
         self.assertEqual(exit_code, 1)
         self.assertFalse(fake.output.exists())
         self.assertIn(needle, stderr)
+        for secret in forbidden:
+            self.assertNotIn(secret, stderr)
+        return stderr
 
     def test_home_directory_path_in_a_filename_is_rejected(self) -> None:
+        # This path arrives as a checksum-map *key*, so the location the
+        # message is built from is where it could have leaked.
         with fixture() as fake:
             fake.artifacts.write_text(
                 "/home/alice/runs/cohort.raw.vcf.gz\tsha256:raw\n", encoding="utf-8"
             )
-            self._assert_rejected(fake, "host filesystem path")
+            stderr = self._assert_rejected(
+                fake, "host filesystem path", "/home/alice", "cohort.raw.vcf.gz"
+            )
+            self.assertIn("checksums", stderr)
 
     def test_file_uri_anywhere_in_the_document_is_rejected(self) -> None:
         with fixture() as fake:
             fake.artifacts.write_text(
                 "file:///opt/results/cohort.raw.vcf.gz\tsha256:raw\n", encoding="utf-8"
             )
-            self._assert_rejected(fake, "file://")
+            # `file://` names the category; `/opt/results` is the leak.
+            self._assert_rejected(fake, "file://", "/opt/results", "cohort.raw.vcf.gz")
 
     def test_credential_bearing_url_is_rejected(self) -> None:
         with fixture() as fake:
@@ -700,7 +859,10 @@ class PrivacyRegressionTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            self._assert_rejected(fake, "credentials")
+            stderr = self._assert_rejected(
+                fake, "credentials", "hunter2", "mirror.internal"
+            )
+            self.assertIn("reference", stderr)
 
     def test_private_network_location_is_rejected(self) -> None:
         with fixture() as fake:
@@ -709,7 +871,8 @@ class PrivacyRegressionTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            self._assert_rejected(fake, "private or loopback")
+            stderr = self._assert_rejected(fake, "private or loopback", "10.0.0.5")
+            self.assertIn("fastp", stderr)
 
     def test_loopback_location_is_rejected(self) -> None:
         with fixture() as fake:
@@ -718,7 +881,7 @@ class PrivacyRegressionTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            self._assert_rejected(fake, "private or loopback")
+            self._assert_rejected(fake, "private or loopback", "localhost:5000")
 
     def test_a_clean_run_publishes_no_absolute_path_at_all(self) -> None:
         with fixture() as fake:

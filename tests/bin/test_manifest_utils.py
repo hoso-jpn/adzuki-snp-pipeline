@@ -271,6 +271,171 @@ class WriteJsonAtomicTests(unittest.TestCase):
             )
 
 
+class RejectionMessageRedactionTests(unittest.TestCase):
+    """PR #56 review (P1): neither guard may echo the value it refused.
+
+    Both guards fail *fast*, which means they fail somewhere a manifest
+    is not: inside a Nextflow task, whose stderr becomes `.command.err`,
+    is copied into the Nextflow log, and -- in CI -- ends up in a build
+    log with a wider and longer-lived audience than the manifest the
+    check was protecting. A message quoting the rejected value would
+    therefore publish the credential, home directory or internal address
+    more broadly than writing it to the manifest would have.
+
+    These tests exercise the shared utility directly rather than through
+    either script, so the contract is pinned at the place both manifests
+    import it from.
+    """
+
+    # (label, value, category substring, substrings that must not appear)
+    CONTAINER_REJECTIONS = (
+        (
+            "credential-bearing URL",
+            "https://user:hunter2@mirror.internal/fastp:1.3.6",
+            "credentials",
+            ("hunter2", "mirror.internal"),
+        ),
+        (
+            "bare host path",
+            "/home/alice/images/fastp.sif",
+            "host filesystem path",
+            ("/home/alice", "fastp.sif"),
+        ),
+        (
+            "home-relative host path",
+            "~/images/fastp.sif",
+            "host filesystem path",
+            ("~/images", "fastp.sif"),
+        ),
+        (
+            "file:// URI",
+            "file:///opt/results/images/fastp.sif",
+            "file://",
+            ("/opt/results", "fastp.sif"),
+        ),
+        (
+            "credential inside a file:// URI",
+            "file://user:hunter2@10.0.0.5/opt/results/fastp.sif",
+            "file://",
+            ("hunter2", "10.0.0.5", "/opt/results"),
+        ),
+        (
+            "credential alongside whitespace",
+            "https://user:hunter2@mirror.internal/fastp:1.3.6 (local)",
+            "whitespace",
+            ("hunter2", "mirror.internal"),
+        ),
+    )
+
+    def test_container_identity_rejections_name_the_category_only(self) -> None:
+        for label, value, category, forbidden in self.CONTAINER_REJECTIONS:
+            with self.subTest(case=label):
+                with self.assertRaises(ValueError) as raised:
+                    manifest_utils.validate_container_identity("fastp", value)
+                message = str(raised.exception)
+
+                # Enough to act on: which process, and what kind of problem.
+                self.assertIn("fastp", message)
+                self.assertIn(category, message)
+                self.assertIn("redacted", message)
+                for secret in forbidden:
+                    self.assertNotIn(secret, message)
+
+    # (label, value, category substring, substrings that must not appear)
+    PUBLISHABILITY_REJECTIONS = (
+        (
+            "host path",
+            "/home/alice/runs/cohort.raw.vcf.gz",
+            "host filesystem path",
+            ("/home/alice", "cohort.raw.vcf.gz"),
+        ),
+        (
+            "file URI",
+            "file:///opt/results/cohort.raw.vcf.gz",
+            "file://",
+            ("/opt/results", "cohort.raw.vcf.gz"),
+        ),
+        (
+            "credential-bearing URL",
+            "https://user:hunter2@mirror.internal/synthetic.fa",
+            "credentials",
+            ("hunter2", "mirror.internal"),
+        ),
+        (
+            "private address",
+            "10.0.0.5:5000/fastp:1.3.6",
+            "private or loopback",
+            ("10.0.0.5",),
+        ),
+        (
+            "loopback address",
+            "localhost:5000/fastp:1.3.6",
+            "private or loopback",
+            ("localhost:5000",),
+        ),
+    )
+
+    def test_publishability_rejections_name_the_location_only(self) -> None:
+        for label, value, category, forbidden in self.PUBLISHABILITY_REJECTIONS:
+            with self.subTest(case=label):
+                with self.assertRaises(manifest_utils.HostMetadataLeakError) as raised:
+                    manifest_utils.assert_no_host_metadata(
+                        {"reference": {"fasta": value}}
+                    )
+                message = str(raised.exception)
+
+                # The location is the actionable half, and is built from
+                # field names, not from the offending value.
+                self.assertIn("manifest.reference.fasta", message)
+                self.assertIn(category, message)
+                self.assertIn("redacted", message)
+                for secret in forbidden:
+                    self.assertNotIn(secret, message)
+
+    def test_a_leaking_dictionary_key_is_not_quoted_into_its_own_location(self) -> None:
+        # The walker checks keys as well as values, and a checksum map is
+        # keyed by filename -- so a full path arriving as a *key* is the
+        # realistic leak. Naming that key in the location string would
+        # have re-disclosed it while the value beside it was redacted.
+        with self.assertRaises(manifest_utils.HostMetadataLeakError) as raised:
+            manifest_utils.assert_no_host_metadata(
+                {"checksums": {"/home/alice/runs/cohort.raw.vcf.gz": "sha256:aa"}}
+            )
+        message = str(raised.exception)
+
+        self.assertIn("manifest.checksums", message)
+        self.assertIn("key", message)
+        self.assertIn("host filesystem path", message)
+        self.assertNotIn("/home/alice", message)
+        self.assertNotIn("cohort.raw.vcf.gz", message)
+
+    def test_a_file_uri_key_is_redacted_but_still_categorised(self) -> None:
+        with self.assertRaises(manifest_utils.HostMetadataLeakError) as raised:
+            manifest_utils.assert_no_host_metadata(
+                {"checksums": {"file:///opt/results/cohort.raw.vcf.gz": "sha256:aa"}}
+            )
+        message = str(raised.exception)
+
+        self.assertIn("file://", message)
+        self.assertNotIn("/opt/results", message)
+
+    def test_a_publishable_document_is_still_accepted(self) -> None:
+        # Redaction changed only what a refusal says. Nothing that used
+        # to pass may start failing -- including a reference field whose
+        # legitimate scientific metadata carries shell metacharacters.
+        manifest_utils.assert_no_host_metadata(
+            {
+                "checksums": {"cohort.raw.vcf.gz": "sha256:aa"},
+                "containers": {"fastp": "quay.io/biocontainers/fastp:1.3.6"},
+                "reference": {
+                    "reference_name": "Vigna angularis (cv. 'Erimo'; v1.2) $REF & co.",
+                    "fasta": {"filename": "synthetic.fa", "checksum": "sha256:fa"},
+                },
+                "samples": [{"sample_id": "alice", "read_group_id": "rg1"}],
+            }
+        )
+
+
 class TimeHelperTests(unittest.TestCase):
     def test_run_id_is_sortable_and_uses_the_injected_moment(self) -> None:
         moment = datetime(2026, 8, 14, 12, 34, 56, tzinfo=UTC)

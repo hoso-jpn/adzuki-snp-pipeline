@@ -666,6 +666,16 @@ def read_cohort_accounting(path: Path, cohort_id: str) -> dict[str, str]:
     checks them: a manifest that embedded the filtered-SNP QC under
     `cohort_accounting` while claiming raw/all would be wrong in a way no
     downstream reader could detect.
+
+    A metric appearing twice is fatal even when both rows agree. A
+    provenance document's claim is that it reports what the run measured;
+    an input that states one metric twice has no single answer to report,
+    and picking one -- last row wins, as a plain dict assignment does --
+    would publish a number chosen by file order rather than by
+    measurement. Two rows that happen to agree today are the same
+    ambiguity, undetected: they say the accounting was produced by
+    something that can emit a metric more than once, which is exactly the
+    condition under which the disagreeing case goes unnoticed.
     """
     metrics: dict[str, str] = {}
 
@@ -685,6 +695,10 @@ def read_cohort_accounting(path: Path, cohort_id: str) -> dict[str, str]:
                 f"{path}: cohort accounting must come from the "
                 f"{COHORT_ACCOUNTING_STAGE}/{COHORT_ACCOUNTING_VARIANT_TYPE} QC "
                 f"run, found stage '{stage}' type '{variant_type}'"
+            )
+        if metric in metrics:
+            raise ProvenanceInconsistencyError(
+                f"{path}: cohort accounting metric '{metric}' appears more than once"
             )
         metrics[metric] = value
 
@@ -741,7 +755,12 @@ def read_sample_accounting(path: Path, cohort_id: str) -> list[dict[str, str]]:
 
 
 def read_variant_type_accounting(path: Path, cohort_id: str) -> dict[str, str]:
-    """Read RECONCILE_VARIANT_TYPE_COUNTS' accounting TSV for this cohort."""
+    """Read RECONCILE_VARIANT_TYPE_COUNTS' accounting TSV for this cohort.
+
+    As in `read_cohort_accounting`, a repeated metric is rejected rather
+    than resolved -- see that function for why agreement between the two
+    rows does not make the input unambiguous.
+    """
     metrics: dict[str, str] = {}
 
     for cohort, metric, value in _read_header_and_rows(
@@ -751,6 +770,11 @@ def read_variant_type_accounting(path: Path, cohort_id: str) -> dict[str, str]:
             raise ProvenanceInconsistencyError(
                 f"{path}: variant type accounting is for cohort '{cohort}', but "
                 f"this run is '{cohort_id}'"
+            )
+        if metric in metrics:
+            raise ProvenanceInconsistencyError(
+                f"{path}: variant type accounting metric '{metric}' appears "
+                "more than once"
             )
         metrics[metric] = value
 

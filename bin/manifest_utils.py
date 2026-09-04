@@ -111,19 +111,47 @@ def checksum_files(paths: list[Path]) -> dict[str, str]:
     return checksums
 
 
+# What a rejection message may say, and what it may never say.
+#
+# These validators run inside Nextflow tasks, so whatever they raise is
+# written to the task's `.command.err`, repeated in the Nextflow log, and
+# -- for a CI run -- published in a build log that outlives the run and
+# is readable by anyone who can see the repository. Echoing the offending
+# value into that message would republish, in plaintext and in a more
+# widely-read place, the exact thing the check exists to keep out of the
+# manifest: a registry password, a home directory, an internal address.
+#
+# So a rejection names the location, the process, and the category of
+# problem -- everything a caller needs in order to fix its own input,
+# since the caller already has the value in front of it -- and says
+# `value redacted` so a reader does not mistake the omission for a bug.
+#
+# This has to be a property of the validator, not of the one branch that
+# happens to be about credentials. A credential-bearing reference can
+# reach any branch: `file://user:pw@host/x` trips the `file://` check
+# first, and a value with a stray space trips the whitespace check before
+# either. Only redacting on every rejection path makes the guarantee hold.
+_REDACTED = "value redacted"
+
+
 def validate_container_identity(process_name: str, value: str) -> str:
-    """Fail fast if a container identity leaks a host path or credential."""
+    """Fail fast if a container identity leaks a host path or credential.
+
+    Returns the value unchanged when it is publishable; every rejection
+    reports the category without echoing the value (see `_REDACTED`).
+    """
     if not value or not value.strip():
         raise ValueError(f"container identity for '{process_name}' is empty")
     if any(character.isspace() for character in value):
         raise ValueError(
-            f"container identity for '{process_name}' contains whitespace: {value!r}"
+            f"container identity for '{process_name}' contains whitespace; "
+            f"{_REDACTED}"
         )
     if _FILE_URI_SCHEME_RE.match(value):
         raise ValueError(
             f"container identity for '{process_name}' is a file:// URI, which "
             "records a host filesystem path rather than a shareable image "
-            f"reference: {value!r}. This manifest is published as a shareable "
+            f"reference; {_REDACTED}. This manifest is published as a shareable "
             "artifact and must not disclose the host's image layout; pin the "
             "image by registry reference (e.g. 'registry/image@sha256:...') "
             "instead."
@@ -131,15 +159,15 @@ def validate_container_identity(process_name: str, value: str) -> str:
     if _HOST_PATH_PREFIX_RE.match(value):
         raise ValueError(
             f"container identity for '{process_name}' looks like a host filesystem "
-            f"path rather than an image reference: {value!r}. This manifest is "
+            f"path rather than an image reference; {_REDACTED}. This manifest is "
             "published as a shareable artifact and must not disclose the host's "
             "image layout; pin the image by registry reference (e.g. "
             "'registry/image@sha256:...') instead."
         )
     if _URL_CREDENTIALS_RE.search(value):
         raise ValueError(
-            f"container identity for '{process_name}' appears to embed registry "
-            f"credentials: {value!r}"
+            f"container identity for '{process_name}' contains embedded registry "
+            f"credentials; {_REDACTED}"
         )
     return value
 
@@ -183,25 +211,26 @@ class HostMetadataLeakError(Exception):
 
 
 def _assert_string_is_publishable(location: str, value: str) -> None:
+    """Reject one string, naming where it sat and why -- never what it was."""
     if _ABSOLUTE_OR_RELATIVE_PATH_RE.match(value):
         raise HostMetadataLeakError(
-            f"{location} looks like a host filesystem path: {value!r}. A published "
+            f"{location} looks like a host filesystem path; {_REDACTED}. A published "
             "manifest records basenames and checksums, never where a file lived on "
             "the machine that produced it."
         )
     if _FILE_URI_SCHEME_RE.match(value):
         raise HostMetadataLeakError(
-            f"{location} is a file:// URI, which encodes a host filesystem path: "
-            f"{value!r}."
+            f"{location} is a file:// URI, which encodes a host filesystem path; "
+            f"{_REDACTED}."
         )
     if _URL_CREDENTIALS_RE.search(value):
         raise HostMetadataLeakError(
-            f"{location} embeds credentials in a URL: {value!r}. A published "
+            f"{location} embeds credentials in a URL; {_REDACTED}. A published "
             "manifest must never carry a secret."
         )
     if _PRIVATE_HOST_RE.search(value):
         raise HostMetadataLeakError(
-            f"{location} names a private or loopback network location: {value!r}. "
+            f"{location} names a private or loopback network location; {_REDACTED}. "
             "That describes the network the run happened on, not the run."
         )
 
@@ -215,7 +244,14 @@ def assert_no_host_metadata(payload: object, location: str = "manifest") -> None
     if isinstance(payload, dict):
         for key, value in payload.items():
             if isinstance(key, str):
-                _assert_string_is_publishable(f"{location} key '{key}'", key)
+                # The key is the suspect value here, so it cannot be
+                # quoted into its own rejection message: a checksum map
+                # keyed by `/home/alice/cohort.vcf.gz` would otherwise
+                # leak that path through the *location* while the value
+                # beside it was dutifully redacted. Descending into the
+                # value below is safe by construction -- this check has
+                # already passed, so the key is publishable by then.
+                _assert_string_is_publishable(f"{location} has a key that", key)
             assert_no_host_metadata(value, f"{location}.{key}")
     elif isinstance(payload, (list, tuple)):
         for index, item in enumerate(payload):
