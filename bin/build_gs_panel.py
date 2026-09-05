@@ -210,6 +210,23 @@ class GenotypeCell:
 # --------------------------------------------------------------------------
 # VCF reading: shared, strictly-validating primitives
 #
+# Issue #44 review: the previous reader accepted any data row with at
+# least 10 tab-separated fields and then indexed into it positionally.
+# A row carrying fewer sample columns than `#CHROM` declared was read
+# without complaint -- the review demonstrated a two-sample header whose
+# data row carried one genotype being parsed cleanly into a matrix row
+# one cell short of the matrix header. A row carrying extra columns
+# silently gained cells the header never promised. Both reach the matrix
+# as a column misalignment, which is what the downstream reconciliation
+# exists to catch -- but the builder should not emit it in the first
+# place, and a check that only looks for "at least 10" cannot see it.
+#
+# Every data row must now carry exactly `9 + sample_count` fields, and
+# every sample field must actually contain the subfield FORMAT's GT
+# index points at: `sample_field.split(":")[gt_index]` previously raised
+# a bare `IndexError` that escaped as an unhandled traceback rather than
+# a diagnosable failure.
+#
 # Both the streaming and the reference reader go through these, so the
 # two can never disagree about which inputs are well-formed.
 # --------------------------------------------------------------------------
@@ -239,19 +256,36 @@ def _extract_row_genotypes(
     path: Path,
     line_number: int,
 ) -> tuple[str, ...]:
-    """Pull one data row's GT strings out of a data row."""
-    if len(fields) < FIXED_COLUMN_COUNT + 1:
+    """Pull one data row's GT strings out, refusing any shape mismatch.
+
+    The column count is checked against the `#CHROM` header rather than
+    against a floor: a row is wrong if it carries *any* number of sample
+    columns other than the number the header declared, in either
+    direction, no matter how late in the file it appears.
+    """
+    expected = FIXED_COLUMN_COUNT + len(sample_names)
+    if len(fields) != expected:
         raise MalformedVcfError(
             f"{path}: line {line_number}: data row has {len(fields)} "
-            "tab-separated fields, expected at least 10"
+            f"tab-separated fields, expected exactly {expected} "
+            f"({FIXED_COLUMN_COUNT} fixed columns plus {len(sample_names)} "
+            "sample columns declared by the #CHROM header)"
         )
 
     gt_index = _locate_gt_index(fields[8], path)
 
-    return tuple(
-        sample_field.split(":")[gt_index]
-        for sample_field in fields[FIXED_COLUMN_COUNT:]
-    )
+    genotypes: list[str] = []
+    for sample_position, sample_field in enumerate(fields[FIXED_COLUMN_COUNT:]):
+        subfields = sample_field.split(":")
+        if gt_index >= len(subfields):
+            raise MalformedVcfError(
+                f"{path}: line {line_number}: sample "
+                f"'{sample_names[sample_position]}' has {len(subfields)} "
+                f"FORMAT subfield(s), but FORMAT places GT at index {gt_index}"
+            )
+        genotypes.append(subfields[gt_index])
+
+    return tuple(genotypes)
 
 
 def classify_genotype(gt: str) -> GenotypeCell:
@@ -446,6 +480,10 @@ def parse_gs_pass_vcf(path: Path) -> GsPassVcf:
                 continue
 
             if line.startswith("#CHROM"):
+                if sample_names is not None:
+                    raise MalformedVcfError(
+                        f"{path}: line {line_number}: a second #CHROM header line"
+                    )
                 sample_names = _parse_chrom_header(line.split("\t"), path)
                 continue
 
@@ -755,6 +793,10 @@ def stream_gs_panel(
                 continue
 
             if line.startswith("#CHROM"):
+                if sample_names is not None:
+                    raise MalformedVcfError(
+                        f"{gs_pass_vcf}: line {line_number}: a second #CHROM header line"
+                    )
                 sample_names = _parse_chrom_header(line.split("\t"), gs_pass_vcf)
                 sample_missing_counts = [0] * len(sample_names)
                 sample_non_standard_counts = [0] * len(sample_names)
@@ -1037,6 +1079,11 @@ def main(argv: list[str] | None = None) -> int:
         args.genotype_accounting_summary_output,
     ]
 
+    # `finally`, not an exception handler: the malformed-input paths below
+    # leave by `return 1`, which no `except` clause would see, and those
+    # are exactly the runs that leave half-written staging files behind.
+    # On success the staging files have already been consumed by the
+    # publish, so the sweep is a no-op.
     try:
         try:
             stream_gs_panel(
@@ -1061,11 +1108,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         publish_outputs(final_paths)
-    except BaseException:
+    finally:
         discard_staged_outputs(final_paths)
-        raise
 
-    discard_staged_outputs(final_paths)
     return 0
 
 
