@@ -384,6 +384,18 @@ artifacts, at a generous 96 GiB ceiling:
 | `SUMMARIZE_FILTER_QC` (snp) | 16.28 GiB | **19.91 GiB** (genuine -- no swap spike in its own window) | 22 GiB | 22 GiB (unchanged) | 9.5% |
 | `BUILD_GS_PANEL` | 12.65 GiB | **19.88 GiB** | 17 GiB | 27 GiB | 26.4% |
 
+> **Issue #44 update.** `BUILD_GS_PANEL`'s 19.88 GiB figure above is a cgroup peak measured
+> against the pre-Issue-#44 builder, which held every parsed record, every matrix row, the
+> joined matrix text and its encoded bytes in Python memory at once. That builder has since
+> been rewritten to stream in one bounded pass: on synthetic cohorts its Python peak RSS is
+> flat at ~21 MiB from 250,000 to 4,000,000 variants, against ~8 GiB for the old code at the
+> largest of those (see `docs/gs_panel_streaming_benchmark.md`). The figures in this table are
+> **left unchanged**: they are the historical record of what was measured here, on
+> `seedcore-01`, against the real cohort, and the streaming builder has not yet been replayed
+> against those real artifacts. The `process_gs_panel` budget is likewise unchanged — Issue #44
+> did not touch resource allocation, and a cgroup peak includes output page cache that a
+> Python-RSS measurement does not.
+
 `SUMMARIZE_FILTER_QC`'s own true peak (19.91 GiB) closely matched its production trace
 reading (19.9 GB), confirming that specific reading was genuine despite running alongside a
 memory-starved sibling task -- its budget is left unchanged, though a 9.5% headroom is thin
