@@ -334,13 +334,132 @@ pinning infrastructure (no `requirements.txt`, `pyproject.toml`, or
 `Dockerfile` for Python dependencies exists anywhere in the repository);
 and `.npz` would not even match the sibling repository's own real
 precedent — its actual, verified genotype ingestion path reads gzip TSV,
-not a binary array format. Panel scales here (thousands of markers,
-tens-to-low-hundreds of samples) are far below where TSV parsing becomes
-a practical bottleneck.
+not a binary array format. Panel scale was originally estimated here at
+thousands of markers; Issue #33's real 20-sample cohort in fact produced
+9,252,873 variant rows, which is what motivated the bounded-memory build
+described below. TSV parsing itself has not become the bottleneck at that
+scale -- retaining the parsed result was.
 
 The matrix header row is always written, even when there are zero
 variant rows (see "Empty panel contract" below) — an empty panel must
 never lose the sample list.
+
+### Compression: what is guaranteed, and why it is not `gzip.GzipFile`
+
+The matrix is gzip-compressed with `mtime=0`, so the same logical
+content always produces byte-identical compressed output. Without that,
+two runs over the same input would write different checksums into the
+manifest with nothing about the data having changed, undermining the
+"same input reproduces the same panel" guarantee this contract rests on.
+
+Since Issue #44 the matrix is compressed *incrementally* rather than in
+one shot, and the choice of streaming primitive is part of the contract
+rather than an implementation detail. `gzip.compress(payload, mtime=0)`
+delegates to zlib's own gzip wrapper, which writes `OS=3` into the
+header. `gzip.GzipFile` -- the obvious streaming replacement -- writes
+its own header with `OS=255`. Those two produce **identical decompressed
+bytes and different files**: swapping one for the other would have
+silently invalidated every previously published matrix checksum while
+appearing to change nothing.
+
+The builder therefore streams through `zlib.compressobj` with
+`wbits=31`, which is that same zlib wrapper at the same compression
+level. Deflate's output does not depend on how the input was chunked as
+long as no intermediate flush is forced, so the result is byte-identical
+to the historical one-shot form. This was verified against a live
+`gzip.compress` oracle rather than a stored digest, both on the
+development host (Python 3.12.3, zlib 1.3) and inside the pinned
+`python:3.12` production image (Python 3.12.13, zlib 1.3.1), across
+chunk sizes from one byte to the whole payload.
+
+**The compressed representation therefore did not change, and historical
+matrix checksums remain valid.** The contract is pinned by
+`tests/bin/test_build_gs_panel.py` (against the live oracle) and by
+`tests/modules/build_gs_panel.nf.test` (asserting the published header's
+flag bits, zeroed mtime and `OS=3` inside the real container), so a
+future Python or zlib that broke the equivalence fails the suite rather
+than quietly changing published artifacts.
+
+The published gzip member also carries no `FNAME` and no `FCOMMENT`: the
+builder writes through a hidden staging file, and its name -- an
+absolute host path -- must not travel inside a published artifact.
+
+### Build-time memory (Issue #44)
+
+Nothing in the builder retains a quantity that scales with the variant
+count. It makes one pass over the GS-eligible PASS VCF and, for each
+data row, classifies that row's genotypes once and immediately writes
+the matrix row into the streaming compressor, writes the variant
+metadata row to an open handle, and folds the row into per-sample and
+cohort-wide counters. The row is then dropped.
+
+What is retained is the sample names, two per-sample counter lists, a
+fixed-size set of cohort counters, the single row in hand, and the I/O
+and compression buffers -- all `O(sample_count)` or constant. Sample
+metadata, the accounting TSV and the summary are derived from the
+accumulated counters after the scan, and are themselves
+`O(sample_count)` or fixed size.
+
+Each genotype is classified exactly once. The previous implementation
+classified every cell five times over: once per output, plus a second
+accounting pass to build the summary.
+
+`bin/build_gs_panel.py` still defines `parse_gs_pass_vcf` and the
+`build_*_rows` family, which do materialize whole documents. They are
+**not** on the production path; they state each output's content
+declaratively and serve as the oracle the streaming implementation is
+tested against. A test replaces each of them with a raising stub and
+runs the CLI, so a change that routed the production path back through
+one of them fails immediately rather than at real-cohort scale.
+
+Measured figures are in `docs/gs_panel_streaming_benchmark.md`.
+
+## Output publication and failure semantics
+
+The five panel artifacts -- matrix, sample metadata, variant metadata,
+genotype accounting, and the accounting summary -- are built into
+staging files beside their final paths and moved into place only after
+the whole VCF has been read and all five documents have been produced.
+
+What that guarantees:
+
+- A malformed row **anywhere** in the input, including its last line,
+  leaves no final output at all. A streaming builder has necessarily
+  already written many good rows by then; none of them are published.
+- A run that fails does not disturb the artifacts of a previous
+  successful run.
+- Each individual `os.replace` is atomic, and a failure partway through
+  the publish sequence restores every already-replaced file from the
+  copy moved aside moments earlier.
+- Staging files are swept on every exit path, including the `return 1`
+  paths that no exception handler would see.
+
+What it does **not** guarantee: publication of the five files is not a
+filesystem transaction. `os.replace` is atomic per file and there is no
+primitive that commits five of them together. A process kill or power
+loss in the middle of the replace sequence, or a failure during the
+rollback itself, can leave a mix of new and old files on disk. The
+rollback narrows that window to the sequence itself rather than to the
+whole build; it does not eliminate it. Downstream readers should
+continue to rely on `reconcile_gs_panel_accounting.py`, which re-reads
+the artifacts and cross-checks them against the source VCF, rather than
+assuming the set is internally consistent because it exists.
+
+### Input validation
+
+A data row must carry exactly `9 + sample_count` tab-separated fields,
+checked against the sample list the `#CHROM` header declared. Both a
+shortage and an excess are hard errors, at any point in the file. Before
+Issue #44 the reader only required "at least 10" fields, so a row
+carrying fewer genotypes than the header declared was accepted and
+produced a matrix row narrower than its own header -- a column
+misalignment the builder should never emit.
+
+Also rejected, each as a diagnosable error naming the line: a FORMAT
+column with no `GT`, a sample field with fewer subfields than FORMAT's
+`GT` index requires (previously a bare `IndexError` traceback), a data
+row before `#CHROM`, a second `#CHROM` header, a `#CHROM` header with no
+sample columns, and a file with no `#CHROM` header at all.
 
 ## Metadata (concern 4)
 
