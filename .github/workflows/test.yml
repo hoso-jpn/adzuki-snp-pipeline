@@ -47,5 +47,6 @@ jobs:
           tests/modules/multiqc.nf.test
           tests/modules/hash_input_fastqs.nf.test
           tests/modules/build_run_manifest.nf.test
+          tests/modules/build_gs_panel.nf.test
           tests/functions/resolve_pipeline_commit.nf.test
           --ci
