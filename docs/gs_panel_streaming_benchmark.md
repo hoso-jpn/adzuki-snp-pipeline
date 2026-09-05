@@ -1,31 +1,31 @@
 # BUILD_GS_PANEL streaming benchmark (Issue #44)
 
-## What this measures, and what it does not
+## Scope
 
 This document records the bounded-memory rewrite of `bin/build_gs_panel.py`
-(Issue #44) measured against **synthetic cohorts**, not against Issue #33's real
-10/20-sample GS PASS artifacts.
+(Issue #44), measured two ways:
 
-Those real artifacts were produced on host `seedcore-01` and are recorded in
-`real_cohort_scale_validation_10sample_manifest.json` and
-`real_cohort_scale_validation_20sample_manifest.json`. They are **not present on
-the machine this work was carried out on** (`a5-pro`): no
-`cohort_gs.snp.pass.vcf.gz` outside this repository's own small nf-test fixtures
-exists on any mounted filesystem, and the only other mounted volume
-(`/mnt/data`, 1.8 TB) is empty. In line with Issue #44's own instruction not to
-re-download or re-derive large cohorts, no attempt was made to reproduce them.
+1. **A real-cohort replay on `seedcore-01`** against Issue #33's already-produced
+   10- and 20-sample GS PASS VCFs — the acceptance evidence for this Issue. See
+   "Real cohort replay" below.
+2. **A synthetic scaling benchmark** run earlier on a different machine, which
+   established the memory complexity change across a controlled range of variant
+   counts. Retained because it varies one dimension at a time in a way the two
+   real cohorts cannot.
 
-**Issue #44's real-data completion criterion ("10/20-sample real artifact
-equivalence with the old output", "20-sample peak RSS measured") is therefore
-NOT met by this document.** What follows is scaling evidence on generated input;
-it demonstrates the memory complexity change and byte-level output equivalence,
-but it is not a substitute for a replay against the real cohorts, which should
-be run on `seedcore-01` before this work is treated as fully validated.
+No new FASTQ processing or end-to-end pipeline run was performed for either. The
+real replay re-used Issue #33's existing artifacts as read-only input; every
+benchmark output was written to a separate scratch directory, and no Issue #33
+artifact was modified (their input checksums and output mtimes were re-verified
+unchanged afterwards).
 
-## Environment
+## Synthetic benchmark environment
 
-Measured 2026-09-05 on host `a5-pro` (not `seedcore-01`, which produced the
-Issue #33 figures — the two are not comparable in absolute wall time):
+
+
+The synthetic runs below were measured 2026-09-05 on host `a5-pro`, which is
+not `seedcore-01`; their absolute wall times are not comparable with the real
+replay's:
 
 - CPU: AMD Ryzen 7 5825U, 16 logical CPUs.
 - RAM: 46 GiB total, 7 GiB swap; 32 GiB available at measurement time.
@@ -61,7 +61,7 @@ that guards this property samples `/proc/<pid>/statm` instead of reading
 Swap was sampled from `/proc/meminfo` (`SwapTotal - SwapFree`) immediately
 before and after each run.
 
-## Results
+## Synthetic benchmark results
 
 Old = `main@cc2c5ca`'s `bin/build_gs_panel.py`. New = this branch. Both run over
 the identical generated input, on the same machine, back to back.
@@ -98,7 +98,7 @@ phased calls, fully missing, haploid, non-biallelic allele index).
 | 1,000,000 x 20 | `9ca746b99fbef2094a328b03957fec5b66cdbb401aa4b3551ca4000efec66e77` | 18,127,212 |
 | 4,000,000 x 20 | `071f30974fef83ac94a8e6410cabe7848c3361bbef69bce725638d3311f49da0` | 72,548,952 |
 
-## Output equivalence
+## Synthetic output equivalence
 
 At **every** scale above, all five artifacts are byte-identical between the old
 and new implementations — including the *compressed* matrix, not merely its
@@ -148,7 +148,7 @@ writes through a hidden staging file whose absolute host path must not reach a
 published artifact), and a zeroed `MTIME`. `tests/modules/build_gs_panel.nf.test`
 asserts those header bytes inside the real task container.
 
-## Downstream reconciliation
+## Synthetic downstream reconciliation
 
 `bin/reconcile_gs_panel_accounting.py` was run against the primary
 4,000,000 x 20 outputs and exited 0, confirming — independently of the builder,
@@ -172,25 +172,170 @@ panel_status                    populated
 
 The same check passed at 250,000 x 20.
 
+## Real cohort replay on seedcore-01
+
+Issue #44's acceptance evidence. Run 2026-09-05 on `seedcore-01` — the same
+machine that produced Issue #33's cohorts — against those cohorts' existing
+`cohort_gs.snp.pass.vcf.gz` artifacts, used strictly read-only.
+
+### Method
+
+Old (`main@cc2c5ca`) and new (PR #57 head `d283d56`) were checked out into two
+detached `git worktree`s under a scratch directory, so neither the working
+checkout nor Issue #33's run directories were switched or modified. Each of the
+four runs was launched **one at a time**, directly by `/usr/bin/time -v` from a
+small shell, and wrote its five artifacts to its own scratch output directory.
+`--sample-ploidy 2` throughout, with `--cohort-id cohort` read from the existing
+production manifest and metadata rather than assumed.
+
+The reported memory is **the builder process's own peak RSS** ("Maximum resident
+set size"), not a cgroup figure and not inclusive of page cache. Issue #33's
+19.88 GiB entry for this process is a *cgroup* peak and is not the same
+measurement; it was not reused here — the old implementation was re-run and
+re-measured from scratch.
+
+`bin/build_gs_panel.py` is unchanged between the commit that produced Issue #33's
+published panels and `main@cc2c5ca`, apart from a docstring and the error text
+printed when `--sample-ploidy != 2`. Neither can affect a successful ploidy-2
+run, so the published production artifacts are what `cc2c5ca` produces — which is
+why the comparison below can be made against them as well as against the fresh
+old replay.
+
+### Inputs (re-measured, not taken from documentation)
+
+| Cohort | Input basename | SHA256 | Bytes | Records | Samples |
+| --- | --- | --- | ---: | ---: | ---: |
+| 10-sample | `cohort_gs.snp.pass.vcf.gz` | `3adc7a6426e466abdc7e337fd9511374f82c88cc7128d181813d2924800518a0` | 781,752,215 | 7,939,188 | 10 |
+| 20-sample | `cohort_gs.snp.pass.vcf.gz` | `555cbcdf4976fbf914c36d4fe8a805d94a29a6bc40290cd31cf8f41f19511fce` | 1,497,301,208 | 9,252,873 | 20 |
+
+Record and sample counts were streamed with `awk`, never materialized. Both match
+the counts Issue #33 documented (7,939,188 / 9,252,873).
+
+### Memory and time
+
+| Cohort | Old peak RSS | New peak RSS | Reduction | Old wall | New wall | Speedup | `Swaps` | Swap delta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10-sample | 12,534,644 KiB (11.95 GiB) | 21,692 KiB (21.18 MiB) | **99.827%** | 6:28.93 | 2:02.93 | 3.16x | 0 / 0 | -256 kB / 0 kB |
+| 20-sample | 19,990,380 KiB (19.06 GiB) | 21,404 KiB (20.90 MiB) | **99.893%** | 13:59.89 | 4:22.51 | 3.20x | 0 / 0 | 0 kB / +57,856 kB |
+
+All four runs exited 0. `/usr/bin/time -v` reported `Swaps: 0` for every one, with
+0-4 major page faults, so no run was swap-assisted.
+
+The old implementation's footprint tracks the cohort: 11.95 GiB at 7.9M variants x
+10 samples, 19.06 GiB at 9.25M x 20. The new one is flat at ~21 MiB across both,
+and is in fact marginally *smaller* on the larger cohort — it holds one row, not
+one cohort.
+
+### Measurement conditions, stated because they were not identical
+
+The two old runs needed ~20 GiB, which the machine did not have free: a resident
+LLM inference container held ~60 GiB RSS and ~116 GiB of shared memory, leaving
+4.3-5.0 GiB available. With the owner's approval that container was stopped for
+the old runs and for the reconciliations, then restarted; the unrelated
+`open-webui` container was left running throughout. This follows Issue #35's own
+precedent of stopping the heavy resident workload before benchmarking.
+
+Consequently the two new runs were measured with that container **running**
+(≈5 GiB available) and the two old runs with it **stopped** (≈118 GiB available).
+The measurement method was identical in all four; the machine state was not.
+This does not weaken the comparison: a 21 MiB process is not constrained by 5 GiB
+of headroom, and extra free memory does not inflate what the old implementation
+allocates. It does mean the wall-time speedups above are conservative — the new
+runs competed with a live inference workload for CPU and memory bandwidth, and
+the old ones did not. The `+57,856 kB` swap delta recorded across the new
+20-sample run is that co-resident container's, not the builder's, whose own
+`Swaps` counter is 0 against a 20.90 MiB footprint.
+
+One further caveat: the old 10-sample run's *wall time* overlapped a checksum
+comparison reading previously produced outputs from the same filesystem, so treat
+6:28.93 as an upper bound. Its peak RSS is unaffected, and its 3.16x ratio agrees
+with the uncontended 20-sample run's 3.20x.
+
+### Output equivalence
+
+At both scales, all five artifacts are byte-identical between old and new —
+including the *compressed* matrix, not merely its decompressed content — and
+byte-identical to the panels Issue #33 actually published. The decompressed
+matrix was compared by streaming through `sha256sum`, never expanded to disk.
+
+| Artifact | 10-sample SHA256 | 20-sample SHA256 |
+| --- | --- | --- |
+| Genotype matrix (compressed) | `f920e1656a8982db967655b23733f694d46f7899a4f0c3504cdbfe8bcad183e8` | `4da8fa46a06944b5dfc61e13cf54e8ecef12117675426d81ecd48c6a117cbb1f` |
+| Genotype matrix (decompressed) | `b5b8540b4cbd3a3b21f22f9ab387994f33c29733cab52cfedaa76408f63b96ab` | `3e701bc448840c553fc95cde6a5443904eafb10c5ae16d657c76debf556bfd5b` |
+| Sample metadata | `200822d9e07e9a66e0a6f820930dd3db828874c2d2a232f4fe0efdf16a3347ed` | `db53170a1eecdc59cb9027c822ddc5f989cdb85953a6af9f581895a3dd75f00c` |
+| Variant metadata | `858471f7d6dd5bb8a52e37933b197c70eaa8ffda0b9a12aebd4a2a0ac32bc873` | `456bde5b112b4d633b4c0a5761b045790c92367682b0f94442a8052f121a61b1` |
+| Genotype accounting | `55f574a4feedda23885716d8d374573e1d3aa1d06f8152f411b8f87b16275041` | `2fb56574d2519e38236ba7b6dae4732c9d9657d7d616c6728dea1ef393c8254f` |
+| Accounting summary | `bffda1c6d5fd473eb553c68a981df3a81cabd0a2c03dd35b615676e27c9ff9a3` | `8a5abe2645d62286437ab6b85a643e317926b88575baff7cbae14016e3ac0d62` |
+
+That the compressed matrix matches is the concrete confirmation of this Issue's
+gzip decision: streaming through zlib's own gzip wrapper preserved the exact
+bytes of panels published weeks earlier, so **no historical matrix checksum was
+invalidated**.
+
+### Dimensions
+
+| Cohort | Matrix variant rows | Matrix sample columns | Variant metadata rows | Sample metadata rows | Accounting total cells |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 10-sample | 7,939,188 | 10 | 7,939,188 | 10 | 79,391,880 |
+| 20-sample | 9,252,873 | 20 | 9,252,873 | 20 | 185,057,460 |
+
+Every row count equals the input record count, every column count the input
+sample count, and each cell total the product of the two.
+
+### Independent reconciliation
+
+`bin/reconcile_gs_panel_accounting.py` is byte-identical between `cc2c5ca` and
+this branch, imports nothing from the builder, and was not modified for this
+benchmark. It was run against each new panel using Issue #33's own upstream
+artifacts (raw/all VCF, normalized VCF, classification accounting, GS PASS VCF).
+
+Both exited 0, and each produced a record-accounting document **identical to the
+one the production run published**:
+
+| Metric | 10-sample | 20-sample |
+| --- | ---: | ---: |
+| `raw_all_records` | 10,247,125 | 12,059,905 |
+| `normalized_records` | 10,787,857 | 12,878,591 |
+| `classified_biallelic_snp_records` | 8,920,725 | 10,556,952 |
+| `gs_hard_filter_excluded_records` | 981,537 | 1,304,079 |
+| `gs_pass_records` | 7,939,188 | 9,252,873 |
+| `matrix_variant_records` | 7,939,188 | 9,252,873 |
+| `variant_metadata_records` | 7,939,188 | 9,252,873 |
+| `gs_pass_sample_count` / `matrix_sample_count` | 10 / 10 | 20 / 20 |
+| `sample_metadata_records` | 10 | 20 |
+| `panel_status` | `populated` | `populated` |
+
+Sample and variant identity *and order* are compared as ordered sequences by that
+tool, not merely counted, so this confirms the streamed panel agrees with its
+source VCF element by element.
+
+Reconciler cost, recorded separately from Issue #44's pass/fail because it is a
+different program: 4,872,896 KiB (4.65 GiB) / 49.78 s at 10 samples, 5,716,324 KiB
+(5.45 GiB) / 1:25.17 at 20 samples, `Swaps: 0`, exit 0. See "Limitations".
+
+### Environment
+
+- Host `seedcore-01`: ASUS ROG STRIX X870-F GAMING WIFI, AMD Ryzen 9 9950X3D
+  (32 logical CPUs), 123 GiB RAM, 15 GiB swap, NVIDIA RTX 5090 present but unused.
+- Ubuntu 24.04.4 LTS, kernel 6.8.0-136-generic, host Python 3.12.3.
+- Builders were run as host Python, not in the task container, so these are
+  Python-RSS figures for the script itself.
+
 ## Limitations and follow-ups
 
-1. **No real-data validation.** As stated at the top: Issue #33's real 10/20-sample
-   artifacts are not on this machine, so the real-artifact equivalence and the
-   real 20-sample peak RSS remain unmeasured. This is the outstanding item for
-   Issue #44.
-2. **The reconciler is now the memory bottleneck of the GS lineage.** Measured
-   during this work: `reconcile_gs_panel_accounting.py` peaked at 1,953,472 KiB
-   (1.86 GiB) on the 4,000,000 x 20 panel, because it materializes the full
-   ordered tuple of variant keys from each artifact in order to compare identity
-   and order. That is outside Issue #44's scope (which is `BUILD_GS_PANEL`), and
-   it is not a regression — but with the builder down to 21 MiB it is now the
-   largest Python consumer in this lineage and deserves its own issue.
-3. **Absolute wall times are not comparable to Issue #33's**, which were measured
-   on different hardware (`seedcore-01`).
-4. **Python RSS only.** Container/cgroup peaks, which include page cache charged
-   for the input and the five outputs, were not measured here and remain the
-   basis of the resource contract in `nextflow.config`. No resource allocation
-   was changed by this work.
-5. **Publication is not a five-file transaction.** See
+1. **The reconciler is now the memory bottleneck of the GS lineage.** Measured on
+   the real cohorts: `reconcile_gs_panel_accounting.py` peaked at 4.65 GiB
+   (10-sample) and 5.45 GiB (20-sample), because it materializes each artifact's
+   full ordered variant-key tuple in order to compare identity and order. That is
+   outside Issue #44's scope (which is `BUILD_GS_PANEL`) and is not a regression —
+   but with the builder down to ~21 MiB it is now the largest Python consumer in
+   this lineage, and deserves its own issue.
+2. **Python RSS only.** Container/cgroup peaks, which include page cache charged
+   for the input and the five outputs, were not measured here and remain the basis
+   of the resource contract in `nextflow.config`. No resource allocation was
+   changed by this work; `process_gs_panel`'s budget is deliberately left as-is.
+3. **Publication is not a five-file transaction.** See
    `docs/gs_panel_data_contract.md`, "Output publication and failure semantics",
    for exactly what is and is not guaranteed.
+4. Synthetic and real wall times were measured on different machines and are not
+   comparable with each other.

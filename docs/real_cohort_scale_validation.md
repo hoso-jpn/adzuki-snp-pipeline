@@ -387,14 +387,26 @@ artifacts, at a generous 96 GiB ceiling:
 > **Issue #44 update.** `BUILD_GS_PANEL`'s 19.88 GiB figure above is a cgroup peak measured
 > against the pre-Issue-#44 builder, which held every parsed record, every matrix row, the
 > joined matrix text and its encoded bytes in Python memory at once. That builder has since
-> been rewritten to stream in one bounded pass: on synthetic cohorts its Python peak RSS is
-> flat at ~21 MiB from 250,000 to 4,000,000 variants, against ~8 GiB for the old code at the
-> largest of those (see `docs/gs_panel_streaming_benchmark.md`). The figures in this table are
-> **left unchanged**: they are the historical record of what was measured here, on
-> `seedcore-01`, against the real cohort, and the streaming builder has not yet been replayed
-> against those real artifacts. The `process_gs_panel` budget is likewise unchanged — Issue #44
-> did not touch resource allocation, and a cgroup peak includes output page cache that a
-> Python-RSS measurement does not.
+> been rewritten to stream in one bounded pass.
+>
+> On 2026-09-05 both implementations were replayed on this machine against **these same two
+> cohorts' existing GS PASS VCFs**, read-only, one run at a time. Builder Python peak RSS:
+>
+> | Cohort | Old | New | Reduction |
+> | --- | ---: | ---: | ---: |
+> | 10-sample (7,939,188 variants) | 11.95 GiB | 21.18 MiB | 99.827% |
+> | 20-sample (9,252,873 variants) | 19.06 GiB | 20.90 MiB | 99.893% |
+>
+> All five panel artifacts came out byte-identical between old and new, and byte-identical to
+> the panels this run originally published — including the compressed matrix. Independent
+> reconciliation passed at both scales with output matching the published record accounting.
+> Full detail, including the measurement conditions, is in
+> `docs/gs_panel_streaming_benchmark.md`.
+>
+> The figures in the table above are **left unchanged**: they are the historical record of
+> what was measured during this Issue's own runs, and a cgroup peak (which charges output page
+> cache) is not the same measurement as the Python RSS quoted here. The `process_gs_panel`
+> budget is likewise unchanged — Issue #44 did not touch resource allocation.
 
 `SUMMARIZE_FILTER_QC`'s own true peak (19.91 GiB) closely matched its production trace
 reading (19.9 GB), confirming that specific reading was genuine despite running alongside a
