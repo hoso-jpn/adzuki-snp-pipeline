@@ -126,6 +126,22 @@ include {
     BUILD_GS_PANEL_MANIFEST
 } from '../modules/local/build_gs_panel_manifest'
 
+include {
+    HASH_INPUT_FASTQS
+} from '../modules/local/hash_input_fastqs'
+
+include {
+    HASH_REFERENCE_BUNDLE
+} from '../modules/local/hash_reference_bundle'
+
+include {
+    HASH_RUN_ARTIFACTS
+} from '../modules/local/hash_run_artifacts'
+
+include {
+    BUILD_RUN_MANIFEST
+} from '../modules/local/build_run_manifest'
+
 // Hard-filter definitions shared by the primary SNP/indel filtering
 // lineage and the GS-panel-specific re-filtering lineage (see
 // GATK_VARIANTFILTRATION_GS below), so the configured thresholds are
@@ -205,13 +221,50 @@ def hardFiltersForVariantType(variant_type) {
     return filters_by_variant_type[variant_type?.toString()]
 }
 
+// Issue #42: label one process invocation's effective container
+// identities with the canonical process key the run manifest records
+// them under.
+//
+// The key is assigned here, explicitly, rather than derived at run time
+// from something like `task.process`. Two of this pipeline's modules are
+// included twice under different aliases (FASTQC as FASTQC_RAW and
+// FASTQC_TRIMMED; GATK_VARIANTFILTRATION and GATK_SELECTPASSVARIANTS
+// each also as their `_GS` alias), and each alias can be overridden
+// independently -- so a key derived from the module's own process name
+// would collapse pairs that are allowed to differ, and one derived from
+// a runtime-formatted qualified name would tie a published schema to how
+// a given Nextflow version happens to spell it. The keys below are part
+// of the schema v2 contract (docs/run_manifest_data_contract.md) and
+// change only when this workflow deliberately changes them.
+def containerProvenance(container_id_ch, String process_key) {
+    return container_id_ch.map { container -> "${process_key}\t${container}" }
+}
+
 workflow ADZUKI_SNP_PIPELINE {
     take:
     samples_ch
     reference_ch
     read_group_counts_by_sample
+    // Issue #42: the same samplesheet rows as samples_ch, each carrying
+    // its zero-based samplesheet position, built in main.nf so this
+    // provenance branch cannot alter samples_ch's own cardinality or
+    // ordering contract.
+    input_provenance_rows_ch
+    // Issue #42: the full 40-character commit this run executed from,
+    // resolved in main.nf (see resolvePipelineCommit there for why
+    // workflow.commitId alone is not enough).
+    run_git_commit
 
     main:
+    // Issue #42: container identities for processes that only run under
+    // some configurations -- reference indexing when no prebuilt bundle
+    // was supplied, and the whole GS lineage when it is enabled. They are
+    // accumulated in the branches that actually invoke them, so the run
+    // manifest lists the processes this run *executed* rather than every
+    // process it could have. Recording a default for a process that never
+    // ran would be a claim about software that never touched the data.
+    optional_container_provenance_ch = channel.empty()
+
     raw_reads_ch = samples_ch.map {
         meta,
         read1,
@@ -253,6 +306,9 @@ workflow ADZUKI_SNP_PIPELINE {
     } else {
         SAMTOOLS_FAIDX(reference_ch)
         reference_fai_ch = SAMTOOLS_FAIDX.out.fai
+        optional_container_provenance_ch = optional_container_provenance_ch.mix(
+            containerProvenance(SAMTOOLS_FAIDX.out.container_id, 'samtools_faidx')
+        )
     }
 
     if (params.reference_dict) {
@@ -271,6 +327,12 @@ workflow ADZUKI_SNP_PIPELINE {
         GATK_CREATE_SEQUENCE_DICTIONARY(reference_ch)
         reference_dict_ch =
             GATK_CREATE_SEQUENCE_DICTIONARY.out.dict
+        optional_container_provenance_ch = optional_container_provenance_ch.mix(
+            containerProvenance(
+                GATK_CREATE_SEQUENCE_DICTIONARY.out.container_id,
+                'gatk_create_sequence_dictionary',
+            )
+        )
     }
 
     // Issue #11 / #41: validate once here for both the generated and
@@ -340,6 +402,9 @@ workflow ADZUKI_SNP_PIPELINE {
     } else {
         BWA_MEM2_INDEX(reference_ch)
         bwa_indexes_ch = BWA_MEM2_INDEX.out.indexes
+        optional_container_provenance_ch = optional_container_provenance_ch.mix(
+            containerProvenance(BWA_MEM2_INDEX.out.container_id, 'bwa_mem2_index')
+        )
     }
 
     BWA_MEM2_MEM_SORT(
@@ -711,6 +776,23 @@ workflow ADZUKI_SNP_PIPELINE {
         gs_panel_genotype_accounting_ch = BUILD_GS_PANEL.out.genotype_accounting
         gs_panel_record_accounting_ch = RECONCILE_GS_PANEL_ACCOUNTING.out.accounting
         gs_panel_manifest_ch = BUILD_GS_PANEL_MANIFEST.out.manifest
+
+        // Issue #42: the GS lineage's own eight processes. These keys
+        // exist in the run manifest only when the GS panel ran; with
+        // enable_gs_panel=false none of these processes is invoked and
+        // none of these keys appears. Note that the two `_GS` aliases are
+        // recorded separately from the primary lineage's invocations of
+        // the same modules, which can be overridden independently of
+        // them.
+        optional_container_provenance_ch = optional_container_provenance_ch
+            .mix(containerProvenance(GS_NORMALIZE_VARIANTS.out.container_id, 'gs_normalize_variants'))
+            .mix(containerProvenance(CLASSIFY_NORMALIZED_VARIANTS.out.container_id, 'classify_normalized_variants'))
+            .mix(containerProvenance(GS_INDEX_CLASSIFIED_VARIANTS.out.container_id, 'gs_index_classified_variants'))
+            .mix(containerProvenance(GATK_VARIANTFILTRATION_GS.out.container_id, 'gatk_variantfiltration_gs'))
+            .mix(containerProvenance(GATK_SELECTPASSVARIANTS_GS.out.container_id, 'gatk_selectpassvariants_gs'))
+            .mix(containerProvenance(BUILD_GS_PANEL.out.container_id, 'build_gs_panel'))
+            .mix(containerProvenance(RECONCILE_GS_PANEL_ACCOUNTING.out.container_id, 'reconcile_gs_panel_accounting'))
+            .mix(containerProvenance(BUILD_GS_PANEL_MANIFEST.out.container_id, 'build_gs_panel_manifest'))
     } else {
         // enable_gs_panel=false: skip the entire GS lineage (normalization
         // through the reproducibility manifest) without starting a single
@@ -731,6 +813,144 @@ workflow ADZUKI_SNP_PIPELINE {
         gs_panel_record_accounting_ch = channel.empty()
         gs_panel_manifest_ch = channel.empty()
     }
+
+    // ---------------------------------------------------------------
+    // Issue #42: run-level provenance.
+    //
+    // Everything below turns what this run actually did into one
+    // published artifact, as an ordinary required process rather than an
+    // onComplete/afterScript best-effort hook. A workflow.onComplete
+    // handler cannot fail the run it is reporting on, which is exactly
+    // the failure mode this Issue exists to remove: "the analysis
+    // succeeded but there is no provenance record" must not be a
+    // successful outcome.
+    // ---------------------------------------------------------------
+
+    // Input FASTQ provenance is computed per read group, in parallel,
+    // rather than by handing every raw FASTQ in the cohort to the
+    // manifest process: at this pipeline's 327-sample target that design
+    // would re-stage the entire input dataset into a single task purely
+    // to write a JSON file.
+    HASH_INPUT_FASTQS(input_provenance_rows_ch)
+
+    // The reference bundle as it was actually used for mapping -- FASTA,
+    // FAI, dictionary and the five BWA-MEM2 index files, whether this run
+    // generated the index or was given a prebuilt one.
+    HASH_REFERENCE_BUNDLE(
+        reference_ch,
+        reference_fai_ch,
+        reference_dict_ch,
+        bwa_indexes_ch,
+    )
+
+    // The run's own scientific deliverables, checksummed in per-group
+    // tasks (one per sample gVCF, one per cohort-level VCF) for the same
+    // scaling reason. This is the artifact set the historical schema v1
+    // manifests recorded, unchanged.
+    run_artifact_groups_ch = GATK_HAPLOTYPECALLER.out.gvcf
+        .map { meta, gvcf, _gvcf_index -> tuple([id: "${meta.id}.gvcf"], [gvcf]) }
+        .mix(
+            GATK_GATHERVCFS.out.vcf.map { meta, vcf, _vcf_index ->
+                tuple([id: "${meta.id}.raw"], [vcf])
+            }
+        )
+        .mix(
+            GATK_SELECTPASSVARIANTS.out.vcf.map { meta, vcf, _vcf_index ->
+                tuple([id: "${meta.id}.${meta.variant_type}.pass"], [vcf])
+            }
+        )
+
+    HASH_RUN_ARTIFACTS(run_artifact_groups_ch)
+
+    // One `process_key<TAB>effective_container` row per executed task.
+    // Every containerized process contributes its own task.container --
+    // Nextflow's post-override effective value -- so the manifest records
+    // what ran, not what the `container` directives defaulted to. The
+    // processes listed here run in every configuration; conditional ones
+    // were accumulated into optional_container_provenance_ch by the
+    // branches that invoked them. BUILD_RUN_MANIFEST adds its own
+    // identity from inside its own task.
+    //
+    // Collecting this is also what makes the manifest a genuine terminal
+    // barrier: BUILD_RUN_MANIFEST consumes the aggregate, so it cannot
+    // start until every one of these processes -- MULTIQC and the rest of
+    // the QC side branch included -- has finished.
+    runtime_container_provenance_ch = channel.empty()
+        .mix(containerProvenance(FASTQC_RAW.out.container_id, 'fastqc_raw'))
+        .mix(containerProvenance(FASTQC_TRIMMED.out.container_id, 'fastqc_trimmed'))
+        .mix(containerProvenance(FASTP.out.container_id, 'fastp'))
+        .mix(containerProvenance(VALIDATE_REFERENCE_CONTIGS.out.container_id, 'validate_reference_contigs'))
+        .mix(containerProvenance(BWA_MEM2_MEM_SORT.out.container_id, 'bwa_mem2_mem_sort'))
+        .mix(containerProvenance(SAMTOOLS_MERGE.out.container_id, 'samtools_merge'))
+        .mix(containerProvenance(GATK_MARKDUPLICATES.out.container_id, 'gatk_markduplicates'))
+        .mix(containerProvenance(SAMTOOLS_INDEX.out.container_id, 'samtools_index'))
+        .mix(containerProvenance(SAMTOOLS_QC.out.container_id, 'samtools_qc'))
+        .mix(containerProvenance(MULTIQC.out.container_id, 'multiqc'))
+        .mix(containerProvenance(GATK_HAPLOTYPECALLER.out.container_id, 'gatk_haplotypecaller'))
+        .mix(containerProvenance(GATK_GENOMICSDBIMPORT.out.container_id, 'gatk_genomicsdbimport'))
+        .mix(containerProvenance(GATK_GENOTYPEGVCFS.out.container_id, 'gatk_genotypegvcfs'))
+        .mix(containerProvenance(GATK_GATHERVCFS.out.container_id, 'gatk_gathervcfs'))
+        .mix(containerProvenance(GATK_SELECTVARIANTS.out.container_id, 'gatk_selectvariants'))
+        .mix(containerProvenance(GATK_VARIANTFILTRATION.out.container_id, 'gatk_variantfiltration'))
+        .mix(containerProvenance(GATK_SELECTPASSVARIANTS.out.container_id, 'gatk_selectpassvariants'))
+        .mix(containerProvenance(BCFTOOLS_STATS.out.container_id, 'bcftools_stats'))
+        .mix(containerProvenance(SUMMARIZE_VARIANT_QC.out.container_id, 'summarize_variant_qc'))
+        .mix(containerProvenance(SUMMARIZE_FILTER_QC.out.container_id, 'summarize_filter_qc'))
+        .mix(containerProvenance(RECONCILE_VARIANT_TYPE_COUNTS.out.container_id, 'reconcile_variant_type_counts'))
+        .mix(containerProvenance(HASH_INPUT_FASTQS.out.container_id, 'hash_input_fastqs'))
+        .mix(containerProvenance(HASH_REFERENCE_BUNDLE.out.container_id, 'hash_reference_bundle'))
+        .mix(containerProvenance(HASH_RUN_ARTIFACTS.out.container_id, 'hash_run_artifacts'))
+        .mix(optional_container_provenance_ch)
+        .collectFile(
+            name: 'runtime_container_provenance.tsv',
+            newLine: true,
+            sort: true,
+        )
+
+    // The cohort and per-sample accounting the pipeline already
+    // published for the raw/all cohort VCF. Both come from the same
+    // SUMMARIZE_VARIANT_QC invocation, so the manifest builder can
+    // cross-check them against each other instead of recomputing either.
+    run_manifest_accounting_ch = SUMMARIZE_VARIANT_QC.out.qc
+        .filter { meta, _variant_qc_tsv, _sample_qc_tsv, _summary_txt ->
+            meta['qc_stage'] == 'raw' && meta['variant_type'] == 'all'
+        }
+        .map { meta, variant_qc_tsv, sample_qc_tsv, _summary_txt ->
+            tuple([id: meta.id], variant_qc_tsv, sample_qc_tsv)
+        }
+
+    // Exactly one value reaches BUILD_RUN_MANIFEST in both
+    // configurations. With the GS panel disabled no GS manifest exists,
+    // so a placeholder is staged and `--no-gs-panel` is passed instead:
+    // wiring channel.empty() into a required input would simply deadlock
+    // the process and hang the run.
+    if (gs_panel_enabled) {
+        gs_panel_manifest_for_run_ch = BUILD_GS_PANEL_MANIFEST.out.manifest
+            .map { _meta, manifest_json -> manifest_json }
+    } else {
+        gs_panel_manifest_for_run_ch = channel.value(
+            file("${projectDir}/assets/NO_GS_PANEL_MANIFEST", checkIfExists: true)
+        )
+    }
+
+    BUILD_RUN_MANIFEST(
+        run_manifest_accounting_ch,
+        RECONCILE_VARIANT_TYPE_COUNTS.out.accounting.map {
+            meta,
+            accounting_tsv,
+            _summary_txt ->
+            tuple(meta, accounting_tsv)
+        },
+        runtime_container_provenance_ch,
+        HASH_INPUT_FASTQS.out.provenance.map { _meta, tsv -> tsv }.collect(),
+        HASH_REFERENCE_BUNDLE.out.provenance.map { _meta, tsv -> tsv },
+        HASH_RUN_ARTIFACTS.out.checksums.map { _meta, tsv -> tsv }.collect(),
+        workflow.manifest.version,
+        run_git_commit,
+        nextflow.version.toString(),
+        gs_panel_enabled,
+        gs_panel_manifest_for_run_ch,
+    )
 
     emit:
     raw_fastqc_html = FASTQC_RAW.out.html
@@ -773,4 +993,8 @@ workflow ADZUKI_SNP_PIPELINE {
     reference_fai = reference_fai_ch
     reference_dict = reference_dict_ch
     bwa_indexes = bwa_indexes_ch
+    input_provenance = HASH_INPUT_FASTQS.out.provenance
+    reference_provenance = HASH_REFERENCE_BUNDLE.out.provenance
+    run_artifact_checksums = HASH_RUN_ARTIFACTS.out.checksums
+    run_manifest = BUILD_RUN_MANIFEST.out.manifest
 }

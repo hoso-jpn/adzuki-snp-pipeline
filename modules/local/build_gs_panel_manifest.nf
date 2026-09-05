@@ -47,6 +47,13 @@ process BUILD_GS_PANEL_MANIFEST {
 
     output:
     tuple(val(meta), path("${meta.id}.gs_panel.manifest.json"), emit: manifest)
+    // Issue #42: the same effective container this process already
+    // records for itself inside the GS manifest (see `--container-build-
+    // gs-panel-manifest` below), emitted as a channel as well so the
+    // run-level manifest can record it the same way it records every
+    // other process -- without BUILD_RUN_MANIFEST having to re-derive it
+    // by reading the GS manifest back out of its own JSON.
+    val(task.container), emit: container_id
 
     script:
     """

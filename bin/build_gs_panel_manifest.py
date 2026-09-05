@@ -7,7 +7,10 @@ deterministic canonical JSON, filename-only checksums, atomic writes)
 without depending on that repository's code -- a bioinformatics
 pipeline has no reason to import a model-training repository's Python
 package, so the pattern is replicated here in stdlib-only Python
-instead.
+instead. Those mechanics, and the container-identity leakage guard,
+live in `bin/manifest_utils.py` (Issue #42), shared with
+`bin/build_run_manifest.py`; the two manifests' payloads and schemas
+stay separate.
 
 Software versions are recorded as each GS-lineage process's own
 *effective* container identity (schema v2, Issue #52): Nextflow's
@@ -76,14 +79,25 @@ contradictory provenance record.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
-import os
-import re
 import sys
-import uuid
-from datetime import UTC, datetime
 from pathlib import Path
+
+# Issue #42: the hashing/serialization mechanics this manifest and
+# bin/build_run_manifest.py both depend on -- including the container
+# identity leakage guard below -- live in one module now (they were
+# previously duplicated character for character). See
+# bin/manifest_utils.py for why a plain sibling import needs no
+# packaging or PYTHONPATH in either place these scripts run.
+from manifest_utils import (
+    _json_default,
+    canonical_json_hash,
+    checksum_files,
+    new_run_id,
+    sha256_file,
+    utc_now_iso,
+    validate_container_identity,
+    write_json_atomic,
+)
 
 SCHEMA_VERSION = 2
 
@@ -125,56 +139,6 @@ CONTAINER_PROCESS_NAMES: tuple[str, ...] = (
     "build_gs_panel_manifest",
 )
 
-# A container identity is expected to be a plain, shareable image
-# reference (e.g. `registry/image:tag` or `...@sha256:...`), never a host
-# filesystem path (a Singularity `.sif` path would leak host layout) or a
-# URL embedding registry credentials -- this manifest is a shareable
-# artifact.
-#
-# A host path reaches this function in two shapes, not one: bare
-# (`/opt/images/gatk.sif`, `./gatk.sif`, `~/gatk.sif`) and wrapped in a
-# `file://` URI (`file:///opt/images/gatk.sif`), which is what a
-# Singularity/Apptainer `container` directive or an image cache can
-# legitimately hold. Both disclose host filesystem layout just as fully,
-# so both are rejected; a prefix-only check would have let the `file://`
-# form through, since it starts with neither `/` nor `.` nor `~`.
-_HOST_PATH_PREFIX_RE = re.compile(r"^(/|\./|\.\./|~)")
-_FILE_URI_SCHEME_RE = re.compile(r"^file://", re.IGNORECASE)
-_URL_CREDENTIALS_RE = re.compile(r"://[^/@\s]+:[^/@\s]+@")
-
-
-def validate_container_identity(process_name: str, value: str) -> str:
-    """Fail fast if a container identity leaks a host path or credential."""
-    if not value or not value.strip():
-        raise ValueError(f"container identity for '{process_name}' is empty")
-    if any(character.isspace() for character in value):
-        raise ValueError(
-            f"container identity for '{process_name}' contains whitespace: {value!r}"
-        )
-    if _FILE_URI_SCHEME_RE.match(value):
-        raise ValueError(
-            f"container identity for '{process_name}' is a file:// URI, which "
-            "records a host filesystem path rather than a shareable image "
-            f"reference: {value!r}. This manifest is published as a shareable "
-            "artifact and must not disclose the host's image layout; pin the "
-            "image by registry reference (e.g. 'registry/image@sha256:...') "
-            "instead."
-        )
-    if _HOST_PATH_PREFIX_RE.match(value):
-        raise ValueError(
-            f"container identity for '{process_name}' looks like a host filesystem "
-            f"path rather than an image reference: {value!r}. This manifest is "
-            "published as a shareable artifact and must not disclose the host's "
-            "image layout; pin the image by registry reference (e.g. "
-            "'registry/image@sha256:...') instead."
-        )
-    if _URL_CREDENTIALS_RE.search(value):
-        raise ValueError(
-            f"container identity for '{process_name}' appears to embed registry "
-            f"credentials: {value!r}"
-        )
-    return value
-
 # A fixed description of this schema's genotype encoding (see
 # bin/build_gs_panel.py and docs/gs_panel_data_contract.md for the
 # full reasoning) -- static, not derived from any file, but recorded
@@ -192,44 +156,6 @@ GENOTYPE_ENCODING_SCHEMA: dict[str, object] = {
 
 class MalformedAccountingError(Exception):
     """Raised when the record-accounting TSV is missing required data."""
-
-
-def new_run_id(now: datetime | None = None, suffix: str | None = None) -> str:
-    """Build a sortable, human-readable run identifier."""
-    moment = now if now is not None else datetime.now(UTC)
-    timestamp = moment.strftime("%Y%m%dT%H%M%SZ")
-    token = suffix if suffix is not None else uuid.uuid4().hex[:8]
-    return f"{timestamp}-{token}"
-
-
-def utc_now_iso(now: datetime | None = None) -> str:
-    """Format a UTC timestamp as an ISO-8601 string with a 'Z' suffix."""
-    moment = now if now is not None else datetime.now(UTC)
-    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def sha256_file(path: Path, chunk_size: int = 1_048_576) -> str:
-    """Compute a file's SHA-256 hex digest without loading it fully into memory."""
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(chunk_size), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def checksum_files(paths: list[Path]) -> dict[str, str]:
-    """Checksum each path, keyed by filename only (never an absolute path).
-
-    Raises if two paths share a filename: silently keeping only the
-    last one would drop a checksum without any indication it happened.
-    """
-    checksums: dict[str, str] = {}
-    for path in paths:
-        name = Path(path).name
-        if name in checksums:
-            raise ValueError(f"duplicate checksum file name: '{name}'")
-        checksums[name] = f"sha256:{sha256_file(Path(path))}"
-    return checksums
 
 
 def read_panel_status(path: Path) -> str:
@@ -253,24 +179,6 @@ def read_panel_status(path: Path) -> str:
             return fields[2]
 
     raise MalformedAccountingError(f"{path}: missing required metric: panel_status")
-
-
-def _json_default(value: object) -> object:
-    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
-
-
-def canonical_json_hash(payload: dict[str, object]) -> str:
-    """Hash a JSON-serializable document deterministically, order-sensitive."""
-    canonical = json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-        allow_nan=False,
-        default=_json_default,
-    )
-    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-    return f"sha256:{digest}"
 
 
 def build_manifest(
@@ -304,25 +212,6 @@ def build_manifest(
     }
     manifest["manifest_hash"] = canonical_json_hash(manifest)
     return manifest
-
-
-def write_json_atomic(path: Path, payload: dict[str, object]) -> None:
-    """Write JSON via a same-directory temp file, then rename it into place.
-
-    A failure partway through leaves the original file (if any)
-    untouched and no partially-written file at the final path.
-    """
-    text = json.dumps(
-        payload,
-        indent=2,
-        sort_keys=True,
-        ensure_ascii=True,
-        allow_nan=False,
-        default=_json_default,
-    )
-    tmp_path = path.with_name(f".{path.name}.tmp")
-    tmp_path.write_text(text + "\n", encoding="utf-8")
-    os.replace(tmp_path, path)
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:

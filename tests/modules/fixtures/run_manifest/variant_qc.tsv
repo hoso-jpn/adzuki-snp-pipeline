@@ -1,0 +1,6 @@
+cohort_id	stage	variant_type	metric	value
+cohort	raw	all	number_of_samples	2
+cohort	raw	all	sample_names	sample_a,sample_b
+cohort	raw	all	cohort_total_genotypes	4
+cohort	raw	all	cohort_missing_genotypes	0
+cohort	raw	all	cohort_missingness_rate	0.000000

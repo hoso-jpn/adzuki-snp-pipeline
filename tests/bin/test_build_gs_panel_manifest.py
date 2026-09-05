@@ -22,6 +22,15 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "build_gs_panel_manifest.py"
 
+# Issue #42: bin/ scripts import their shared helpers as a plain sibling
+# module (`from manifest_utils import ...`), which resolves on its own
+# both from a source checkout and inside a Nextflow task container --
+# in each case Python puts the *running script's* own directory first on
+# sys.path. Loading a script by file path from a test does not go
+# through that mechanism, so bin/ is put on sys.path here. This is a
+# test-harness detail only: production invocations need no PYTHONPATH.
+sys.path.insert(0, str(REPO_ROOT / "bin"))
+
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 
 PLOIDY_CLI_ARGS = ["--sample-ploidy", "2"]
@@ -522,9 +531,16 @@ class ValidateContainerIdentityTests(unittest.TestCase):
                 "gatk_variantfiltration_gs", "file:///opt/images/gatk.sif"
             )
         message = str(raised.exception)
+        # The category stays -- a caller has to know *why* its value was
+        # refused -- but the path itself does not. This assertion used to
+        # require the opposite: PR #56 review found that echoing the value
+        # republishes the host layout into `.command.err`, the Nextflow
+        # log and the CI log, which is a wider audience than the manifest
+        # this check was protecting.
         self.assertIn("file://", message)
         self.assertIn("host filesystem path", message)
-        self.assertIn("/opt/images/gatk.sif", message)
+        self.assertNotIn("/opt/images/gatk.sif", message)
+        self.assertNotIn("/opt/images", message)
 
     def test_rejects_file_uri_home_directory_path(self) -> None:
         with self.assertRaises(ValueError) as raised:
@@ -555,6 +571,86 @@ class ValidateContainerIdentityTests(unittest.TestCase):
             manifest_module.validate_container_identity(
                 "build_gs_panel", "python:3.12 (local build)"
             )
+
+
+class ContainerIdentityRedactionTests(unittest.TestCase):
+    """PR #56 review (P1): a refusal must not republish what it refused.
+
+    `validate_container_identity` runs inside a Nextflow task, so what it
+    raises is written to `.command.err`, echoed in the Nextflow log, and
+    -- in CI -- published in a build log that outlives the run. A message
+    quoting the rejected value would put the credential or host path in a
+    *more* widely-read place than the manifest the check was keeping it
+    out of.
+
+    The redaction is asserted per branch rather than once, because which
+    branch a secret reaches is not up to the caller: a credential-bearing
+    `file://` reference is caught by the `file://` check, and one with a
+    stray space by the whitespace check, before the credential branch is
+    ever consulted.
+    """
+
+    def _refusal(self, process: str, value: str) -> str:
+        with self.assertRaises(ValueError) as raised:
+            manifest_module.validate_container_identity(process, value)
+        return str(raised.exception)
+
+    def test_credential_branch_reports_the_category_and_not_the_secret(self) -> None:
+        message = self._refusal(
+            "gs_normalize_variants",
+            "https://svc-account:hunter2@registry.internal/bcftools:1.24",
+        )
+        self.assertIn("credentials", message)
+        self.assertIn("gs_normalize_variants", message)
+        self.assertIn("redacted", message)
+        self.assertNotIn("hunter2", message)
+        self.assertNotIn("svc-account", message)
+        self.assertNotIn("registry.internal", message)
+
+    def test_host_path_branch_reports_the_category_and_not_the_path(self) -> None:
+        message = self._refusal("build_gs_panel", "/home/alice/images/python.sif")
+        self.assertIn("host filesystem path", message)
+        self.assertIn("build_gs_panel", message)
+        self.assertNotIn("/home/alice", message)
+        self.assertNotIn("python.sif", message)
+
+    def test_file_uri_branch_keeps_the_scheme_but_drops_the_path(self) -> None:
+        # `file://` is the category name, not the secret; everything
+        # after it is host layout.
+        message = self._refusal(
+            "gatk_variantfiltration_gs", "file:///opt/results/images/gatk.sif"
+        )
+        self.assertIn("file://", message)
+        self.assertNotIn("/opt/results", message)
+        self.assertNotIn("gatk.sif", message)
+
+    def test_a_credential_reaching_the_file_uri_branch_is_still_redacted(self) -> None:
+        # Ordering matters: this value never reaches the credential
+        # branch, so redacting only there would have leaked it.
+        message = self._refusal(
+            "build_gs_panel", "file://svc:hunter2@10.0.0.5/opt/images/python.sif"
+        )
+        self.assertIn("file://", message)
+        self.assertNotIn("hunter2", message)
+        self.assertNotIn("10.0.0.5", message)
+        self.assertNotIn("/opt/images", message)
+
+    def test_a_credential_reaching_the_whitespace_branch_is_still_redacted(self) -> None:
+        message = self._refusal(
+            "build_gs_panel", "https://svc:hunter2@registry.internal/py:3.12 (local)"
+        )
+        self.assertIn("whitespace", message)
+        self.assertNotIn("hunter2", message)
+        self.assertNotIn("registry.internal", message)
+
+    def test_a_publishable_identity_is_still_returned_unchanged(self) -> None:
+        # Redaction is a property of the failure path only; the happy
+        # path still hands back exactly what it was given.
+        value = "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:" + "a" * 64
+        self.assertEqual(
+            manifest_module.validate_container_identity("gs_normalize_variants", value),
+            value,
+        )
 
 
 if __name__ == "__main__":

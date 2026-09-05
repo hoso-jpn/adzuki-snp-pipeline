@@ -1,0 +1,4 @@
+fasta	synthetic.fa	sha256:fa
+fai	synthetic.fa.fai	sha256:fai
+dict	synthetic.dict	sha256:dict
+bwa_index	synthetic.fa.0123	sha256:i1

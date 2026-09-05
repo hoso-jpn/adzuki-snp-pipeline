@@ -1,0 +1,2 @@
+fastqc_raw	quay.io/biocontainers/fastqc:0.12.1@sha256:aa
+multiqc	quay.io/biocontainers/multiqc:1.35@sha256:bb

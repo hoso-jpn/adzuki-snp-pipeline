@@ -10,6 +10,119 @@ include {
     ADZUKI_SNP_PIPELINE
 } from './workflows/adzuki_snp_pipeline'
 
+// Issue #42: the full 40-character commit this run executed from, and
+// proof that the working tree it ran from is that commit.
+//
+// The run manifest is a provenance artifact the pipeline produces for
+// itself, so "which code produced this result" is not allowed to be
+// unknown -- or, worse, confidently wrong. Two things have to hold, and
+// both are checked before any analysis process starts:
+//
+//   * a full 40-character commit can be resolved at all. Nextflow's own
+//     `workflow.commitId` is populated only when Nextflow pulled the
+//     pipeline from a git host (`nextflow run owner/repo`); for this
+//     repository's own documented `nextflow run .` invocation it is null
+//     (measured on Nextflow 26.04.6, and the same under nf-test), so the
+//     commit is read from the project directory's git checkout instead.
+//   * the working tree is *clean*. This is the part a HEAD lookup alone
+//     cannot give: with uncommitted changes the code that actually ran is
+//     not the code at HEAD, and a manifest recording that SHA would be
+//     false provenance -- the most damaging kind, because it looks
+//     authoritative and is checkable by nobody.
+//
+// `git status --porcelain` covers all three ways a tree can differ from
+// its commit -- unstaged changes to tracked files, staged changes, and
+// untracked files -- in one check, and honors .gitignore, so a run's own
+// `work/`, `results/` and `.nf-test/` output does not count as a
+// modification of the pipeline.
+//
+// Nothing host-specific reaches the error messages: no project path, no
+// list of dirty files, no user name, and none of git's own stderr. A
+// provenance guard that leaked the layout of the machine it guarded would
+// be self-defeating.
+def gitCommandOutput(String projectPath, List<String> arguments) {
+    def process = (['git', '-C', projectPath] + arguments).execute()
+    def standardOutput = new StringBuilder()
+    def errorOutput = new StringBuilder()
+    // Consume both streams while waiting: a `git status` in a repository
+    // with many changes can fill a pipe buffer and deadlock a bare
+    // waitFor().
+    process.waitForProcessOutput(standardOutput, errorOutput)
+
+    return [
+        exit_code: process.exitValue(),
+        output: standardOutput.toString().trim(),
+    ]
+}
+
+def resolvePipelineCommit(projectDirectory, declaredCommitId) {
+    def projectPath = projectDirectory.toString()
+
+    def head = gitCommandOutput(projectPath, ['rev-parse', 'HEAD'])
+    if (head.exit_code != 0 || !(head.output ==~ /^[0-9a-f]{40}$/)) {
+        error(
+            'could not resolve the git commit this pipeline is running from. ' +
+            'The run-level provenance manifest (Issue #42) records the exact ' +
+            'commit a result came from and will not record an unknown or ' +
+            'abbreviated one, so this run stops before doing any analysis. Run ' +
+            'the pipeline from a git checkout of this repository, or from a ' +
+            'git-hosted revision.'
+        )
+    }
+
+    // `git -C <dir>` walks *up* to the nearest enclosing repository, so a
+    // project directory that is not itself under version control -- an
+    // unpacked tarball that happens to sit inside some unrelated checkout,
+    // say -- would otherwise resolve that repository's HEAD and record it
+    // as the code that ran. Requiring the pipeline's own entry point to be
+    // a tracked file of the repository whose commit is about to be
+    // recorded rules that out, while still allowing the legitimate case
+    // where the pipeline lives in a subdirectory of a larger repository
+    // that genuinely versions it. (`mainScript` in nextflow.config.)
+    def tracked = gitCommandOutput(projectPath, ['ls-files', '--error-unmatch', 'main.nf'])
+    if (tracked.exit_code != 0) {
+        error(
+            "the pipeline's own source is not tracked by the git repository " +
+            'its commit would be read from, so that commit does not identify ' +
+            'the code being run. The run-level provenance manifest (Issue #42) ' +
+            'records the exact commit a result came from, so this run stops ' +
+            'before doing any analysis. Run the pipeline from a git checkout ' +
+            'of this repository, or from a git-hosted revision.'
+        )
+    }
+
+    if (declaredCommitId && declaredCommitId.toString() != head.output) {
+        error(
+            'the revision Nextflow reports for this run does not match the ' +
+            "commit checked out in the pipeline's project directory. Refusing " +
+            'to record either one as the code that produced this run.'
+        )
+    }
+
+    def status = gitCommandOutput(projectPath, ['status', '--porcelain'])
+    if (status.exit_code != 0) {
+        error(
+            "could not determine whether the pipeline's working tree matches " +
+            'its git commit. The run-level provenance manifest (Issue #42) ' +
+            'records that commit as the code that produced the run, so this ' +
+            'run stops rather than recording a claim it cannot support.'
+        )
+    }
+
+    if (!status.output.isEmpty()) {
+        error(
+            "the pipeline's working tree has uncommitted changes (modified, " +
+            'staged, or untracked files). The run-level provenance manifest ' +
+            '(Issue #42) would record the HEAD commit as the code that ' +
+            'produced this run, which is not true while the working tree ' +
+            'differs from it. Commit, stash, or remove the changes before a ' +
+            'formal provenance run.'
+        )
+    }
+
+    return head.output
+}
+
 workflow {
     validateParameters()
     log.info paramsSummaryLog(workflow)
@@ -77,6 +190,20 @@ workflow {
     }
 
     samples_ch = channel.fromList(sample_rows)
+
+    // Issue #42: a provenance-only view of the same rows, each tagged
+    // with its zero-based samplesheet position. Built from the already
+    // materialized `sample_rows` list rather than by transforming
+    // samples_ch, so the scientific channel's own cardinality and
+    // ordering contract is untouched: Nextflow makes no ordering promise
+    // across parallel tasks, and this rank is how the run manifest
+    // restores samplesheet order afterwards. The rank is a transport
+    // detail -- bin/build_run_manifest.py sorts on it and drops it.
+    input_provenance_rows_ch = channel.fromList(
+        sample_rows.withIndex().collect { row, index ->
+            tuple(row[0] + [rank: index], row[1], row[2])
+        }
+    )
 
     // Issue #8: computed once, synchronously, directly from the fully
     // materialized samplesheet list -- before any channel operation
@@ -171,6 +298,8 @@ workflow {
     ADZUKI_SNP_PIPELINE(
         samples_ch,
         reference_ch,
-        read_group_counts_by_sample
+        read_group_counts_by_sample,
+        input_provenance_rows_ch,
+        resolvePipelineCommit(workflow.projectDir, workflow.commitId)
     )
 }

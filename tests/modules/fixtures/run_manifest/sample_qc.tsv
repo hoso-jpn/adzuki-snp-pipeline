@@ -1,0 +1,3 @@
+cohort_id	stage	variant_type	sample	reference_homozygous	non_reference_homozygous	heterozygous	missing	missingness_rate	average_depth	singletons
+cohort	raw	all	sample_a	1	1	0	0	0.000000	8.0	1
+cohort	raw	all	sample_b	1	1	0	0	0.000000	5.5	1
