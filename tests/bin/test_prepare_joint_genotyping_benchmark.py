@@ -11,7 +11,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "bin" / "prepare_joint_genotyping_benchmark.py"
 CONTAINER = "broadinstitute/gatk:4.6.2.0@sha256:" + "a" * 64
@@ -25,9 +24,7 @@ class BenchmarkPreparationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             fai, manifest = _build_inputs(directory, 51)
-            result, sample_map, interval_plan, evidence_path = _run(
-                directory, fai, manifest
-            )
+            result, sample_map, interval_plan, evidence_path = _run(directory, fai, manifest)
 
             self.assertEqual(result.returncode, 0, result.stderr)
             with sample_map.open(encoding="utf-8", newline="") as handle:
@@ -41,17 +38,9 @@ class BenchmarkPreparationTests(unittest.TestCase):
             interval_rows = _read_tsv(interval_plan)
             plan_ids = {row["plan_id"] for row in interval_rows}
             self.assertEqual(plan_ids, {"baseline_per_contig", "candidate_split_group"})
-            candidate = [
-                row
-                for row in interval_rows
-                if row["plan_id"] == "candidate_split_group"
-            ]
+            candidate = [row for row in interval_rows if row["plan_id"] == "candidate_split_group"]
             self.assertTrue(any("window" in row["strategy"] for row in candidate))
-            small = next(
-                row
-                for row in candidate
-                if row["interval_group_id"] == "small_scaffolds"
-            )
+            small = next(row for row in candidate if row["interval_group_id"] == "small_scaffolds")
             self.assertEqual(json.loads(small["intervals_json"]), ["small1", "small2"])
 
             evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -95,9 +84,7 @@ class BenchmarkPreparationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             fai, manifest = _build_inputs(directory, 51)
-            rows = list(
-                csv.DictReader(manifest.read_text(encoding="utf-8").splitlines())
-            )
+            rows = list(csv.DictReader(manifest.read_text(encoding="utf-8").splitlines()))
             rows[0]["sample_id"] = "wrong"
             with manifest.open("w", encoding="utf-8", newline="") as handle:
                 writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
@@ -109,6 +96,84 @@ class BenchmarkPreparationTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("does not match manifest", result.stderr)
             self.assertTrue(all(not output.exists() for output in outputs))
+
+    def test_index_belonging_to_another_sample_is_rejected(self) -> None:
+        # Every other check passes for this manifest: both files exist,
+        # no path is reused, and each header sample still matches its own
+        # row. Only the gVCF/index pairing is wrong, and it would reach
+        # GenomicsDBImport through the sample-name-map's third column.
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            fai, manifest = _build_inputs(directory, 51)
+            rows = list(csv.DictReader(manifest.read_text(encoding="utf-8").splitlines()))
+            shifted = [row["gvcf_index"] for row in rows[1:]] + [rows[0]["gvcf_index"]]
+            for row, index_path in zip(rows, shifted, strict=True):
+                row["gvcf_index"] = index_path
+            with manifest.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+
+            result, *outputs = _run(directory, fai, manifest)
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("must be the gVCF's own index", result.stderr)
+            self.assertTrue(all(not output.exists() for output in outputs))
+
+    def test_small_scaffold_bound_above_the_window_size_is_rejected(self) -> None:
+        # Inverted bounds would group every contig, chromosome-scale ones
+        # included, into the single "small_scaffolds" task, so E2 would
+        # silently measure a one-interval plan instead of the documented
+        # chromosome split.
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            fai, manifest = _build_inputs(directory, 51)
+
+            result, *outputs = _run(
+                directory,
+                fai,
+                manifest,
+                ["--window-size-bp", "1000000", "--small-scaffold-max-bp", "50000000"],
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("--small-scaffold-max-bp must be smaller", result.stderr)
+            self.assertTrue(all(not output.exists() for output in outputs))
+
+    def test_candidate_plan_tiles_every_contig_exactly_once(self) -> None:
+        # The split/group candidate must stay a partition of the
+        # reference: a gap would drop variants from the benchmark and an
+        # overlap would import the same region twice.
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            fai, manifest = _build_inputs(directory, 51)
+
+            result, _sample_map, interval_plan, _evidence = _run(directory, fai, manifest)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            lengths = {}
+            for line in fai.read_text(encoding="utf-8").splitlines():
+                name, length = line.split("\t")[:2]
+                lengths[name] = int(length)
+
+            covered: dict[str, list[tuple[int, int]]] = {name: [] for name in lengths}
+            for row in _read_tsv(interval_plan):
+                if row["plan_id"] != "candidate_split_group":
+                    continue
+                for interval in json.loads(row["intervals_json"]):
+                    if ":" in interval:
+                        contig, span = interval.split(":")
+                        start, end = span.split("-")
+                        covered[contig].append((int(start), int(end)))
+                    else:
+                        covered[interval].append((1, lengths[interval]))
+
+            for name, length in lengths.items():
+                with self.subTest(contig=name):
+                    spans = sorted(covered[name])
+                    self.assertEqual(sum(end - start + 1 for start, end in spans), length)
+                    for earlier, later in zip(spans, spans[1:], strict=False):
+                        self.assertLess(earlier[1], later[0])
 
     def test_reference_dictionary_mismatch_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -141,9 +206,7 @@ def _build_inputs(directory: Path, sample_count: int) -> tuple[Path, Path]:
                 output.write("##fileformat=VCFv4.2\n")
                 for name, length in contigs:
                     output.write(f"##contig=<ID={name},length={length}>\n")
-                output.write(
-                    f"#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t{sample}\n"
-                )
+                output.write(f"#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t{sample}\n")
             index_path = Path(str(gvcf) + ".tbi")
             index_path.write_bytes(f"index-{sample}".encode())
             writer.writerow((sample, gvcf, index_path))

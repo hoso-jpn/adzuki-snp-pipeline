@@ -13,7 +13,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-
 MANIFEST_COLUMNS = ("sample_id", "gvcf", "gvcf_index")
 PIPELINE_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 CONTIG_HEADER = re.compile(r"^##contig=<ID=([^,>]+),length=([0-9]+)(?:,|>)")
@@ -112,9 +111,7 @@ def read_gvcf_identity(path: Path) -> tuple[str, tuple[Contig, ...]]:
                 sample_id = samples[0]
                 break
             elif not line.startswith("#"):
-                raise BenchmarkInputError(
-                    f"{path}: data row appeared before #CHROM header"
-                )
+                raise BenchmarkInputError(f"{path}: data row appeared before #CHROM header")
     if sample_id is None:
         raise BenchmarkInputError(f"{path}: missing #CHROM header")
     if not contigs:
@@ -143,13 +140,9 @@ def load_inputs(
         for line_number, row in enumerate(reader, start=2):
             sample_id = row["sample_id"].strip()
             if not sample_id:
-                raise BenchmarkInputError(
-                    f"{manifest}: line {line_number}: empty sample_id"
-                )
+                raise BenchmarkInputError(f"{manifest}: line {line_number}: empty sample_id")
             if sample_id in sample_ids:
-                raise BenchmarkInputError(
-                    f"{manifest}: duplicate sample_id: {sample_id}"
-                )
+                raise BenchmarkInputError(f"{manifest}: duplicate sample_id: {sample_id}")
             gvcf = Path(row["gvcf"]).expanduser().resolve()
             gvcf_index = Path(row["gvcf_index"]).expanduser().resolve()
             if gvcf in gvcf_paths or gvcf_index in index_paths:
@@ -159,6 +152,21 @@ def load_inputs(
             if not gvcf.is_file() or not gvcf_index.is_file():
                 raise BenchmarkInputError(
                     f"{manifest}: line {line_number}: gVCF and index must both exist"
+                )
+            # The index is handed to GenomicsDBImport as the third
+            # sample-name-map column, so a row pairing one sample's gVCF
+            # with another sample's existing .tbi is accepted by every
+            # check above -- both files exist, both paths are unique, and
+            # the header sample still matches. That pairing silently
+            # attributes a benchmark measurement to the wrong input
+            # lineage, which is the one thing this preparation gate exists
+            # to prevent, so require the index this pipeline actually
+            # emits for that gVCF.
+            expected_index = Path(str(gvcf) + ".tbi")
+            if gvcf_index != expected_index:
+                raise BenchmarkInputError(
+                    f"{manifest}: line {line_number}: gvcf_index must be the gVCF's own "
+                    f"index {expected_index.name}, not {gvcf_index.name}"
                 )
             header_sample, gvcf_contigs = read_gvcf_identity(gvcf)
             if header_sample != sample_id:
@@ -355,9 +363,7 @@ def _write_sample_name_map(path: Path, inputs: tuple[GvcfInput, ...]) -> None:
     """Write GATK's headerless sample, gVCF, optional-index three-column form."""
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerows(
-            (item.sample_id, str(item.gvcf), str(item.gvcf_index)) for item in inputs
-        )
+        writer.writerows((item.sample_id, str(item.gvcf), str(item.gvcf_index)) for item in inputs)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -379,18 +385,24 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         if not PIPELINE_COMMIT.fullmatch(args.pipeline_commit):
-            raise BenchmarkInputError(
-                "--pipeline-commit must be a full lowercase 40-hex SHA"
-            )
+            raise BenchmarkInputError("--pipeline-commit must be a full lowercase 40-hex SHA")
         if "@sha256:" not in args.gatk_container:
-            raise BenchmarkInputError(
-                "--gatk-container must be digest-pinned with @sha256:"
-            )
+            raise BenchmarkInputError("--gatk-container must be digest-pinned with @sha256:")
         for name in ("batch_size", "window_size_bp", "small_scaffold_max_bp"):
             if getattr(args, name) <= 0:
-                raise BenchmarkInputError(
-                    f"--{name.replace('_', '-')} must be positive"
-                )
+                raise BenchmarkInputError(f"--{name.replace('_', '-')} must be positive")
+        # The candidate plan classifies a contig as a small scaffold
+        # before it considers windowing it. With the two bounds inverted,
+        # every contig -- including chromosome-scale ones -- falls into
+        # the single grouped "small_scaffolds" task, so E2 would compare
+        # a degenerate one-interval plan while the protocol table still
+        # calls it "chromosome split + small-scaffold group". Reject the
+        # inversion instead of silently benchmarking a different design.
+        if args.small_scaffold_max_bp >= args.window_size_bp:
+            raise BenchmarkInputError(
+                "--small-scaffold-max-bp must be smaller than --window-size-bp; "
+                f"got {args.small_scaffold_max_bp} >= {args.window_size_bp}"
+            )
 
         reference_contigs = read_reference_fai(args.reference_fai)
         minimum_samples = max(51, args.batch_size + 1)
