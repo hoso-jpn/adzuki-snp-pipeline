@@ -146,6 +146,8 @@ SNP / indel hard-filter thresholdもparameter化されています。現在値�
 
 詳細なGS contractは[`docs/gs_panel_data_contract.md`](docs/gs_panel_data_contract.md)、run-level provenance contractは[`docs/run_manifest_data_contract.md`](docs/run_manifest_data_contract.md)、MultiQC contractは[`docs/multiqc.md`](docs/multiqc.md)を参照してください。
 
+全processの公開先・copy mode・file patternは`nextflow.config`の`process` blockを唯一の正本とします。`modules/local/*.nf`は計算とoutput channelの契約だけを持ち、公開layoutを直接決めません。
+
 ### Run provenance manifest
 
 Issue #42 / PR #56で、run-level provenance manifestをNextflow DAGの正式な最終工程にしました。成功したrunは必ず`provenance/cohort.run_manifest.json` (schema v2) を生成します。手動のpost-run CLI実行は不要です。
