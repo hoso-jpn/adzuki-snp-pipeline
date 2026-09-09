@@ -1,0 +1,131 @@
+nextflow_process {
+
+    name "BUILD_GS_PANEL bounded-memory streaming contract"
+    script "modules/local/build_gs_panel.nf"
+    process "BUILD_GS_PANEL"
+
+    tag "issue44_streaming_gs_panel"
+
+    // Issue #44 rewrote this process's script to build the panel in one
+    // streaming pass rather than materializing every record. Two things
+    // about that rewrite can only be checked inside a real task
+    // container, which is why this test exists alongside the Python unit
+    // tests rather than instead of them:
+    //
+    //   * the compressed matrix must stay byte-identical to what the
+    //     previous one-shot `gzip.compress(payload, mtime=0)` produced,
+    //     or every previously published matrix checksum silently stops
+    //     matching. That equivalence is a property of zlib, and the
+    //     pinned python:3.12 image does not ship the host's zlib -- the
+    //     host used to develop this carried 1.3, the image carries
+    //     1.3.1. A host-only check would not have covered the version
+    //     that actually runs in production.
+    //   * a malformed input must fail the task, not produce a panel.
+    //
+    // The fixture deliberately carries one of each genotype shape the
+    // encoding distinguishes: hom-ref, het in both orders, hom-alt,
+    // phased calls, a fully missing call, a haploid call, a
+    // non-biallelic allele index, and a row whose FORMAT places GT at a
+    // non-zero index.
+    def FIXTURES = 'tests/modules/fixtures'
+
+    test("a GS-eligible PASS VCF becomes a matrix whose gzip bytes match the historical one-shot form") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort' ],
+                    file("${projectDir}/${FIXTURES}/gs_panel_contract.vcf.gz"),
+                    file("${projectDir}/${FIXTURES}/gs_panel_contract.vcf.gz.tbi"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def matrixFile = file(process.out.matrix[0][1])
+            def matrixLines = path(matrixFile.toString()).linesGzip
+
+            // Sample order follows the #CHROM header, not a sort.
+            assert matrixLines[0] == 'variant_key\tsample_a\tsample_b'
+
+            // Variant order follows the file, and every dosage is the
+            // documented encoding: 0/0 -> -1, 0/1 and 1/0 -> 0,
+            // 1/1 -> +1, phasing irrelevant, everything else nan.
+            assert matrixLines[1] == 'chrSynthetic1:1000:A:G\t-1\t0'
+            assert matrixLines[2] == 'chrSynthetic1:2000:C:T\t1\t0'
+            assert matrixLines[3] == 'chrSynthetic1:3000:G:A\t0\t1'
+            assert matrixLines[4] == 'chrSynthetic1:4000:T:C\tnan\t-1'
+            assert matrixLines[5] == 'chrSynthetic1:5000:A:T\tnan\t0'
+            assert matrixLines[6] == 'chrSynthetic1:6000:G:C\tnan\t1'
+            assert matrixLines[7] == 'chrSynthetic1:7000:C:G\t0\t1'
+            assert matrixLines.size() == 8
+
+            // The gzip member itself: no embedded filename (the builder
+            // writes through a hidden staging file, whose name must not
+            // reach the published artifact), no comment, and a zeroed
+            // mtime so the same input reproduces the same checksum.
+            def rawBytes = matrixFile.getBytes()
+            assert rawBytes[0] == (byte) 0x1f
+            assert rawBytes[1] == (byte) 0x8b
+            assert (rawBytes[3] & 0x08) == 0   // FNAME unset
+            assert (rawBytes[3] & 0x10) == 0   // FCOMMENT unset
+            assert rawBytes[4] == (byte) 0 && rawBytes[5] == (byte) 0
+            assert rawBytes[6] == (byte) 0 && rawBytes[7] == (byte) 0
+            // zlib's own gzip wrapper writes OS=3; gzip.GzipFile would
+            // have written 255 here and changed every published digest.
+            assert rawBytes[9] == (byte) 3
+
+            def accounting = [:]
+            path(process.out.genotype_accounting[0]).readLines().drop(1).each { line ->
+                def parts = line.split('\t')
+                accounting[parts[1]] = parts[2]
+            }
+            assert accounting['total_genotype_cells'] == '14'
+            assert accounting['standard_hom_ref_calls'] == '2'
+            assert accounting['standard_het_calls'] == '5'
+            assert accounting['standard_hom_alt_calls'] == '4'
+            assert accounting['missing_calls'] == '1'
+            assert accounting['non_diploid_calls_treated_as_missing'] == '1'
+            assert accounting['non_biallelic_index_calls_treated_as_missing'] == '1'
+            assert accounting['total_treated_as_missing'] == '3'
+            // Phasing is informational and never removes a cell.
+            assert accounting['phased_genotype_count'] == '2'
+
+            def sampleMetadata = path(process.out.sample_metadata[0]).readLines()
+            assert sampleMetadata[1].startsWith('cohort\t0\tsample_a\t3\t')
+            assert sampleMetadata[2].startsWith('cohort\t1\tsample_b\t0\t')
+
+            def variantMetadata = path(process.out.variant_metadata[0]).readLines()
+            assert variantMetadata.size() == 8
+            assert variantMetadata[1].startsWith('cohort\t0\tchrSynthetic1:1000:A:G\t')
+
+            assert path(process.out.genotype_accounting_summary[0])
+                .text.contains('Phased genotype calls: 2')
+        }
+    }
+
+    test("a FORMAT column with no GT subfield fails the task and publishes no panel") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort' ],
+                    file("${projectDir}/${FIXTURES}/gs_panel_no_gt_format.vcf.gz"),
+                    file("${projectDir}/${FIXTURES}/gs_panel_no_gt_format.vcf.gz.tbi"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            assert process.stdout.toString().contains('FORMAT field has no GT subfield')
+                || process.errorReport.toString().contains('FORMAT field has no GT subfield')
+        }
+    }
+}
