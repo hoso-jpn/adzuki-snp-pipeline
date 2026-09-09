@@ -24,6 +24,31 @@ class PythonQualityContractsTest(unittest.TestCase):
         self.assertIn(f"ruff check {paths}", workflow)
         self.assertIn(f"ruff format --check {paths}", workflow)
 
+    def test_pull_request_checks_are_not_restricted_to_a_base_branch(self) -> None:
+        # Issue #53: a `pull_request` `branches:` filter matches the base
+        # branch, so restricting it to `main` silently gave stacked PRs no
+        # check run at all. Re-adding such a filter would remove CI from
+        # exactly the PRs that most need it, without failing anything
+        # visibly, so both workflows are pinned here.
+        for workflow_name in (".github/workflows/lint.yml", ".github/workflows/test.yml"):
+            with self.subTest(workflow=workflow_name):
+                workflow = (ROOT / workflow_name).read_text(encoding="utf-8")
+                trigger_start = workflow.index("  pull_request:")
+                trigger_block = workflow[trigger_start : workflow.index("jobs:", trigger_start)]
+                self.assertNotIn(
+                    "branches:",
+                    trigger_block,
+                    f"{workflow_name} restricts pull_request to a base branch again",
+                )
+
+    def test_readme_uses_one_nf_test_invocation_form(self) -> None:
+        # Issue #53: the README mixed `./nf-test` and `nf-test`, which is
+        # only reproducible if the reader happens to install it the same
+        # way. CI puts nf-test on PATH, so the PATH form is the contract.
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertNotIn("./nf-test", readme)
+        self.assertIn("nf-test test", readme)
+
     def test_local_secrets_and_caches_are_ignored_but_examples_are_not(self) -> None:
         ignored = (
             ".env",
