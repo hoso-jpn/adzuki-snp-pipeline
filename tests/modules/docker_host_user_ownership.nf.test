@@ -1,0 +1,70 @@
+nextflow_process {
+
+    name "Docker tasks write host-user-owned files"
+    script "modules/local/fastqc.nf"
+    process "FASTQC"
+
+    tag "issue51_host_user"
+
+    // Issue #51: with the container running as its own root, every file a
+    // task wrote into the work directory came out root-owned, so the
+    // person who launched the run could not delete their own failed-run
+    // and `.nf-test` work directories without privilege escalation.
+    // `docker.runOptions = '-u $(id -u):$(id -g)'` (nextflow.config) fixes
+    // that, and this test is what proves it at run time rather than by
+    // reading the config back.
+    //
+    // The reference the output is compared against is `.command.sh` in the
+    // task's own directory: Nextflow writes that file on the host as the
+    // launching user, so "same owner as `.command.sh`" is exactly the
+    // property that matters and needs no assumption about what the
+    // launching account is called on this machine or in CI.
+    //
+    // FASTQC is the process under test because it is the cheapest of the
+    // three the Issue named as most likely to break under a UID that has
+    // no `/etc/passwd` entry (MultiQC's matplotlib/fontconfig cache,
+    // Java's `$HOME`, GenomicsDBImport's work-directory writes): it is
+    // Java, it writes both its outputs and incidental font-cache state,
+    // and it runs in seconds on the synthetic fixture. Ownership itself is
+    // set by the container engine and so is not process-specific; the
+    // profile-level half of the contract -- that `docker_amd64` keeps both
+    // `-u` and `--platform`, which this amd64 CI host cannot observe -- is
+    // pinned in tests/bin/test_docker_host_user_contracts.py instead.
+
+    test("a container-written output is owned by the same user as the task's own .command.sh") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: 'sample_a', read_group_id: 'sample_a_L001'],
+                    [
+                        file("${projectDir}/tests/data/reads/sample_a_L001_R1.fastq.gz"),
+                        file("${projectDir}/tests/data/reads/sample_a_L001_R2.fastq.gz"),
+                    ],
+                ]
+                input[1] = 'raw'
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def reports = process.out.zip[0][1] + process.out.html[0][1]
+            assert reports.size() == 4
+
+            def taskDir = java.nio.file.Paths.get(reports[0].toString()).getParent()
+            def launcherOwner = java.nio.file.Files.getOwner(taskDir.resolve(".command.sh"))
+
+            // The task ran in a container, so a root-owned output here is
+            // the pre-fix behaviour, not a test-environment artefact.
+            assert launcherOwner.getName() != "root"
+
+            reports.each { report ->
+                def written = java.nio.file.Paths.get(report.toString())
+                assert java.nio.file.Files.getOwner(written) == launcherOwner
+            }
+        }
+    }
+}

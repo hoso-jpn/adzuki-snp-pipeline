@@ -9,6 +9,30 @@ process MULTIQC {
         mode: 'copy'
     )
 
+    // Issue #51: container tasks now run as the launching host user
+    // (nextflow.config's `docker.runOptions`), and an unprivileged user
+    // cannot create `/multiqc` at the container filesystem root the way
+    // the container's root previously could -- the task fails at its very
+    // first line with `mkdir: cannot create directory '/multiqc'`.
+    //
+    // The fixed container-absolute staging root is not incidental: Issue
+    // #38 chose it so that the source paths MultiQC records in
+    // multiqc_data.json and multiqc_sources.json are container paths and
+    // never this host's work directory (see docs/multiqc.md, and the
+    // `/multiqc/input/` assertions in tests/pipeline). Relocating it would
+    // change the published provenance those artifacts carry, so it is kept
+    // exactly as it is and simply given a writable mount. A tmpfs rather
+    // than a bind of the task's own work directory: binding the work
+    // directory onto `/multiqc` makes the staging root and the task
+    // directory the same directory, which turns the script's own
+    // `cp multiqc_config.yaml /multiqc/multiqc_config.yaml` into a
+    // same-file copy error. What lands here is MultiQC's staging and
+    // report output, which the script then copies back into the task
+    // directory; it is therefore charged to this task's memory budget
+    // rather than to disk, and its size has been observed only at the
+    // synthetic fixture's scale.
+    containerOptions '--tmpfs /multiqc:rw'
+
     input:
     path raw_fastqc_zips
     path trimmed_fastqc_zips
