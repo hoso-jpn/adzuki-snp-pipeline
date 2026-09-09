@@ -82,6 +82,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from manifest_utils import _json_default as _json_default
+
 # Issue #42: the hashing/serialization mechanics this manifest and
 # bin/build_run_manifest.py both depend on -- including the container
 # identity leakage guard below -- live in one module now (they were
@@ -89,15 +91,14 @@ from pathlib import Path
 # bin/manifest_utils.py for why a plain sibling import needs no
 # packaging or PYTHONPATH in either place these scripts run.
 from manifest_utils import (
-    _json_default,
     canonical_json_hash,
     checksum_files,
     new_run_id,
-    sha256_file,
     utc_now_iso,
     validate_container_identity,
     write_json_atomic,
 )
+from manifest_utils import sha256_file as sha256_file
 
 SCHEMA_VERSION = 2
 
@@ -221,7 +222,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--cohort-id", required=True, help="Cohort identifier.")
     parser.add_argument(
-        "--pipeline-version", required=True, help="Pipeline manifest version (workflow.manifest.version)."
+        "--pipeline-version",
+        required=True,
+        help="Pipeline manifest version (workflow.manifest.version).",
     )
     parser.add_argument(
         "--git-commit",
@@ -280,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
             f"(v{SCHEMA_VERSION}) is diploid-only, but --sample-ploidy was "
             f"{args.sample_ploidy}. Writing a manifest with "
             "parameters.sample_ploidy set to this value alongside "
-            "genotype_encoding.ploidy=\"diploid_only\" would record self-"
+            'genotype_encoding.ploidy="diploid_only" would record self-'
             "contradictory provenance. In the normal pipeline this is unreachable "
             "because build_gs_panel.py already fails fast on the same input, but "
             "this script must not depend on that when invoked on its own.",
@@ -292,9 +295,7 @@ def main(argv: list[str] | None = None) -> int:
         panel_status = read_panel_status(args.record_accounting)
         checksums = checksum_files(args.checksum_file)
         containers = {
-            name: validate_container_identity(
-                name, getattr(args, f"container_{name}")
-            )
+            name: validate_container_identity(name, getattr(args, f"container_{name}"))
             for name in CONTAINER_PROCESS_NAMES
         }
     except OSError as error:

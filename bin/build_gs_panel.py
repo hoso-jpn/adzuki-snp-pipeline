@@ -560,9 +560,7 @@ def build_variant_metadata_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[str
 
     for variant_index, record in enumerate(vcf.records):
         missing_count = sum(
-            1
-            for gt in record.sample_genotypes
-            if classify_genotype(gt).category != "standard"
+            1 for gt in record.sample_genotypes if classify_genotype(gt).category != "standard"
         )
         rows.append(
             _variant_metadata_row(
@@ -781,9 +779,7 @@ def stream_gs_panel(
     with ExitStack() as stack:
         handle = stack.enter_context(gzip.open(gs_pass_vcf, "rt", encoding="utf-8"))
         matrix = stack.enter_context(_StreamingGzipWriter(matrix_path))
-        variant_metadata = stack.enter_context(
-            variant_metadata_path.open("w", encoding="utf-8")
-        )
+        variant_metadata = stack.enter_context(variant_metadata_path.open("w", encoding="utf-8"))
         _write_tsv_header(variant_metadata, VARIANT_METADATA_HEADER)
 
         for line_number, line in enumerate(handle, start=1):
@@ -809,14 +805,10 @@ def stream_gs_panel(
                 continue
 
             if sample_names is None:
-                raise MalformedVcfError(
-                    f"{gs_pass_vcf}: data row seen before #CHROM header"
-                )
+                raise MalformedVcfError(f"{gs_pass_vcf}: data row seen before #CHROM header")
 
             fields = line.split("\t")
-            genotypes = _extract_row_genotypes(
-                fields, sample_names, gs_pass_vcf, line_number
-            )
+            genotypes = _extract_row_genotypes(fields, sample_names, gs_pass_vcf, line_number)
             chrom, pos, _id, ref, alt, qual = fields[:6]
 
             dosages: list[str] = []
@@ -839,9 +831,7 @@ def stream_gs_panel(
                 if cell.category != "missing":
                     sample_non_standard_counts[sample_position] += 1
 
-            matrix.write(
-                "\t".join([_variant_key(chrom, pos, ref, alt), *dosages]) + "\n"
-            )
+            matrix.write("\t".join([_variant_key(chrom, pos, ref, alt), *dosages]) + "\n")
             _write_tsv_row(
                 variant_metadata,
                 _variant_metadata_row(

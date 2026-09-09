@@ -16,7 +16,6 @@ import unittest
 from collections import Counter
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "reconcile_variant_type_counts.py"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -56,9 +55,7 @@ class ParseVcfSitesTests(unittest.TestCase):
     """Tests for parse_vcf_sites: record counts and (CHROM, POS, REF, ALT) multisets."""
 
     def test_counts_records_and_collects_variant_keys(self) -> None:
-        sites = reconcile_module.parse_vcf_sites(
-            FIXTURES_DIR / "reconcile_clean_raw_all.vcf.gz"
-        )
+        sites = reconcile_module.parse_vcf_sites(FIXTURES_DIR / "reconcile_clean_raw_all.vcf.gz")
 
         self.assertEqual(sites.record_count, 2)
         self.assertEqual(
@@ -67,9 +64,7 @@ class ParseVcfSitesTests(unittest.TestCase):
         )
 
     def test_empty_vcf_has_zero_records(self) -> None:
-        sites = reconcile_module.parse_vcf_sites(
-            FIXTURES_DIR / "reconcile_clean_raw_indel.vcf.gz"
-        )
+        sites = reconcile_module.parse_vcf_sites(FIXTURES_DIR / "reconcile_clean_raw_indel.vcf.gz")
 
         self.assertEqual(sites.record_count, 0)
         self.assertEqual(sites.variant_keys, Counter())
@@ -123,7 +118,11 @@ class ReadCrossReferencedMetricsTests(unittest.TestCase):
 
             self.assertEqual(
                 metrics,
-                {"number_of_mnps": "1", "number_of_others": "2", "number_of_multiallelic_sites": "3"},
+                {
+                    "number_of_mnps": "1",
+                    "number_of_others": "2",
+                    "number_of_multiallelic_sites": "3",
+                },
             )
 
     def test_missing_metric_raises_with_file_and_cause(self) -> None:
@@ -152,7 +151,11 @@ class ReconcileTests(unittest.TestCase):
         raw_indel = reconcile_module.parse_vcf_sites(
             FIXTURES_DIR / "reconcile_clean_raw_indel.vcf.gz"
         )
-        cross_referenced = {"number_of_mnps": "0", "number_of_others": "0", "number_of_multiallelic_sites": "0"}
+        cross_referenced = {
+            "number_of_mnps": "0",
+            "number_of_others": "0",
+            "number_of_multiallelic_sites": "0",
+        }
 
         result = reconcile_module.reconcile(raw_all, raw_snp, raw_indel, cross_referenced)
 
@@ -173,7 +176,11 @@ class ReconcileTests(unittest.TestCase):
         raw_indel = reconcile_module.parse_vcf_sites(
             FIXTURES_DIR / "reconcile_excluded_raw_indel.vcf.gz"
         )
-        cross_referenced = {"number_of_mnps": "1", "number_of_others": "0", "number_of_multiallelic_sites": "0"}
+        cross_referenced = {
+            "number_of_mnps": "1",
+            "number_of_others": "0",
+            "number_of_multiallelic_sites": "0",
+        }
 
         result = reconcile_module.reconcile(raw_all, raw_snp, raw_indel, cross_referenced)
 
@@ -208,7 +215,11 @@ class ReconcileTests(unittest.TestCase):
         raw_indel = reconcile_module.parse_vcf_sites(
             FIXTURES_DIR / "reconcile_duplicate_raw_indel.vcf.gz"
         )
-        cross_referenced = {"number_of_mnps": "0", "number_of_others": "0", "number_of_multiallelic_sites": "1"}
+        cross_referenced = {
+            "number_of_mnps": "0",
+            "number_of_others": "0",
+            "number_of_multiallelic_sites": "1",
+        }
 
         result = reconcile_module.reconcile(raw_all, raw_snp, raw_indel, cross_referenced)
 
@@ -231,7 +242,11 @@ class ReconcileTests(unittest.TestCase):
         raw_indel = reconcile_module.parse_vcf_sites(
             FIXTURES_DIR / "reconcile_duplicate_raw_indel.vcf.gz"
         )
-        cross_referenced = {"number_of_mnps": "0", "number_of_others": "0", "number_of_multiallelic_sites": "1"}
+        cross_referenced = {
+            "number_of_mnps": "0",
+            "number_of_others": "0",
+            "number_of_multiallelic_sites": "1",
+        }
         result = reconcile_module.reconcile(raw_all, raw_snp, raw_indel, cross_referenced)
 
         rows = reconcile_module.build_output_rows("cohort", result)
@@ -243,7 +258,9 @@ class ReconcileTests(unittest.TestCase):
 
         summary_text = reconcile_module.build_summary_text("cohort", result)
         self.assertIn("WARNING: records_not_selected is negative", summary_text)
-        self.assertIn("It is NOT explained by MIXED-type records being selected into both", summary_text)
+        self.assertIn(
+            "It is NOT explained by MIXED-type records being selected into both", summary_text
+        )
         self.assertIn("snp_indel_duplicate_records = 1", summary_text)
 
 
@@ -259,7 +276,11 @@ class OutputContractTests(unittest.TestCase):
         raw_indel = reconcile_module.parse_vcf_sites(
             FIXTURES_DIR / "reconcile_clean_raw_indel.vcf.gz"
         )
-        cross_referenced = {"number_of_mnps": "0", "number_of_others": "0", "number_of_multiallelic_sites": "0"}
+        cross_referenced = {
+            "number_of_mnps": "0",
+            "number_of_others": "0",
+            "number_of_multiallelic_sites": "0",
+        }
         result = reconcile_module.reconcile(raw_all, raw_snp, raw_indel, cross_referenced)
 
         rows = reconcile_module.build_output_rows("cohort", result)

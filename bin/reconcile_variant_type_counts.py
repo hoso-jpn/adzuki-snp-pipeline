@@ -44,7 +44,6 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-
 OUTPUT_HEADER: tuple[str, ...] = ("cohort_id", "metric", "value")
 
 # Metrics cross-referenced from the existing raw/all variant_qc.tsv
@@ -148,9 +147,7 @@ def read_cross_referenced_metrics(path: Path) -> dict[str, str]:
     missing = [metric for metric in CROSS_REFERENCED_METRICS if metric not in values]
 
     if missing:
-        raise MalformedVariantQcError(
-            f"{path}: missing required metric(s): {', '.join(missing)}"
-        )
+        raise MalformedVariantQcError(f"{path}: missing required metric(s): {', '.join(missing)}")
 
     return {metric: values[metric] for metric in CROSS_REFERENCED_METRICS}
 
@@ -260,12 +257,8 @@ def build_summary_text(cohort_id: str, result: ReconciliationResult) -> str:
         "variant_qc.tsv for related counts) are excluded from both "
         "type-specific selections by GATK's classification contract."
     )
-    lines.append(
-        f"raw/all number_of_mnps: {result.cross_referenced['number_of_mnps']}"
-    )
-    lines.append(
-        f"raw/all number_of_others: {result.cross_referenced['number_of_others']}"
-    )
+    lines.append(f"raw/all number_of_mnps: {result.cross_referenced['number_of_mnps']}")
+    lines.append(f"raw/all number_of_others: {result.cross_referenced['number_of_others']}")
     lines.append(
         "raw/all number_of_multiallelic_sites: "
         f"{result.cross_referenced['number_of_multiallelic_sites']} (a "

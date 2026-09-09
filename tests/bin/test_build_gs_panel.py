@@ -19,7 +19,6 @@ import types
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "build_gs_panel.py"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -339,9 +338,7 @@ class OutputContractTests(unittest.TestCase):
     """Tests for output headers."""
 
     def test_headers(self) -> None:
-        self.assertEqual(
-            build_module.GENOTYPE_ACCOUNTING_HEADER, ("cohort_id", "metric", "value")
-        )
+        self.assertEqual(build_module.GENOTYPE_ACCOUNTING_HEADER, ("cohort_id", "metric", "value"))
         self.assertEqual(
             build_module.SAMPLE_METADATA_HEADER,
             (
@@ -587,9 +584,12 @@ def _write_vcf(path: Path, lines: list[str]) -> Path:
 
 def _panel_argv(vcf: Path, directory: Path, cohort_id: str = "cohort") -> list[str]:
     argv = [
-        "--gs-pass-vcf", str(vcf),
-        "--cohort-id", cohort_id,
-        "--sample-ploidy", "2",
+        "--gs-pass-vcf",
+        str(vcf),
+        "--cohort-id",
+        cohort_id,
+        "--sample-ploidy",
+        "2",
     ]
     for flag, name in zip(PANEL_OUTPUT_FLAGS, PANEL_OUTPUT_NAMES):
         argv.extend([flag, str(directory / name)])
@@ -606,11 +606,24 @@ def _run_panel(vcf: Path, directory: Path, cohort_id: str = "cohort") -> tuple[i
 #: Every genotype shape this encoding distinguishes, so generated
 #: cohorts exercise all of them rather than only the clean cases.
 _GENOTYPE_SHAPES = (
-    "0/0", "0/1", "1/0", "1/1",          # standard, unphased
-    "0|0", "0|1", "1|0", "1|1",          # standard, phased -- same dosages
-    "./.", ".", "./1", "1/.",            # missing
-    "0", "0/0/1", "0|1|1",               # non-diploid
-    "0/2", "2/2", "1/3",                 # non-biallelic index
+    "0/0",
+    "0/1",
+    "1/0",
+    "1/1",  # standard, unphased
+    "0|0",
+    "0|1",
+    "1|0",
+    "1|1",  # standard, phased -- same dosages
+    "./.",
+    ".",
+    "./1",
+    "1/.",  # missing
+    "0",
+    "0/0/1",
+    "0|1|1",  # non-diploid
+    "0/2",
+    "2/2",
+    "1/3",  # non-biallelic index
 )
 
 
@@ -658,10 +671,7 @@ class StreamingEquivalenceTests(unittest.TestCase):
             streamed_matrix = handle.read()
         expected_matrix_rows = [
             "\t".join(["variant_key", *reference.sample_names]),
-            *(
-                "\t".join(row)
-                for row in build_module.build_matrix_rows(reference)
-            ),
+            *("\t".join(row) for row in build_module.build_matrix_rows(reference)),
         ]
         self.assertEqual(streamed_matrix, "\n".join(expected_matrix_rows) + "\n")
 
@@ -680,12 +690,8 @@ class StreamingEquivalenceTests(unittest.TestCase):
             ),
         }
         for name, (header, rows) in expected_by_name.items():
-            expected = "\n".join(
-                ["\t".join(header), *("\t".join(row) for row in rows)]
-            ) + "\n"
-            self.assertEqual(
-                (directory / name).read_text(encoding="utf-8"), expected, name
-            )
+            expected = "\n".join(["\t".join(header), *("\t".join(row) for row in rows)]) + "\n"
+            self.assertEqual((directory / name).read_text(encoding="utf-8"), expected, name)
 
         self.assertEqual(
             (directory / "genotype_accounting_summary.txt").read_text(encoding="utf-8"),
@@ -700,9 +706,7 @@ class StreamingEquivalenceTests(unittest.TestCase):
             "build_panel_empty",
         ):
             with self.subTest(fixture=name), tempfile.TemporaryDirectory() as tmp:
-                self._assert_matches_reference(
-                    FIXTURES_DIR / f"{name}.vcf.gz", Path(tmp)
-                )
+                self._assert_matches_reference(FIXTURES_DIR / f"{name}.vcf.gz", Path(tmp))
 
     def test_generated_cohorts_match_the_reference_implementation(self) -> None:
         # Wide enough to cover every genotype shape, several sample
@@ -943,9 +947,7 @@ class MalformedVcfRejectionTests(unittest.TestCase):
         self._assert_rejected(list(VCF_META_LINES), "no #CHROM header line found")
 
     def test_a_header_with_no_sample_columns_is_rejected(self) -> None:
-        self._assert_rejected(
-            [*VCF_META_LINES, _chrom_header(())], "#CHROM header has 9 fields"
-        )
+        self._assert_rejected([*VCF_META_LINES, _chrom_header(())], "#CHROM header has 9 fields")
 
     def test_no_rejection_surfaces_as_a_bare_python_traceback(self) -> None:
         # Every case above must arrive as this script's own diagnosable
@@ -990,9 +992,7 @@ class OutputPublicationTests(unittest.TestCase):
         )
         exit_code, stderr = _run_panel(vcf, directory)
         self.assertEqual(exit_code, 0, stderr)
-        return {
-            name: (directory / name).read_bytes() for name in PANEL_OUTPUT_NAMES
-        }
+        return {name: (directory / name).read_bytes() for name in PANEL_OUTPUT_NAMES}
 
     def test_a_failing_run_does_not_disturb_an_existing_panel(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1075,9 +1075,7 @@ class OutputPublicationTests(unittest.TestCase):
             exit_code, stderr = _run_panel(again, directory)
 
             self.assertEqual(exit_code, 0, stderr)
-            hidden = sorted(
-                path.name for path in directory.iterdir() if path.name.startswith(".")
-            )
+            hidden = sorted(path.name for path in directory.iterdir() if path.name.startswith("."))
             self.assertEqual(hidden, [])
 
 
@@ -1142,9 +1140,7 @@ class GzipContractTests(unittest.TestCase):
         # staging path is an absolute host path.
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
-            matrix_path = self._build_matrix(
-                directory, _generated_vcf_lines(50, 3, 15)
-            )
+            matrix_path = self._build_matrix(directory, _generated_vcf_lines(50, 3, 15))
             raw = matrix_path.read_bytes()
 
             self.assertEqual(raw[:2], b"\x1f\x8b")
@@ -1178,13 +1174,9 @@ class ProductionPathIsBoundedTests(unittest.TestCase):
         # this fails immediately rather than at real-cohort scale.
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
-            vcf = _write_vcf(
-                directory / "in.vcf.gz", _generated_vcf_lines(120, 4, 16)
-            )
+            vcf = _write_vcf(directory / "in.vcf.gz", _generated_vcf_lines(120, 4, 16))
 
-            originals = {
-                name: getattr(build_module, name) for name in self.MATERIALIZING_HELPERS
-            }
+            originals = {name: getattr(build_module, name) for name in self.MATERIALIZING_HELPERS}
 
             def forbidden(name: str):
                 def _raise(*args: object, **kwargs: object) -> None:
@@ -1206,9 +1198,7 @@ class ProductionPathIsBoundedTests(unittest.TestCase):
             for name in PANEL_OUTPUT_NAMES:
                 self.assertTrue((directory / name).exists(), name)
 
-    @unittest.skipUnless(
-        Path("/proc/self/statm").exists(), "needs /proc to sample a child's RSS"
-    )
+    @unittest.skipUnless(Path("/proc/self/statm").exists(), "needs /proc to sample a child's RSS")
     def test_peak_memory_does_not_grow_with_the_variant_count(self) -> None:
         # "The fixture is small so the memory was small" proves nothing.
         # This runs the real CLI over two cohorts 16x apart in variant
@@ -1229,9 +1219,7 @@ class ProductionPathIsBoundedTests(unittest.TestCase):
                 )
                 run_directory = directory / f"out_{variants}"
                 run_directory.mkdir()
-                measurements[variants] = _peak_rss_kib_for_panel_run(
-                    vcf, run_directory
-                )
+                measurements[variants] = _peak_rss_kib_for_panel_run(vcf, run_directory)
 
         growth = measurements[large] - measurements[small]
         self.assertLess(

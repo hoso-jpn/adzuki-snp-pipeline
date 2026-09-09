@@ -18,7 +18,6 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "build_gs_panel_manifest.py"
 
@@ -36,13 +35,20 @@ RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 PLOIDY_CLI_ARGS = ["--sample-ploidy", "2"]
 
 SNP_FILTER_CLI_ARGS = [
-    "--snp-filter-qd-min", "2.0",
-    "--snp-filter-qual-min", "30.0",
-    "--snp-filter-sor-max", "3.0",
-    "--snp-filter-fs-max", "60.0",
-    "--snp-filter-mq-min", "40.0",
-    "--snp-filter-mq-rank-sum-min", "-12.5",
-    "--snp-filter-read-pos-rank-sum-min", "-8.0",
+    "--snp-filter-qd-min",
+    "2.0",
+    "--snp-filter-qual-min",
+    "30.0",
+    "--snp-filter-sor-max",
+    "3.0",
+    "--snp-filter-fs-max",
+    "60.0",
+    "--snp-filter-mq-min",
+    "40.0",
+    "--snp-filter-mq-rank-sum-min",
+    "-12.5",
+    "--snp-filter-read-pos-rank-sum-min",
+    "-8.0",
 ]
 
 # Issue #52: one --container-<process-name> flag per GS-lineage process
@@ -54,14 +60,22 @@ SNP_FILTER_CLI_ARGS = [
 # records its own container too (BUILD_GS_PANEL_MANIFEST passes its own
 # task.container from inside its own script).
 CONTAINER_CLI_ARGS = [
-    "--container-gs-normalize-variants", "bcftools:1.24-a",
-    "--container-classify-normalized-variants", "python:3.12-b",
-    "--container-gs-index-classified-variants", "bcftools:1.24-c",
-    "--container-gatk-variantfiltration-gs", "gatk:4.6.2.0-d",
-    "--container-gatk-selectpassvariants-gs", "gatk:4.6.2.0-e",
-    "--container-build-gs-panel", "python:3.12-f",
-    "--container-reconcile-gs-panel-accounting", "python:3.12-g",
-    "--container-build-gs-panel-manifest", "python:3.12-h",
+    "--container-gs-normalize-variants",
+    "bcftools:1.24-a",
+    "--container-classify-normalized-variants",
+    "python:3.12-b",
+    "--container-gs-index-classified-variants",
+    "bcftools:1.24-c",
+    "--container-gatk-variantfiltration-gs",
+    "gatk:4.6.2.0-d",
+    "--container-gatk-selectpassvariants-gs",
+    "gatk:4.6.2.0-e",
+    "--container-build-gs-panel",
+    "python:3.12-f",
+    "--container-reconcile-gs-panel-accounting",
+    "python:3.12-g",
+    "--container-build-gs-panel-manifest",
+    "python:3.12-h",
 ]
 
 CONTAINERS_KWARG = {
@@ -196,9 +210,7 @@ class BuildManifestTests(unittest.TestCase):
             set(manifest_module.CONTAINER_PROCESS_NAMES),
             set(CONTAINERS_KWARG),
         )
-        self.assertIn(
-            "build_gs_panel_manifest", manifest_module.CONTAINER_PROCESS_NAMES
-        )
+        self.assertIn("build_gs_panel_manifest", manifest_module.CONTAINER_PROCESS_NAMES)
         self.assertEqual(len(manifest_module.CONTAINER_PROCESS_NAMES), 8)
         self.assertIn("build_gs_panel_manifest", self._build()["containers"])
 
@@ -274,15 +286,21 @@ class CliTests(unittest.TestCase):
 
             exit_code = manifest_module.main(
                 [
-                    "--cohort-id", "cohort",
-                    "--pipeline-version", "0.2.0-dev",
-                    "--git-commit", "",
+                    "--cohort-id",
+                    "cohort",
+                    "--pipeline-version",
+                    "0.2.0-dev",
+                    "--git-commit",
+                    "",
                     *CONTAINER_CLI_ARGS,
                     *PLOIDY_CLI_ARGS,
                     *SNP_FILTER_CLI_ARGS,
-                    "--record-accounting", str(accounting_path),
-                    "--checksum-file", str(matrix_path),
-                    "--output", str(output_path),
+                    "--record-accounting",
+                    str(accounting_path),
+                    "--checksum-file",
+                    str(matrix_path),
+                    "--output",
+                    str(output_path),
                 ]
             )
 
@@ -295,7 +313,9 @@ class CliTests(unittest.TestCase):
             self.assertRegex(manifest["run_id"], RUN_ID_PATTERN)
             self.assertEqual(manifest["parameters"]["snp_filter_qd_min"], 2.0)
             self.assertEqual(manifest["parameters"]["sample_ploidy"], 2)
-            self.assertEqual(manifest["genotype_encoding"], manifest_module.GENOTYPE_ENCODING_SCHEMA)
+            self.assertEqual(
+                manifest["genotype_encoding"], manifest_module.GENOTYPE_ENCODING_SCHEMA
+            )
             self.assertEqual(manifest["containers"], CONTAINERS_KWARG)
 
     def test_main_fails_clearly_for_a_missing_accounting_file(self) -> None:
@@ -307,13 +327,17 @@ class CliTests(unittest.TestCase):
             with contextlib.redirect_stderr(stderr):
                 exit_code = manifest_module.main(
                     [
-                        "--cohort-id", "cohort",
-                        "--pipeline-version", "0.2.0-dev",
+                        "--cohort-id",
+                        "cohort",
+                        "--pipeline-version",
+                        "0.2.0-dev",
                         *CONTAINER_CLI_ARGS,
                         *PLOIDY_CLI_ARGS,
                         *SNP_FILTER_CLI_ARGS,
-                        "--record-accounting", str(missing_accounting),
-                        "--output", str(tmp_path / "manifest.json"),
+                        "--record-accounting",
+                        str(missing_accounting),
+                        "--output",
+                        str(tmp_path / "manifest.json"),
                     ]
                 )
 
@@ -331,13 +355,18 @@ class CliTests(unittest.TestCase):
             with contextlib.redirect_stderr(stderr):
                 exit_code = manifest_module.main(
                     [
-                        "--cohort-id", "cohort",
-                        "--pipeline-version", "0.2.0-dev",
+                        "--cohort-id",
+                        "cohort",
+                        "--pipeline-version",
+                        "0.2.0-dev",
                         *CONTAINER_CLI_ARGS,
-                        "--sample-ploidy", ploidy,
+                        "--sample-ploidy",
+                        ploidy,
                         *SNP_FILTER_CLI_ARGS,
-                        "--record-accounting", str(accounting_path),
-                        "--output", str(output_path),
+                        "--record-accounting",
+                        str(accounting_path),
+                        "--output",
+                        str(output_path),
                     ]
                 )
 
@@ -378,13 +407,17 @@ class CliTests(unittest.TestCase):
                 [
                     sys.executable,
                     str(SCRIPT_PATH),
-                    "--cohort-id", "cohort",
-                    "--pipeline-version", "0.2.0-dev",
+                    "--cohort-id",
+                    "cohort",
+                    "--pipeline-version",
+                    "0.2.0-dev",
                     *CONTAINER_CLI_ARGS,
                     *PLOIDY_CLI_ARGS,
                     *SNP_FILTER_CLI_ARGS,
-                    "--record-accounting", str(accounting_path),
-                    "--output", str(output_path),
+                    "--record-accounting",
+                    str(accounting_path),
+                    "--output",
+                    str(output_path),
                 ],
                 capture_output=True,
                 text=True,
@@ -404,13 +437,17 @@ class CliTests(unittest.TestCase):
             stderr = io.StringIO()
 
             args = [
-                "--cohort-id", "cohort",
-                "--pipeline-version", "0.2.0-dev",
+                "--cohort-id",
+                "cohort",
+                "--pipeline-version",
+                "0.2.0-dev",
                 *CONTAINER_CLI_ARGS,
                 *PLOIDY_CLI_ARGS,
                 *SNP_FILTER_CLI_ARGS,
-                "--record-accounting", str(accounting_path),
-                "--output", str(output_path),
+                "--record-accounting",
+                str(accounting_path),
+                "--output",
+                str(output_path),
             ]
             # Overwrite one container identity with a Singularity-style
             # absolute host path -- exactly the kind of value that must
@@ -435,13 +472,17 @@ class CliTests(unittest.TestCase):
             stderr = io.StringIO()
 
             args = [
-                "--cohort-id", "cohort",
-                "--pipeline-version", "0.2.0-dev",
+                "--cohort-id",
+                "cohort",
+                "--pipeline-version",
+                "0.2.0-dev",
                 *CONTAINER_CLI_ARGS,
                 *PLOIDY_CLI_ARGS,
                 *SNP_FILTER_CLI_ARGS,
-                "--record-accounting", str(accounting_path),
-                "--output", str(output_path),
+                "--record-accounting",
+                str(accounting_path),
+                "--output",
+                str(output_path),
             ]
             # Issue #52 review (P1): a Singularity/Apptainer image path
             # wrapped in a file:// URI discloses host filesystem layout
@@ -469,13 +510,17 @@ class CliTests(unittest.TestCase):
             stderr = io.StringIO()
 
             args = [
-                "--cohort-id", "cohort",
-                "--pipeline-version", "0.2.0-dev",
+                "--cohort-id",
+                "cohort",
+                "--pipeline-version",
+                "0.2.0-dev",
                 *CONTAINER_CLI_ARGS,
                 *PLOIDY_CLI_ARGS,
                 *SNP_FILTER_CLI_ARGS,
-                "--record-accounting", str(accounting_path),
-                "--output", str(output_path),
+                "--record-accounting",
+                str(accounting_path),
+                "--output",
+                str(output_path),
             ]
             index = args.index("--container-reconcile-gs-panel-accounting") + 1
             args[index] = "https://user:hunter2@example.com/python:3.12"
@@ -515,9 +560,7 @@ class ValidateContainerIdentityTests(unittest.TestCase):
 
     def test_rejects_relative_host_path(self) -> None:
         with self.assertRaises(ValueError):
-            manifest_module.validate_container_identity(
-                "gatk_variantfiltration_gs", "./gatk.sif"
-            )
+            manifest_module.validate_container_identity("gatk_variantfiltration_gs", "./gatk.sif")
 
     def test_rejects_home_relative_host_path(self) -> None:
         with self.assertRaises(ValueError):
@@ -617,9 +660,7 @@ class ContainerIdentityRedactionTests(unittest.TestCase):
     def test_file_uri_branch_keeps_the_scheme_but_drops_the_path(self) -> None:
         # `file://` is the category name, not the secret; everything
         # after it is host layout.
-        message = self._refusal(
-            "gatk_variantfiltration_gs", "file:///opt/results/images/gatk.sif"
-        )
+        message = self._refusal("gatk_variantfiltration_gs", "file:///opt/results/images/gatk.sif")
         self.assertIn("file://", message)
         self.assertNotIn("/opt/results", message)
         self.assertNotIn("gatk.sif", message)

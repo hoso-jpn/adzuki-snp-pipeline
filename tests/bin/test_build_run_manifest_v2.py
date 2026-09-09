@@ -48,29 +48,48 @@ manifest_module = _load_module("build_run_manifest_v2", SCRIPT_PATH)
 FULL_SHA = "402f437b4a4f00023e0571bbe6d73dab3a83fadf"
 
 PARAMETER_CLI_ARGS = [
-    "--sample-ploidy", "2",
-    "--genomicsdb-batch-size", "50",
-    "--optical-duplicate-pixel-distance", "100",
+    "--sample-ploidy",
+    "2",
+    "--genomicsdb-batch-size",
+    "50",
+    "--optical-duplicate-pixel-distance",
+    "100",
     "--enable-gs-panel",
-    "--snp-filter-qd-min", "2.0",
-    "--snp-filter-qual-min", "30.0",
-    "--snp-filter-sor-max", "3.0",
-    "--snp-filter-fs-max", "60.0",
-    "--snp-filter-mq-min", "40.0",
-    "--snp-filter-mq-rank-sum-min", "-12.5",
-    "--snp-filter-read-pos-rank-sum-min", "-8.0",
-    "--indel-filter-qd-min", "2.0",
-    "--indel-filter-qual-min", "30.0",
-    "--indel-filter-fs-max", "200.0",
-    "--indel-filter-read-pos-rank-sum-min", "-20.0",
+    "--snp-filter-qd-min",
+    "2.0",
+    "--snp-filter-qual-min",
+    "30.0",
+    "--snp-filter-sor-max",
+    "3.0",
+    "--snp-filter-fs-max",
+    "60.0",
+    "--snp-filter-mq-min",
+    "40.0",
+    "--snp-filter-mq-rank-sum-min",
+    "-12.5",
+    "--snp-filter-read-pos-rank-sum-min",
+    "-8.0",
+    "--indel-filter-qd-min",
+    "2.0",
+    "--indel-filter-qual-min",
+    "30.0",
+    "--indel-filter-fs-max",
+    "200.0",
+    "--indel-filter-read-pos-rank-sum-min",
+    "-20.0",
 ]
 
 REFERENCE_CLI_ARGS = [
-    "--reference-id", "synthetic-adzuki-v1",
-    "--reference-name", "Synthetic adzuki test reference",
-    "--reference-species", "Vigna angularis",
-    "--reference-cultivar", "synthetic",
-    "--reference-accession", "",
+    "--reference-id",
+    "synthetic-adzuki-v1",
+    "--reference-name",
+    "Synthetic adzuki test reference",
+    "--reference-species",
+    "Vigna angularis",
+    "--reference-cultivar",
+    "synthetic",
+    "--reference-accession",
+    "",
 ]
 
 # Two tasks of fastqc_raw reporting the same image, one multiqc task,
@@ -172,20 +191,32 @@ class _Fixture:
 
     def argv(self, *, gs_panel: bool = True, git_commit: str = FULL_SHA) -> list[str]:
         argv = [
-            "--mode", "dag-v2",
-            "--cohort-id", "cohort",
-            "--pipeline-version", "0.2.0",
-            "--git-commit", git_commit,
-            "--nextflow-version", "26.04.6",
+            "--mode",
+            "dag-v2",
+            "--cohort-id",
+            "cohort",
+            "--pipeline-version",
+            "0.2.0",
+            "--git-commit",
+            git_commit,
+            "--nextflow-version",
+            "26.04.6",
             *REFERENCE_CLI_ARGS,
             *PARAMETER_CLI_ARGS,
-            "--runtime-provenance", str(self.runtime),
-            "--reference-provenance", str(self.reference),
-            "--artifact-checksums", str(self.artifacts),
-            "--variant-qc-tsv", str(self.variant_qc),
-            "--sample-qc-tsv", str(self.sample_qc),
-            "--variant-type-accounting-tsv", str(self.variant_type),
-            "--output", str(self.output),
+            "--runtime-provenance",
+            str(self.runtime),
+            "--reference-provenance",
+            str(self.reference),
+            "--artifact-checksums",
+            str(self.artifacts),
+            "--variant-qc-tsv",
+            str(self.variant_qc),
+            "--sample-qc-tsv",
+            str(self.sample_qc),
+            "--variant-type-accounting-tsv",
+            str(self.variant_type),
+            "--output",
+            str(self.output),
         ]
         for path in self.inputs:
             argv.extend(["--input-provenance", str(path)])
@@ -314,7 +345,10 @@ class ContainerProvenanceTests(unittest.TestCase):
         )
 
     def test_many_tasks_of_one_process_collapse_to_one_identity(self) -> None:
-        rows = [*RUNTIME_PROVENANCE_ROWS, "fastqc_raw\tquay.io/biocontainers/fastqc:0.12.1@sha256:aa"]
+        rows = [
+            *RUNTIME_PROVENANCE_ROWS,
+            "fastqc_raw\tquay.io/biocontainers/fastqc:0.12.1@sha256:aa",
+        ]
         self.assertEqual(
             self._containers(rows)["fastqc_raw"],
             "quay.io/biocontainers/fastqc:0.12.1@sha256:aa",
@@ -322,8 +356,12 @@ class ContainerProvenanceTests(unittest.TestCase):
 
     def test_aliases_of_one_module_keep_their_own_identities(self) -> None:
         containers = self._containers(RUNTIME_PROVENANCE_ROWS)
-        self.assertEqual(containers["gatk_variantfiltration"], "broadinstitute/gatk:4.6.2.0@sha256:cc")
-        self.assertEqual(containers["gatk_variantfiltration_gs"], "broadinstitute/gatk:4.6.2.0@sha256:dd")
+        self.assertEqual(
+            containers["gatk_variantfiltration"], "broadinstitute/gatk:4.6.2.0@sha256:cc"
+        )
+        self.assertEqual(
+            containers["gatk_variantfiltration_gs"], "broadinstitute/gatk:4.6.2.0@sha256:dd"
+        )
         self.assertNotEqual(
             containers["gatk_variantfiltration"], containers["gatk_variantfiltration_gs"]
         )
@@ -436,9 +474,7 @@ class ReferenceProvenanceTests(unittest.TestCase):
     def test_a_missing_single_file_role_is_rejected(self) -> None:
         with fixture() as fake:
             fake.reference.write_text(
-                "\n".join(
-                    row for row in REFERENCE_PROVENANCE_ROWS if not row.startswith("fai\t")
-                )
+                "\n".join(row for row in REFERENCE_PROVENANCE_ROWS if not row.startswith("fai\t"))
                 + "\n",
                 encoding="utf-8",
             )
@@ -560,8 +596,7 @@ class AccountingTests(unittest.TestCase):
         with fixture() as fake:
             fake.variant_qc.write_text(
                 "\n".join(
-                    row.replace("sample_a,sample_b", "sample_b,sample_a")
-                    for row in VARIANT_QC_ROWS
+                    row.replace("sample_a,sample_b", "sample_b,sample_a") for row in VARIANT_QC_ROWS
                 )
                 + "\n",
                 encoding="utf-8",
@@ -587,8 +622,7 @@ class AccountingTests(unittest.TestCase):
         # undetectable downstream.
         with fixture() as fake:
             fake.variant_qc.write_text(
-                "\n".join(VARIANT_QC_ROWS).replace("\traw\tall\t", "\tfiltered\tsnp\t")
-                + "\n",
+                "\n".join(VARIANT_QC_ROWS).replace("\traw\tall\t", "\tfiltered\tsnp\t") + "\n",
                 encoding="utf-8",
             )
             exit_code, stderr = run_main(fake.argv())
@@ -609,8 +643,7 @@ class AccountingTests(unittest.TestCase):
     def test_missing_variant_type_metric_is_rejected(self) -> None:
         with fixture() as fake:
             fake.variant_type.write_text(
-                "\n".join(row for row in VARIANT_TYPE_ROWS if "raw_snp_records" not in row)
-                + "\n",
+                "\n".join(row for row in VARIANT_TYPE_ROWS if "raw_snp_records" not in row) + "\n",
                 encoding="utf-8",
             )
             exit_code, stderr = run_main(fake.argv())
@@ -648,10 +681,7 @@ class DuplicateAccountingMetricTests(unittest.TestCase):
     def test_duplicate_cohort_metric_with_a_conflicting_value_fails(self) -> None:
         with fixture() as fake:
             fake.variant_qc.write_text(
-                "\n".join(
-                    [*VARIANT_QC_ROWS, "cohort\traw\tall\tcohort_total_genotypes\t9"]
-                )
-                + "\n",
+                "\n".join([*VARIANT_QC_ROWS, "cohort\traw\tall\tcohort_total_genotypes\t9"]) + "\n",
                 encoding="utf-8",
             )
             self._expect_duplicate_failure(fake, "cohort_total_genotypes")
@@ -659,10 +689,7 @@ class DuplicateAccountingMetricTests(unittest.TestCase):
     def test_duplicate_cohort_metric_with_an_identical_value_also_fails(self) -> None:
         with fixture() as fake:
             fake.variant_qc.write_text(
-                "\n".join(
-                    [*VARIANT_QC_ROWS, "cohort\traw\tall\tcohort_total_genotypes\t4"]
-                )
-                + "\n",
+                "\n".join([*VARIANT_QC_ROWS, "cohort\traw\tall\tcohort_total_genotypes\t4"]) + "\n",
                 encoding="utf-8",
             )
             self._expect_duplicate_failure(fake, "cohort_total_genotypes")
@@ -704,9 +731,7 @@ class DuplicateAccountingMetricTests(unittest.TestCase):
         # the new check must not have changed which failure a caller gets.
         with fixture() as fake:
             fake.variant_qc.write_text(
-                "\n".join(
-                    [*VARIANT_QC_ROWS, "cohort\tfiltered\tsnp\tcohort_total_genotypes\t4"]
-                )
+                "\n".join([*VARIANT_QC_ROWS, "cohort\tfiltered\tsnp\tcohort_total_genotypes\t4"])
                 + "\n",
                 encoding="utf-8",
             )
@@ -859,16 +884,13 @@ class PrivacyRegressionTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            stderr = self._assert_rejected(
-                fake, "credentials", "hunter2", "mirror.internal"
-            )
+            stderr = self._assert_rejected(fake, "credentials", "hunter2", "mirror.internal")
             self.assertIn("reference", stderr)
 
     def test_private_network_location_is_rejected(self) -> None:
         with fixture() as fake:
             fake.runtime.write_text(
-                "\n".join([*RUNTIME_PROVENANCE_ROWS, "fastp\t10.0.0.5:5000/fastp:1.3.6"])
-                + "\n",
+                "\n".join([*RUNTIME_PROVENANCE_ROWS, "fastp\t10.0.0.5:5000/fastp:1.3.6"]) + "\n",
                 encoding="utf-8",
             )
             stderr = self._assert_rejected(fake, "private or loopback", "10.0.0.5")
@@ -877,8 +899,7 @@ class PrivacyRegressionTests(unittest.TestCase):
     def test_loopback_location_is_rejected(self) -> None:
         with fixture() as fake:
             fake.runtime.write_text(
-                "\n".join([*RUNTIME_PROVENANCE_ROWS, "fastp\tlocalhost:5000/fastp:1.3.6"])
-                + "\n",
+                "\n".join([*RUNTIME_PROVENANCE_ROWS, "fastp\tlocalhost:5000/fastp:1.3.6"]) + "\n",
                 encoding="utf-8",
             )
             self._assert_rejected(fake, "private or loopback", "localhost:5000")
@@ -925,9 +946,7 @@ class LegacyModeIsolationTests(unittest.TestCase):
         # passed it would otherwise silently ignore it.
         with self.assertRaises(SystemExit):
             with contextlib.redirect_stderr(io.StringIO()):
-                manifest_module.parse_args(
-                    ["--mode", "legacy-v1", "--runtime-provenance", "x.tsv"]
-                )
+                manifest_module.parse_args(["--mode", "legacy-v1", "--runtime-provenance", "x.tsv"])
 
     def test_legacy_and_dag_schema_versions_differ(self) -> None:
         self.assertEqual(manifest_module.SCHEMA_VERSION, 1)
