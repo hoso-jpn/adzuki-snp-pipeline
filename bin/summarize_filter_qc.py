@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import sys
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -132,15 +133,14 @@ class AnnotationCoverage:
     filter_hit_rate: str
 
 
-def parse_filtered_vcf(path: Path) -> list[VcfRecord]:
-    """Parse the FILTER, QUAL, and INFO columns of a bgzipped VCF.
+def parse_filtered_vcf(path: Path) -> Iterator[VcfRecord]:
+    """Yield the FILTER, QUAL, and INFO columns of a bgzipped VCF.
 
     Every other column (ID, REF, ALT, FORMAT, sample genotypes) is
     ignored; this tool only needs the filter outcome and the annotations
-    it was computed from.
+    it was computed from. Records are yielded one at a time so callers do
+    not need to materialize the VCF in memory.
     """
-    records: list[VcfRecord] = []
-
     with gzip.open(path, "rt", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             line = line.rstrip("\n")
@@ -156,17 +156,13 @@ def parse_filtered_vcf(path: Path) -> list[VcfRecord]:
                     "tab-separated fields, expected at least 8"
                 )
 
-            records.append(
-                VcfRecord(
-                    chrom=fields[0],
-                    pos=fields[1],
-                    qual=fields[5],
-                    filter_value=fields[6],
-                    info=_parse_info(fields[7]),
-                )
+            yield VcfRecord(
+                chrom=fields[0],
+                pos=fields[1],
+                qual=fields[5],
+                filter_value=fields[6],
+                info=_parse_info(fields[7]),
             )
-
-    return records
 
 
 def _parse_info(info_field: str) -> dict[str, str]:
@@ -224,14 +220,17 @@ def _format_rate(numerator: int, denominator: int) -> str:
     return f"{numerator / denominator:.6f}"
 
 
-def compute_filter_breakdown(records: list[VcfRecord]) -> FilterBreakdown:
+def compute_filter_breakdown(records: Iterable[VcfRecord]) -> FilterBreakdown:
     """Compute FILTER-value accounting: total, PASS, tags, and combinations."""
     combination_counts: dict[str, int] = {}
     tag_counts: dict[str, int] = {}
     pass_records = 0
     multi_tag_records = 0
 
+    total_records = 0
+
     for record in records:
+        total_records += 1
         combination_counts[record.filter_value] = (
             combination_counts.get(record.filter_value, 0) + 1
         )
@@ -248,8 +247,6 @@ def compute_filter_breakdown(records: list[VcfRecord]) -> FilterBreakdown:
         for tag in tags:
             tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
-    total_records = len(records)
-
     return FilterBreakdown(
         total_records=total_records,
         pass_records=pass_records,
@@ -261,7 +258,7 @@ def compute_filter_breakdown(records: list[VcfRecord]) -> FilterBreakdown:
 
 
 def compute_annotation_coverage(
-    records: list[VcfRecord],
+    records: Iterable[VcfRecord],
     variant_type: str,
 ) -> list[AnnotationCoverage]:
     """Compute per-annotation presence and filter-hit accounting.
@@ -271,15 +268,42 @@ def compute_annotation_coverage(
     its filter, so it must not dilute the rate for records that could be.
     """
     tag_by_annotation = FILTER_TAG_BY_VARIANT_TYPE[variant_type]
-    total_records = len(records)
+    present_counts = {annotation: 0 for annotation in ANNOTATION_NAMES}
+    filter_tagged_counts = {annotation: 0 for annotation in ANNOTATION_NAMES}
+    total_records = 0
+
+    for record in records:
+        total_records += 1
+        tags = set(_filter_tags(record))
+
+        for annotation in ANNOTATION_NAMES:
+            if _is_present(_annotation_value(record, annotation)):
+                present_counts[annotation] += 1
+
+            filter_tag = tag_by_annotation[annotation]
+            if filter_tag is not None and filter_tag in tags:
+                filter_tagged_counts[annotation] += 1
+
+    return _build_annotation_coverages(
+        variant_type,
+        total_records,
+        present_counts,
+        filter_tagged_counts,
+    )
+
+
+def _build_annotation_coverages(
+    variant_type: str,
+    total_records: int,
+    present_counts: dict[str, int],
+    filter_tagged_counts: dict[str, int],
+) -> list[AnnotationCoverage]:
+    """Finalize annotation counters into the stable output representation."""
+    tag_by_annotation = FILTER_TAG_BY_VARIANT_TYPE[variant_type]
     coverages: list[AnnotationCoverage] = []
 
     for annotation in ANNOTATION_NAMES:
-        present_records = sum(
-            1
-            for record in records
-            if _is_present(_annotation_value(record, annotation))
-        )
+        present_records = present_counts[annotation]
         missing_records = total_records - present_records
         evaluable_rate = _format_rate(present_records, total_records)
         filter_tag = tag_by_annotation[annotation]
@@ -299,9 +323,7 @@ def compute_annotation_coverage(
             )
             continue
 
-        filter_tagged_records = sum(
-            1 for record in records if filter_tag in _filter_tags(record)
-        )
+        filter_tagged_records = filter_tagged_counts[annotation]
 
         coverages.append(
             AnnotationCoverage(
@@ -317,6 +339,75 @@ def compute_annotation_coverage(
         )
 
     return coverages
+
+
+def summarize_records(
+    records: Iterable[VcfRecord],
+    variant_type: str,
+) -> tuple[FilterBreakdown, list[AnnotationCoverage]]:
+    """Aggregate FILTER and annotation QC together in one pass.
+
+    The retained state is bounded by the number of distinct FILTER values,
+    FILTER tags, and the fixed annotation set; it does not grow with the
+    number of VCF records.
+    """
+    tag_by_annotation = FILTER_TAG_BY_VARIANT_TYPE[variant_type]
+    combination_counts: dict[str, int] = {}
+    tag_counts: dict[str, int] = {}
+    present_counts = {annotation: 0 for annotation in ANNOTATION_NAMES}
+    filter_tagged_counts = {annotation: 0 for annotation in ANNOTATION_NAMES}
+    total_records = 0
+    pass_records = 0
+    multi_tag_records = 0
+
+    for record in records:
+        total_records += 1
+        combination_counts[record.filter_value] = (
+            combination_counts.get(record.filter_value, 0) + 1
+        )
+        tags = _filter_tags(record)
+        tag_set = set(tags)
+
+        if record.filter_value == "PASS":
+            pass_records += 1
+        else:
+            if len(tags) > 1:
+                multi_tag_records += 1
+
+            for tag in tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        for annotation in ANNOTATION_NAMES:
+            if _is_present(_annotation_value(record, annotation)):
+                present_counts[annotation] += 1
+
+            filter_tag = tag_by_annotation[annotation]
+            if filter_tag is not None and filter_tag in tag_set:
+                filter_tagged_counts[annotation] += 1
+
+    breakdown = FilterBreakdown(
+        total_records=total_records,
+        pass_records=pass_records,
+        non_pass_records=total_records - pass_records,
+        multi_tag_records=multi_tag_records,
+        combination_counts=combination_counts,
+        tag_counts=tag_counts,
+    )
+    coverages = _build_annotation_coverages(
+        variant_type,
+        total_records,
+        present_counts,
+        filter_tagged_counts,
+    )
+    return breakdown, coverages
+
+
+def summarize_filtered_vcf(
+    path: Path,
+    variant_type: str,
+) -> tuple[FilterBreakdown, list[AnnotationCoverage]]:
+    """Stream one filtered VCF into its two QC summaries."""
+    return summarize_records(parse_filtered_vcf(path), variant_type)
 
 
 def build_filter_breakdown_rows(
@@ -510,7 +601,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
     try:
-        records = parse_filtered_vcf(args.filtered_vcf)
+        breakdown, coverages = summarize_filtered_vcf(
+            args.filtered_vcf,
+            args.variant_type,
+        )
     except OSError as error:
         print(
             f"summarize_filter_qc.py: error: cannot read {args.filtered_vcf}: {error}",
@@ -520,9 +614,6 @@ def main(argv: list[str] | None = None) -> int:
     except MalformedVcfError as error:
         print(f"summarize_filter_qc.py: error: {error}", file=sys.stderr)
         return 1
-
-    breakdown = compute_filter_breakdown(records)
-    coverages = compute_annotation_coverage(records, args.variant_type)
 
     write_tsv(
         args.filter_breakdown_output,
