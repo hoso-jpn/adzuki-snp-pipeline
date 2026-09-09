@@ -16,7 +16,6 @@ import types
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "reconcile_gs_panel_accounting.py"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -46,12 +45,12 @@ def _vcf(
     return reconcile_module.VcfSummary(
         record_count=record_count,
         sample_count=sample_count,
-        sample_ids=sample_ids if sample_ids is not None else tuple(
-            f"sample_{i}" for i in range(sample_count)
-        ),
-        variant_keys=variant_keys if variant_keys is not None else tuple(
-            f"chrTest:{100 * (i + 1)}:A:G" for i in range(record_count)
-        ),
+        sample_ids=sample_ids
+        if sample_ids is not None
+        else tuple(f"sample_{i}" for i in range(sample_count)),
+        variant_keys=variant_keys
+        if variant_keys is not None
+        else tuple(f"chrTest:{100 * (i + 1)}:A:G" for i in range(record_count)),
         all_rows_have_expected_sample_count=all_rows_ok,
     )
 
@@ -67,12 +66,12 @@ def _matrix(
     return reconcile_module.MatrixSummary(
         variant_count=variant_count,
         sample_count=sample_count,
-        sample_ids=sample_ids if sample_ids is not None else tuple(
-            f"sample_{i}" for i in range(sample_count)
-        ),
-        variant_keys=variant_keys if variant_keys is not None else tuple(
-            f"chrTest:{100 * (i + 1)}:A:G" for i in range(variant_count)
-        ),
+        sample_ids=sample_ids
+        if sample_ids is not None
+        else tuple(f"sample_{i}" for i in range(sample_count)),
+        variant_keys=variant_keys
+        if variant_keys is not None
+        else tuple(f"chrTest:{100 * (i + 1)}:A:G" for i in range(variant_count)),
         all_rows_have_expected_width=all_rows_ok,
     )
 
@@ -163,18 +162,24 @@ class SummarizeMatrixTests(unittest.TestCase):
     """Tests for summarize_matrix: header validation, identity, and row-width checks."""
 
     def test_counts_variant_and_sample_columns(self) -> None:
-        summary = reconcile_module.summarize_matrix(FIXTURES_DIR / "reconcile_gs_clean_matrix.tsv.gz")
+        summary = reconcile_module.summarize_matrix(
+            FIXTURES_DIR / "reconcile_gs_clean_matrix.tsv.gz"
+        )
         self.assertEqual(summary.variant_count, 1)
         self.assertEqual(summary.sample_count, 2)
         self.assertTrue(summary.all_rows_have_expected_width)
 
     def test_reads_sample_ids_and_variant_keys(self) -> None:
-        summary = reconcile_module.summarize_matrix(FIXTURES_DIR / "reconcile_gs_clean_matrix.tsv.gz")
+        summary = reconcile_module.summarize_matrix(
+            FIXTURES_DIR / "reconcile_gs_clean_matrix.tsv.gz"
+        )
         self.assertEqual(summary.sample_ids, ("sample_a", "sample_b"))
         self.assertEqual(summary.variant_keys, ("chrTest:100:A:G",))
 
     def test_header_only_matrix_has_zero_variants_but_keeps_samples(self) -> None:
-        summary = reconcile_module.summarize_matrix(FIXTURES_DIR / "reconcile_gs_empty_matrix.tsv.gz")
+        summary = reconcile_module.summarize_matrix(
+            FIXTURES_DIR / "reconcile_gs_empty_matrix.tsv.gz"
+        )
         self.assertEqual(summary.variant_count, 0)
         self.assertEqual(summary.sample_count, 2)
         self.assertEqual(summary.variant_keys, ())
@@ -191,7 +196,9 @@ class SummarizeMatrixTests(unittest.TestCase):
 
     def test_empty_file_raises(self) -> None:
         with self.assertRaises(reconcile_module.MalformedMatrixError) as raised:
-            reconcile_module.summarize_matrix(FIXTURES_DIR / "reconcile_gs_empty_file_matrix.tsv.gz")
+            reconcile_module.summarize_matrix(
+                FIXTURES_DIR / "reconcile_gs_empty_file_matrix.tsv.gz"
+            )
         self.assertIn("file is empty", str(raised.exception))
 
     def test_wrong_first_header_column_raises(self) -> None:
@@ -263,9 +270,7 @@ class DescribeSequenceMismatchTests(unittest.TestCase):
     """Tests for _describe_sequence_mismatch: bounded, useful diagnostics."""
 
     def test_reports_length_difference(self) -> None:
-        message = reconcile_module._describe_sequence_mismatch(
-            [("a", ("x", "y")), ("b", ("x",))]
-        )
+        message = reconcile_module._describe_sequence_mismatch([("a", ("x", "y")), ("b", ("x",))])
         self.assertIn("a=2", message)
         self.assertIn("b=1", message)
 

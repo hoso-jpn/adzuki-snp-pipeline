@@ -15,7 +15,6 @@ import types
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "summarize_filter_qc.py"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -106,7 +105,9 @@ class FilterBreakdownTests(unittest.TestCase):
         self.assertEqual(breakdown.total_records, 3)
         self.assertEqual(breakdown.pass_records, 1)
         self.assertEqual(breakdown.non_pass_records, 2)
-        self.assertEqual(breakdown.total_records, breakdown.pass_records + breakdown.non_pass_records)
+        self.assertEqual(
+            breakdown.total_records, breakdown.pass_records + breakdown.non_pass_records
+        )
         self.assertEqual(breakdown.multi_tag_records, 1)
 
     def test_multi_tag_fixture_tag_counts_can_exceed_non_pass_records(self) -> None:
@@ -236,7 +237,9 @@ class OutputContractTests(unittest.TestCase):
         breakdown = qc.compute_filter_breakdown(records)
         coverages = qc.compute_annotation_coverage(records, "snp")
 
-        summary_text = qc.build_filter_qc_summary_text("cohort", "filtered", "snp", breakdown, coverages)
+        summary_text = qc.build_filter_qc_summary_text(
+            "cohort", "filtered", "snp", breakdown, coverages
+        )
 
         self.assertIn("Reconciliation: total (3) = PASS (1) + non-PASS (2)", summary_text)
 

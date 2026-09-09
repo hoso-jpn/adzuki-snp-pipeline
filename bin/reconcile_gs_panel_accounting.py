@@ -174,8 +174,7 @@ def summarize_vcf(path: Path) -> VcfSummary:
             fields = line.split("\t")
             if len(fields) < 10:
                 raise MalformedVcfError(
-                    f"{path}: data row has {len(fields)} tab-separated fields, "
-                    "expected at least 10"
+                    f"{path}: data row has {len(fields)} tab-separated fields, expected at least 10"
                 )
 
             variant_keys.append(f"{fields[0]}:{fields[1]}:{fields[3]}:{fields[4]}")

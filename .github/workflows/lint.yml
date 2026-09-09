@@ -9,6 +9,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install development dependencies
+        run: python3 -m pip install --requirement requirements-dev.txt
+
+      - name: Lint Python
+        run: ruff check bin tests/bin tests/scripts
+
+      - name: Check Python formatting
+        run: ruff format --check bin tests/bin tests/scripts
+
       - name: Check README exists
         run: test -f README.md
       - name: Check docs exist

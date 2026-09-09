@@ -93,7 +93,6 @@ from pathlib import Path
 # packaging or PYTHONPATH in either place these scripts run.
 from manifest_utils import (
     HostMetadataLeakError,
-    _json_default,
     assert_no_host_metadata,
     canonical_json_hash,
     checksum_files,
@@ -103,6 +102,7 @@ from manifest_utils import (
     validate_container_identity,
     write_json_atomic,
 )
+from manifest_utils import _json_default as _json_default
 
 SCHEMA_VERSION = 1
 
@@ -267,7 +267,9 @@ def parse_samplesheet(path: Path) -> list[dict[str, str]]:
         if reader.fieldnames is None:
             raise MalformedSamplesheetError(f"{path}: file is empty")
 
-        missing = [column for column in REQUIRED_SAMPLESHEET_COLUMNS if column not in reader.fieldnames]
+        missing = [
+            column for column in REQUIRED_SAMPLESHEET_COLUMNS if column not in reader.fieldnames
+        ]
         if missing:
             raise MalformedSamplesheetError(f"{path}: missing required column(s): {missing}")
 
@@ -459,9 +461,7 @@ def parse_runtime_provenance(paths: list[Path]) -> dict[str, str]:
     identities_by_process: dict[str, set[str]] = {}
 
     for path in paths:
-        for process_key, container in _read_tsv_rows(
-            path, RUNTIME_PROVENANCE_FIELD_COUNT
-        ):
+        for process_key, container in _read_tsv_rows(path, RUNTIME_PROVENANCE_FIELD_COUNT):
             if not PROCESS_KEY_RE.match(process_key):
                 raise MalformedProvenanceError(
                     f"{path}: '{process_key}' is not a canonical process key "
@@ -472,9 +472,7 @@ def parse_runtime_provenance(paths: list[Path]) -> dict[str, str]:
             identities_by_process.setdefault(process_key, set()).add(container)
 
     if not identities_by_process:
-        raise MalformedProvenanceError(
-            "no runtime container provenance was recorded for this run"
-        )
+        raise MalformedProvenanceError("no runtime container provenance was recorded for this run")
 
     divergent = {
         process_key: sorted(identities)
@@ -569,9 +567,7 @@ def parse_reference_provenance(path: Path) -> dict[str, object]:
     single: dict[str, dict[str, str]] = {}
     multi: dict[str, list[dict[str, str]]] = {role: [] for role in REFERENCE_MULTI_FILE_ROLES}
 
-    for role, filename, checksum in _read_tsv_rows(
-        path, REFERENCE_PROVENANCE_FIELD_COUNT
-    ):
+    for role, filename, checksum in _read_tsv_rows(path, REFERENCE_PROVENANCE_FIELD_COUNT):
         entry = {"filename": filename, "checksum": checksum}
         if role in REFERENCE_SINGLE_FILE_ROLES:
             if role in single:
@@ -582,15 +578,11 @@ def parse_reference_provenance(path: Path) -> dict[str, object]:
         elif role in REFERENCE_MULTI_FILE_ROLES:
             multi[role].append(entry)
         else:
-            raise MalformedProvenanceError(
-                f"{path}: unknown reference role: {role!r}"
-            )
+            raise MalformedProvenanceError(f"{path}: unknown reference role: {role!r}")
 
     missing = [role for role in REFERENCE_SINGLE_FILE_ROLES if role not in single]
     if missing:
-        raise MalformedProvenanceError(
-            f"{path}: missing required reference role(s): {missing}"
-        )
+        raise MalformedProvenanceError(f"{path}: missing required reference role(s): {missing}")
     for role in REFERENCE_MULTI_FILE_ROLES:
         expected_count = REFERENCE_MULTI_FILE_ROLE_COUNTS[role]
         if len(multi[role]) != expected_count:
@@ -613,8 +605,7 @@ def parse_artifact_checksums(paths: list[Path]) -> dict[str, str]:
         for filename, checksum in _read_tsv_rows(path, ARTIFACT_CHECKSUM_FIELD_COUNT):
             if filename in checksums and checksums[filename] != checksum:
                 raise ProvenanceInconsistencyError(
-                    f"two different artifacts were recorded under the same "
-                    f"filename '{filename}'"
+                    f"two different artifacts were recorded under the same filename '{filename}'"
                 )
             if filename in checksums:
                 raise ValueError(f"duplicate checksum file name: '{filename}'")
@@ -626,9 +617,7 @@ def parse_artifact_checksums(paths: list[Path]) -> dict[str, str]:
     return dict(sorted(checksums.items()))
 
 
-def _read_header_and_rows(
-    path: Path, header: tuple[str, ...]
-) -> list[list[str]]:
+def _read_header_and_rows(path: Path, header: tuple[str, ...]) -> list[list[str]]:
     """Read a headed TSV whose header must match `header` exactly."""
     lines = Path(path).read_text(encoding="utf-8").splitlines()
     if not lines:
@@ -684,8 +673,7 @@ def read_cohort_accounting(path: Path, cohort_id: str) -> dict[str, str]:
     ):
         if cohort != cohort_id:
             raise ProvenanceInconsistencyError(
-                f"{path}: cohort accounting is for cohort '{cohort}', but this run "
-                f"is '{cohort_id}'"
+                f"{path}: cohort accounting is for cohort '{cohort}', but this run is '{cohort_id}'"
             )
         if (stage, variant_type) != (
             COHORT_ACCOUNTING_STAGE,
@@ -702,15 +690,9 @@ def read_cohort_accounting(path: Path, cohort_id: str) -> dict[str, str]:
             )
         metrics[metric] = value
 
-    missing = [
-        metric
-        for metric in REQUIRED_COHORT_ACCOUNTING_METRICS
-        if metric not in metrics
-    ]
+    missing = [metric for metric in REQUIRED_COHORT_ACCOUNTING_METRICS if metric not in metrics]
     if missing:
-        raise MalformedAccountingError(
-            f"{path}: missing required metric(s): {missing}"
-        )
+        raise MalformedAccountingError(f"{path}: missing required metric(s): {missing}")
 
     return metrics
 
@@ -729,8 +711,7 @@ def read_sample_accounting(path: Path, cohort_id: str) -> list[dict[str, str]]:
         cohort, stage, variant_type = row[0], row[1], row[2]
         if cohort != cohort_id:
             raise ProvenanceInconsistencyError(
-                f"{path}: sample accounting is for cohort '{cohort}', but this run "
-                f"is '{cohort_id}'"
+                f"{path}: sample accounting is for cohort '{cohort}', but this run is '{cohort_id}'"
             )
         if (stage, variant_type) != (
             COHORT_ACCOUNTING_STAGE,
@@ -763,9 +744,7 @@ def read_variant_type_accounting(path: Path, cohort_id: str) -> dict[str, str]:
     """
     metrics: dict[str, str] = {}
 
-    for cohort, metric, value in _read_header_and_rows(
-        path, ("cohort_id", "metric", "value")
-    ):
+    for cohort, metric, value in _read_header_and_rows(path, ("cohort_id", "metric", "value")):
         if cohort != cohort_id:
             raise ProvenanceInconsistencyError(
                 f"{path}: variant type accounting is for cohort '{cohort}', but "
@@ -773,20 +752,15 @@ def read_variant_type_accounting(path: Path, cohort_id: str) -> dict[str, str]:
             )
         if metric in metrics:
             raise ProvenanceInconsistencyError(
-                f"{path}: variant type accounting metric '{metric}' appears "
-                "more than once"
+                f"{path}: variant type accounting metric '{metric}' appears more than once"
             )
         metrics[metric] = value
 
     missing = [
-        metric
-        for metric in REQUIRED_VARIANT_TYPE_ACCOUNTING_METRICS
-        if metric not in metrics
+        metric for metric in REQUIRED_VARIANT_TYPE_ACCOUNTING_METRICS if metric not in metrics
     ]
     if missing:
-        raise MalformedAccountingError(
-            f"{path}: missing required metric(s): {missing}"
-        )
+        raise MalformedAccountingError(f"{path}: missing required metric(s): {missing}")
 
     return metrics
 
@@ -804,9 +778,7 @@ def read_gs_panel_summary(path: Path, cohort_id: str) -> dict[str, object]:
 
     missing = [key for key in REQUIRED_GS_PANEL_MANIFEST_KEYS if key not in payload]
     if missing:
-        raise MalformedAccountingError(
-            f"{path}: GS panel manifest missing key(s): {missing}"
-        )
+        raise MalformedAccountingError(f"{path}: GS panel manifest missing key(s): {missing}")
 
     if payload["cohort_id"] != cohort_id:
         raise ProvenanceInconsistencyError(
@@ -844,9 +816,7 @@ def cross_validate_accounting(
             f"accounting has {len(recorded_names)} rows"
         )
 
-    expected_names = [
-        name for name in cohort_accounting["sample_names"].split(",") if name
-    ]
+    expected_names = [name for name in cohort_accounting["sample_names"].split(",") if name]
     if expected_names != recorded_names:
         raise ProvenanceInconsistencyError(
             f"cohort accounting sample_names {expected_names} do not match the "
@@ -954,9 +924,7 @@ def _peek_mode(argv: list[str] | None) -> str:
 def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     """Add the arguments both modes require, with identical meanings."""
     parser.add_argument("--cohort-id", required=True)
-    parser.add_argument(
-        "--pipeline-version", required=True, help="workflow.manifest.version"
-    )
+    parser.add_argument("--pipeline-version", required=True, help="workflow.manifest.version")
     parser.add_argument(
         "--nextflow-version",
         required=True,
@@ -971,9 +939,7 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--sample-ploidy", required=True, type=int)
     parser.add_argument("--genomicsdb-batch-size", required=True, type=int)
     parser.add_argument("--optical-duplicate-pixel-distance", required=True, type=int)
-    parser.add_argument(
-        "--enable-gs-panel", required=True, action=argparse.BooleanOptionalAction
-    )
+    parser.add_argument("--enable-gs-panel", required=True, action=argparse.BooleanOptionalAction)
     for name in (*SNP_FILTER_PARAM_NAMES, *INDEL_FILTER_PARAM_NAMES):
         parser.add_argument(f"--{name.replace('_', '-')}", required=True, type=float)
 
@@ -1047,8 +1013,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
             action="append",
             default=[],
             type=Path,
-            help="An additional run artifact to checksum (gVCFs, cohort VCF, ...); "
-            "repeatable.",
+            help="An additional run artifact to checksum (gVCFs, cohort VCF, ...); repeatable.",
         )
         return parser.parse_args(argv)
 

@@ -11,10 +11,10 @@ sequence content -- so that is what these tests pin.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
 import io
-import contextlib
 import sys
 import tempfile
 import types
@@ -38,15 +38,11 @@ def _load_module(name: str, path: Path) -> types.ModuleType:
     return module
 
 
-hash_input_fastqs = _load_module(
-    "hash_input_fastqs", REPO_ROOT / "bin" / "hash_input_fastqs.py"
-)
+hash_input_fastqs = _load_module("hash_input_fastqs", REPO_ROOT / "bin" / "hash_input_fastqs.py")
 hash_reference_bundle = _load_module(
     "hash_reference_bundle", REPO_ROOT / "bin" / "hash_reference_bundle.py"
 )
-hash_run_artifacts = _load_module(
-    "hash_run_artifacts", REPO_ROOT / "bin" / "hash_run_artifacts.py"
-)
+hash_run_artifacts = _load_module("hash_run_artifacts", REPO_ROOT / "bin" / "hash_run_artifacts.py")
 
 # A real fixture read pair this repository already ships, so the expected
 # checksums below are the checksums of actual pipeline input rather than
@@ -82,9 +78,7 @@ class HashInputFastqsTests(unittest.TestCase):
         self.assertEqual(fields[9], _sha256(FIXTURE_READ_2))
 
     def test_row_has_the_declared_column_count(self) -> None:
-        self.assertEqual(
-            len(self._row()), len(hash_input_fastqs.INPUT_PROVENANCE_COLUMNS)
-        )
+        self.assertEqual(len(self._row()), len(hash_input_fastqs.INPUT_PROVENANCE_COLUMNS))
 
     def test_records_basenames_never_paths(self) -> None:
         fields = self._row()
@@ -123,15 +117,24 @@ class HashInputFastqsTests(unittest.TestCase):
             with contextlib.redirect_stderr(stderr):
                 exit_code = hash_input_fastqs.main(
                     [
-                        "--rank", "0",
-                        "--sample-id", "sample_a",
-                        "--read-group-id", "rg",
-                        "--library-id", "lib",
-                        "--platform", "ILLUMINA",
-                        "--platform-unit", "",
-                        "--fastq-1", str(Path(tmp) / "missing_R1.fastq.gz"),
-                        "--fastq-2", str(FIXTURE_READ_2),
-                        "--output", str(output),
+                        "--rank",
+                        "0",
+                        "--sample-id",
+                        "sample_a",
+                        "--read-group-id",
+                        "rg",
+                        "--library-id",
+                        "lib",
+                        "--platform",
+                        "ILLUMINA",
+                        "--platform-unit",
+                        "",
+                        "--fastq-1",
+                        str(Path(tmp) / "missing_R1.fastq.gz"),
+                        "--fastq-2",
+                        str(FIXTURE_READ_2),
+                        "--output",
+                        str(output),
                     ]
                 )
             self.assertEqual(exit_code, 1)
@@ -207,9 +210,7 @@ class HashReferenceBundleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             bundle = self._bundle(Path(tmp))
             bundle["bwa_indexes"] = bundle["bwa_indexes"][:4]
-            with self.assertRaises(
-                hash_reference_bundle.MalformedReferenceBundleError
-            ) as raised:
+            with self.assertRaises(hash_reference_bundle.MalformedReferenceBundleError) as raised:
                 hash_reference_bundle.build_rows(**bundle)
             self.assertIn("exactly 5", str(raised.exception))
 
@@ -220,9 +221,7 @@ class HashReferenceBundleTests(unittest.TestCase):
             extra = directory / "synthetic.fa.sa"
             extra.write_text("extra\n", encoding="utf-8")
             bundle["bwa_indexes"] = [*bundle["bwa_indexes"], extra]
-            with self.assertRaises(
-                hash_reference_bundle.MalformedReferenceBundleError
-            ) as raised:
+            with self.assertRaises(hash_reference_bundle.MalformedReferenceBundleError) as raised:
                 hash_reference_bundle.build_rows(**bundle)
             self.assertIn("exactly 5", str(raised.exception))
 
@@ -236,9 +235,7 @@ class HashReferenceBundleTests(unittest.TestCase):
             wrong = directory / "synthetic.fa.sa"
             wrong.write_text("wrong\n", encoding="utf-8")
             bundle["bwa_indexes"] = [*bundle["bwa_indexes"][:4], wrong]
-            with self.assertRaises(
-                hash_reference_bundle.MalformedReferenceBundleError
-            ) as raised:
+            with self.assertRaises(hash_reference_bundle.MalformedReferenceBundleError) as raised:
                 hash_reference_bundle.build_rows(**bundle)
             self.assertIn("suffixes", str(raised.exception))
 
@@ -263,9 +260,7 @@ class HashReferenceBundleTests(unittest.TestCase):
             collision.write_text("different content\n", encoding="utf-8")
             bundle["dict_file"] = collision
 
-            with self.assertRaises(
-                hash_reference_bundle.MalformedReferenceBundleError
-            ) as raised:
+            with self.assertRaises(hash_reference_bundle.MalformedReferenceBundleError) as raised:
                 hash_reference_bundle.build_rows(**bundle)
             self.assertIn("duplicate reference file name", str(raised.exception))
 

@@ -191,7 +191,17 @@ FastQC / fastp HTML、BWA logs、FASTQ/BAM/VCF、variant QC、GS artifactsはMul
 
 ## Tests and CI
 
+Pythonの開発・CI依存はPython 3.12環境へ固定版を導入します。
+
 ```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --requirement requirements-dev.txt
+```
+
+```bash
+.venv/bin/ruff check bin tests/bin tests/scripts
+.venv/bin/ruff format --check bin tests/bin tests/scripts
+
 python3 -m unittest discover -s tests/bin -v
 
 NXF_VER=26.04.6 nextflow lint .
@@ -213,7 +223,7 @@ nf-test test --tag issue52_containers     # container identity provenance
 nf-test test --tag issue51_host_user      # container出力のhost user所有
 ```
 
-GitHub Actionsはmainへのpush / pull requestでNextflow lint、Python unit tests、nf-testを実行します。real WGS cohortはCIでは実行しません。
+GitHub Actionsはmainへのpush / pull requestでPython 3.12と`requirements-dev.txt`の固定版を使ったRuff lint / format check、Nextflow lint、Python unit tests、nf-testを実行します。real WGS cohortはCIでは実行しません。
 
 ## Releases
 

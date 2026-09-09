@@ -54,9 +54,7 @@ def build_rows(artifacts: list[Path]) -> list[str]:
     for artifact in artifacts:
         path = Path(artifact)
         if path.name in seen:
-            raise MalformedArtifactGroupError(
-                f"duplicate artifact file name: '{path.name}'"
-            )
+            raise MalformedArtifactGroupError(f"duplicate artifact file name: '{path.name}'")
         seen.add(path.name)
         rows.append(f"{path.name}\tsha256:{sha256_file(path)}")
 

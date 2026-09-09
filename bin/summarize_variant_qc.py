@@ -14,7 +14,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-
 REQUIRED_SUMMARY_KEYS: tuple[str, ...] = (
     "number of samples:",
     "number of records:",

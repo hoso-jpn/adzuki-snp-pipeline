@@ -106,9 +106,7 @@ class ModuleLabelTests(unittest.TestCase):
         # an unreviewed side effect of a future HaplotypeCaller-only
         # change -- the exact coupling this Issue's label split exists
         # to prevent (PR #31 review feedback).
-        text = (REPO_ROOT / "modules/local/gatk_haplotypecaller.nf").read_text(
-            encoding="utf-8"
-        )
+        text = (REPO_ROOT / "modules/local/gatk_haplotypecaller.nf").read_text(encoding="utf-8")
         self.assertNotIn("label 'process_high'", text)
 
 
