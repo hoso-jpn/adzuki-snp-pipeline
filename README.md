@@ -71,6 +71,8 @@ NXF_VER=26.04.6 \
   -profile test,docker_amd64
 ```
 
+container taskは`docker`/`docker_amd64`のどちらでも起動したhost user（`-u $(id -u):$(id -g)`）として実行され、work directoryとpublished artifactは実行ユーザー所有で生成されます。実行契約と既知の制約は[`docs/docker_host_user_execution.md`](docs/docker_host_user_execution.md)です。
+
 ## 入力契約
 
 ### Samplesheet
@@ -208,6 +210,7 @@ Issue単位でfocused runもできます。
 ```bash
 nf-test test --tag issue42_run_manifest   # run-level provenance manifest
 nf-test test --tag issue52_containers     # container identity provenance
+nf-test test --tag issue51_host_user      # container出力のhost user所有
 ```
 
 GitHub Actionsはmainへのpush / pull requestでNextflow lint、Python unit tests、nf-testを実行します。real WGS cohortはCIでは実行しません。
@@ -217,6 +220,8 @@ GitHub Actionsはmainへのpush / pull requestでNextflow lint、Python unit tes
 Versioned research releasesは[GitHub Releases](https://github.com/hoso-jpn/adzuki-snp-pipeline/releases)で公開します。`v0.2.0`のrelease scopeとvalidation notesのreview可能な正本は[`docs/releases/v0.2.0.md`](docs/releases/v0.2.0.md)です。
 
 - [`v0.2.0`](https://github.com/hoso-jpn/adzuki-snp-pipeline/releases/tag/v0.2.0) — 最初の明示的なversioned research release。release対象commitは`dc87eb8fdba0294482fc5fdba991c2a34f1569e2`です。
+
+次のversionへ持ち越すrelease notes素材は[`docs/releases/unreleased.md`](docs/releases/unreleased.md)に記録します。
 
 `v0.2.0`が固定するcontractは、synthetic profileとCIで検証されるNextflow DSL2 workflow、FastQCからGS panel生成までのmodule contract、pin済みcontainer digest、および公開WGS 20検体までのreal E2E evidenceです。reference FAI/dictionaryのname、length、order整合性は、sample依存のmappingと全variant calling processに対するhard dataflow gateです。
 
