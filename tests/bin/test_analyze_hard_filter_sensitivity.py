@@ -12,7 +12,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "bin" / "analyze_hard_filter_sensitivity.py"
 SCENARIOS = REPO_ROOT / "conf" / "hard_filter_sensitivity_scenarios.json"
@@ -34,9 +33,7 @@ class SensitivityCliTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             rows = _read_tsv(sensitivity)
-            current = {
-                row["annotation"]: row for row in rows if row["scenario"] == "current"
-            }
+            current = {row["annotation"]: row for row in rows if row["scenario"] == "current"}
             self.assertEqual(current["QD"]["hit_records"], "1")
             self.assertEqual(current["QD"]["missing_records"], "1")
             self.assertEqual(current["QD"]["predicted_minus_observed"], "0")
@@ -51,9 +48,64 @@ class SensitivityCliTests(unittest.TestCase):
             ]
             self.assertEqual(summary_rows[0]["present_records"], "2")
             self.assertEqual(summary_rows[0]["missing_records"], "1")
-            self.assertIn(
-                "do not estimate accuracy", summary.read_text(encoding="utf-8")
+            self.assertIn("do not estimate accuracy", summary.read_text(encoding="utf-8"))
+
+    def test_any_filter_denominator_excludes_wholly_unevaluable_records(self) -> None:
+        # Two of these three records carry no filtered annotation at all,
+        # so no threshold can ever hit them. Reporting them as evaluable
+        # in the union row would restate an unevaluated record as one that
+        # passed every filter -- the separation Issue #46 requires between
+        # missing/evaluable and threshold-hit accounting.
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            vcf = _write_vcf(
+                directory / "snp.vcf.gz",
+                [
+                    "chr1\t1\t.\tA\tT\t.\tPASS\tAC=1",
+                    "chr1\t2\t.\tA\tT\t.\tPASS\tAC=1",
+                    "chr1\t3\t.\tA\tT\t500\tPASS\t"
+                    "QD=30;SOR=0.5;FS=0;MQ=60;MQRankSum=0;ReadPosRankSum=0",
+                ],
             )
+            result, _distribution, sensitivity, _summary = _run(vcf, directory, "snp")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            any_filter = next(
+                row
+                for row in _read_tsv(sensitivity)
+                if row["scenario"] == "current" and row["annotation"] == "ANY_FILTER"
+            )
+            self.assertEqual(any_filter["total_records"], "3")
+            self.assertEqual(any_filter["present_records"], "1")
+            self.assertEqual(any_filter["missing_records"], "2")
+            # 0 of the 1 evaluable record is hit, which is a real rate --
+            # distinct from the 0/3 that the total-record denominator
+            # would have implied.
+            self.assertEqual(any_filter["hit_records"], "0")
+            self.assertEqual(any_filter["hit_rate_among_present"], "0.000000")
+            self.assertEqual(any_filter["hit_rate_among_total"], "0.000000")
+
+    def test_any_filter_present_plus_missing_equals_total(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            vcf = _write_vcf(
+                directory / "snp.vcf.gz",
+                [
+                    "chr1\t1\t.\tA\tT\t50\tPASS\tQD=5",
+                    "chr1\t2\t.\tA\tT\t.\tPASS\tAC=1",
+                ],
+            )
+            result, _distribution, sensitivity, _summary = _run(vcf, directory, "snp")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for row in _read_tsv(sensitivity):
+                if row["annotation"] != "ANY_FILTER":
+                    continue
+                with self.subTest(scenario=row["scenario"]):
+                    self.assertEqual(
+                        int(row["present_records"]) + int(row["missing_records"]),
+                        int(row["total_records"]),
+                    )
 
     def test_boundary_values_do_not_hit_strict_current_comparisons(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -67,9 +119,7 @@ class SensitivityCliTests(unittest.TestCase):
             result, _distribution, sensitivity, _summary = _run(vcf, directory, "indel")
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            current = [
-                row for row in _read_tsv(sensitivity) if row["scenario"] == "current"
-            ]
+            current = [row for row in _read_tsv(sensitivity) if row["scenario"] == "current"]
             self.assertTrue(all(row["hit_records"] == "0" for row in current))
 
     def test_non_numeric_annotation_fails_before_outputs_are_written(self) -> None:
@@ -83,9 +133,7 @@ class SensitivityCliTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1)
             self.assertIn("not numeric", result.stderr)
-            self.assertTrue(
-                all(not path.exists() for path in (distribution, sensitivity, summary))
-            )
+            self.assertTrue(all(not path.exists() for path in (distribution, sensitivity, summary)))
 
     def test_default_scenarios_are_versioned_and_complete(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -128,9 +176,7 @@ class SensitivityCliTests(unittest.TestCase):
                         re.MULTILINE,
                     )
                     self.assertIsNotNone(match)
-                    self.assertEqual(
-                        float(match.group(1)), current[variant_type][annotation]
-                    )
+                    self.assertEqual(float(match.group(1)), current[variant_type][annotation])
 
     def test_indel_distribution_still_reports_unfiltered_annotations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

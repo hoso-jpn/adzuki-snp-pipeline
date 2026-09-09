@@ -31,18 +31,13 @@ from summarize_filter_qc import (
     parse_filtered_vcf,
 )
 
-
 DEFAULT_SCENARIO_CONFIG = (
-    Path(__file__).resolve().parents[1]
-    / "conf"
-    / "hard_filter_sensitivity_scenarios.json"
+    Path(__file__).resolve().parents[1] / "conf" / "hard_filter_sensitivity_scenarios.json"
 )
 NOT_APPLICABLE = "NA"
 
 FILTERED_ANNOTATIONS = {
-    variant_type: tuple(
-        annotation for annotation, tag in tags.items() if tag is not None
-    )
+    variant_type: tuple(annotation for annotation, tag in tags.items() if tag is not None)
     for variant_type, tags in FILTER_TAG_BY_VARIANT_TYPE.items()
 }
 
@@ -140,6 +135,12 @@ class AnalysisResult:
     scenario_any_hits: dict[str, int]
     observed_tag_hits: dict[str, int]
     observed_any_hits: int
+    # Records with at least one filtered annotation present. This is the
+    # union's own evaluable denominator: a record whose every filtered
+    # annotation is missing cannot be hit by any threshold, so counting
+    # it as evaluable would report an unevaluated record as one that
+    # passed -- the exact conflation this tool exists to avoid.
+    union_present_records: int
 
 
 def load_scenarios(path: Path) -> dict[str, dict[str, dict[str, float]]]:
@@ -161,13 +162,9 @@ def load_scenarios(path: Path) -> dict[str, dict[str, dict[str, float]]]:
     validated: dict[str, dict[str, dict[str, float]]] = {}
     for scenario_name, by_variant_type in scenarios.items():
         if not isinstance(scenario_name, str) or not scenario_name:
-            raise ScenarioConfigError(
-                f"{path}: scenario names must be non-empty strings"
-            )
+            raise ScenarioConfigError(f"{path}: scenario names must be non-empty strings")
         if not isinstance(by_variant_type, dict):
-            raise ScenarioConfigError(
-                f"{path}: scenario {scenario_name} must be an object"
-            )
+            raise ScenarioConfigError(f"{path}: scenario {scenario_name} must be an object")
 
         validated[scenario_name] = {}
         for variant_type, expected_annotations in FILTERED_ANNOTATIONS.items():
@@ -184,9 +181,7 @@ def load_scenarios(path: Path) -> dict[str, dict[str, dict[str, float]]]:
 
             validated[scenario_name][variant_type] = {}
             for annotation, raw_threshold in thresholds.items():
-                if isinstance(raw_threshold, bool) or not isinstance(
-                    raw_threshold, (int, float)
-                ):
+                if isinstance(raw_threshold, bool) or not isinstance(raw_threshold, (int, float)):
                     raise ScenarioConfigError(
                         f"{path}: {scenario_name}.{variant_type}.{annotation} must be numeric"
                     )
@@ -234,21 +229,19 @@ def analyze_records(
     """Scan records once and retain only fixed-size distribution counters."""
     filtered_annotations = FILTERED_ANNOTATIONS[variant_type]
     distributions = {
-        annotation: DistributionAccumulator.create(annotation)
-        for annotation in ANNOTATION_NAMES
+        annotation: DistributionAccumulator.create(annotation) for annotation in ANNOTATION_NAMES
     }
     scenario_hits = {
-        scenario: {annotation: 0 for annotation in filtered_annotations}
-        for scenario in scenarios
+        scenario: {annotation: 0 for annotation in filtered_annotations} for scenario in scenarios
     }
     scenario_any_hits = {scenario: 0 for scenario in scenarios}
     observed_tag_hits = {annotation: 0 for annotation in filtered_annotations}
     expected_tags = {
-        FILTER_TAG_BY_VARIANT_TYPE[variant_type][annotation]
-        for annotation in filtered_annotations
+        FILTER_TAG_BY_VARIANT_TYPE[variant_type][annotation] for annotation in filtered_annotations
     }
     total_records = 0
     observed_any_hits = 0
+    union_present_records = 0
 
     for record in records:
         total_records += 1
@@ -259,6 +252,8 @@ def analyze_records(
         tags = set(_filter_tags(record))
         if tags & expected_tags:
             observed_any_hits += 1
+        if any(values[annotation] is not None for annotation in filtered_annotations):
+            union_present_records += 1
 
         for annotation, value in values.items():
             if value is not None:
@@ -286,6 +281,7 @@ def analyze_records(
         scenario_any_hits=scenario_any_hits,
         observed_tag_hits=observed_tag_hits,
         observed_any_hits=observed_any_hits,
+        union_present_records=union_present_records,
     )
 
 
@@ -324,9 +320,7 @@ def build_distribution_rows(
                 _format_number(distribution.minimum),
                 _format_number(distribution.maximum),
                 _format_number(
-                    distribution.total / distribution.present
-                    if distribution.present
-                    else None
+                    distribution.total / distribution.present if distribution.present else None
                 ),
             ]
         )
@@ -338,9 +332,7 @@ def build_distribution_rows(
                 + [
                     "histogram",
                     "-inf" if bounds[index] is None else _format_number(bounds[index]),
-                    "+inf"
-                    if bounds[index + 1] is None
-                    else _format_number(bounds[index + 1]),
+                    "+inf" if bounds[index + 1] is None else _format_number(bounds[index + 1]),
                     str(result.total_records),
                     str(distribution.present),
                     str(missing),
@@ -367,9 +359,7 @@ def build_sensitivity_rows(
             distribution = result.distributions[annotation]
             missing = result.total_records - distribution.present
             hit_records = result.scenario_hits[scenario][annotation]
-            observed = (
-                result.observed_tag_hits[annotation] if scenario == "current" else None
-            )
+            observed = result.observed_tag_hits[annotation] if scenario == "current" else None
             rows.append(
                 [
                     cohort_id,
@@ -385,9 +375,7 @@ def build_sensitivity_rows(
                     _format_rate(hit_records, distribution.present),
                     _format_rate(hit_records, result.total_records),
                     str(observed) if observed is not None else NOT_APPLICABLE,
-                    str(hit_records - observed)
-                    if observed is not None
-                    else NOT_APPLICABLE,
+                    str(hit_records - observed) if observed is not None else NOT_APPLICABLE,
                 ]
             )
 
@@ -402,15 +390,13 @@ def build_sensitivity_rows(
                 "any",
                 NOT_APPLICABLE,
                 str(result.total_records),
-                str(result.total_records),
-                "0",
+                str(result.union_present_records),
+                str(result.total_records - result.union_present_records),
                 str(any_hits),
-                _format_rate(any_hits, result.total_records),
+                _format_rate(any_hits, result.union_present_records),
                 _format_rate(any_hits, result.total_records),
                 str(observed_any) if observed_any is not None else NOT_APPLICABLE,
-                str(any_hits - observed_any)
-                if observed_any is not None
-                else NOT_APPLICABLE,
+                str(any_hits - observed_any) if observed_any is not None else NOT_APPLICABLE,
             ]
         )
     return rows
@@ -461,9 +447,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--filtered-vcf", required=True, type=Path)
     parser.add_argument("--cohort-id", required=True)
-    parser.add_argument(
-        "--variant-type", required=True, choices=sorted(FILTERED_ANNOTATIONS)
-    )
+    parser.add_argument("--variant-type", required=True, choices=sorted(FILTERED_ANNOTATIONS))
     parser.add_argument("--scenario-config", type=Path, default=DEFAULT_SCENARIO_CONFIG)
     parser.add_argument("--distribution-output", required=True, type=Path)
     parser.add_argument("--sensitivity-output", required=True, type=Path)
@@ -480,9 +464,7 @@ def main(argv: list[str] | None = None) -> int:
             args.variant_type,
             scenarios,
         )
-        distribution_rows = build_distribution_rows(
-            args.cohort_id, args.variant_type, result
-        )
+        distribution_rows = build_distribution_rows(args.cohort_id, args.variant_type, result)
         sensitivity_rows = build_sensitivity_rows(
             args.cohort_id,
             args.variant_type,

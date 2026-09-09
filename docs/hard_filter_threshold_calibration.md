@@ -30,7 +30,7 @@ sample/cohort sizeへの依存が強く、20検体で得た値をcohort非依存
 
 ```bash
 python3 bin/analyze_hard_filter_sensitivity.py \
-  --filtered-vcf cohort.filtered.snp.vcf.gz \
+  --filtered-vcf cohort.snp.filtered.vcf.gz \
   --cohort-id PRJNA1138464_20sample \
   --variant-type snp \
   --scenario-config conf/hard_filter_sensitivity_scenarios.json \
