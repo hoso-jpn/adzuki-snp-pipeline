@@ -269,6 +269,8 @@ Versioned research releasesは[GitHub Releases](https://github.com/hoso-jpn/adzu
 
 `FILTER=PASS`は「設定されたhard-filter規則を通過した」ことだけを意味します。truth setがないため、variant callの正しさや最適なthresholdを意味しません。annotation欠損はthreshold通過と区別してQCします。
 
+Issue #46のreal-cohort calibrationは、事前定義した探索scenarioと再現可能な集計手順を[`docs/hard_filter_threshold_calibration.md`](docs/hard_filter_threshold_calibration.md)に固定しています。20検体artifactの実測結果とdecision recordは未記録であり、default thresholdは変更していません。
+
 ### GS panel
 
 MAF / call-rate filtering、LD pruning、imputation、GS model trainingはこのrepositoryのscope外です。現在のGS panelはvariant-calling outputから下流解析へ渡すための監査可能なdata packageです。
