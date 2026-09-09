@@ -15,7 +15,6 @@ import types
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "summarize_variant_qc.py"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -122,7 +121,9 @@ class ParseBcftoolsStatsTests(unittest.TestCase):
         self.assertEqual([sample.sample for sample in parsed.per_sample], ["sample_b", "sample_a"])
 
     def test_missing_genotypes_are_tracked_per_sample(self) -> None:
-        text = _bcftools_stats_text(number_of_records=3, missing_by_sample={"sample_a": 1, "sample_b": 3})
+        text = _bcftools_stats_text(
+            number_of_records=3, missing_by_sample={"sample_a": 1, "sample_b": 3}
+        )
         parsed = qc.parse_bcftools_stats(text, Path("synthetic.tsv"))
 
         missing_by_sample = {sample.sample: sample.missing for sample in parsed.per_sample}
@@ -260,7 +261,9 @@ class BuildOutputTests(unittest.TestCase):
         parsed = qc.parse_bcftools_stats(text, Path("synthetic.tsv"))
 
         sample_rows = qc.build_sample_qc_rows("cohort", "raw", "snp", parsed)
-        variant_rows = {row[3]: row[4] for row in qc.build_variant_qc_rows("cohort", "raw", "snp", parsed)}
+        variant_rows = {
+            row[3]: row[4] for row in qc.build_variant_qc_rows("cohort", "raw", "snp", parsed)
+        }
 
         self.assertTrue(all(row[8] == "NA" for row in sample_rows))
         self.assertEqual(variant_rows["cohort_missingness_rate"], "NA")
@@ -270,7 +273,9 @@ class BuildOutputTests(unittest.TestCase):
         parsed = qc.parse_bcftools_stats(text, Path("synthetic.tsv"))
 
         self.assertEqual(qc.build_sample_qc_rows("cohort", "raw", "snp", parsed), [])
-        variant_rows = {row[3]: row[4] for row in qc.build_variant_qc_rows("cohort", "raw", "snp", parsed)}
+        variant_rows = {
+            row[3]: row[4] for row in qc.build_variant_qc_rows("cohort", "raw", "snp", parsed)
+        }
         self.assertEqual(variant_rows["sample_names"], "")
         # cohort_total_genotypes comes from the SN section, independent
         # of how many PSC rows were actually present.
@@ -284,7 +289,9 @@ class BuildOutputTests(unittest.TestCase):
         source = FIXTURES_DIR / "raw_snp.bcftools.stats.tsv"
         parsed = qc.parse_bcftools_stats(source.read_text(encoding="utf-8"), source)
 
-        variant_qc = {row[3]: row[4] for row in qc.build_variant_qc_rows("cohort", "raw", "snp", parsed)}
+        variant_qc = {
+            row[3]: row[4] for row in qc.build_variant_qc_rows("cohort", "raw", "snp", parsed)
+        }
         self.assertEqual(variant_qc["cohort_missing_genotypes"], "0")
         self.assertEqual(variant_qc["cohort_total_genotypes"], "4")
         self.assertEqual(variant_qc["cohort_missingness_rate"], "0.000000")

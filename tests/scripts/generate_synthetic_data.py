@@ -7,7 +7,6 @@ import random
 import re
 from pathlib import Path
 
-
 RANDOM_SEED = 20260812
 CONTIG_LENGTH = 5000
 READ_LENGTH = 100
@@ -81,10 +80,7 @@ def make_sequence(
     random_generator: random.Random,
     length: int,
 ) -> str:
-    return "".join(
-        random_generator.choice("ACGT")
-        for _ in range(length)
-    )
+    return "".join(random_generator.choice("ACGT") for _ in range(length))
 
 
 def reverse_complement(sequence: str) -> str:
@@ -101,7 +97,7 @@ def write_fasta(
     for name, sequence in contigs.items():
         lines.append(f">{name}")
         lines.extend(
-            sequence[index:index + 80]
+            sequence[index : index + 80]
             for index in range(
                 0,
                 len(sequence),
@@ -133,14 +129,11 @@ def build_fastq(
             fragment_starts,
             start=1,
         ):
-            fragment = contig_sequence[
-                start:start + FRAGMENT_LENGTH
-            ]
+            fragment = contig_sequence[start : start + FRAGMENT_LENGTH]
 
             if len(fragment) != FRAGMENT_LENGTH:
                 raise ValueError(
-                    "Fragment exceeds contig: "
-                    f"{read_group_id}, {contig_name}, {start}"
+                    f"Fragment exceeds contig: {read_group_id}, {contig_name}, {start}"
                 )
 
             fragment_bases = list(fragment)
@@ -153,9 +146,7 @@ def build_fastq(
 
             fragment = "".join(fragment_bases)
             read1 = fragment[:READ_LENGTH]
-            read2 = reverse_complement(
-                fragment[-READ_LENGTH:]
-            )
+            read2 = reverse_complement(fragment[-READ_LENGTH:])
             read_name = casava_read_name(
                 read_group_id,
                 contig_name,
@@ -207,9 +198,7 @@ def write_deterministic_gzip(
 
 def main() -> None:
     project_dir = Path(__file__).resolve().parents[2]
-    reference_dir = (
-        project_dir / "tests/data/reference"
-    )
+    reference_dir = project_dir / "tests/data/reference"
     reads_dir = project_dir / "tests/data/reads"
     variants_dir = project_dir / "tests/data/variants"
 
@@ -226,9 +215,7 @@ def main() -> None:
         exist_ok=True,
     )
 
-    random_generator = random.Random(
-        RANDOM_SEED
-    )
+    random_generator = random.Random(RANDOM_SEED)
     contigs = {
         "chrSynthetic1": make_sequence(
             random_generator,
@@ -386,11 +373,7 @@ def main() -> None:
         position = site["position"]
         alt_dp = site["alt_dp"]
         ref_dp = site["ref_dp"]
-        ref_sample_id = next(
-            sample_id
-            for sample_id in sample_ids
-            if sample_id != alt_sample_id
-        )
+        ref_sample_id = next(sample_id for sample_id in sample_ids if sample_id != alt_sample_id)
 
         expected_variant_rows.append(
             "\t".join(
@@ -413,9 +396,7 @@ def main() -> None:
             )
         )
 
-    (
-        variants_dir / "expected_variants.tsv"
-    ).write_text(
+    (variants_dir / "expected_variants.tsv").write_text(
         "\n".join(expected_variant_rows) + "\n",
         encoding="utf-8",
     )
@@ -439,13 +420,11 @@ def main() -> None:
         )
 
         write_deterministic_gzip(
-            reads_dir
-            / f"{read_group_id}_R1.fastq.gz",
+            reads_dir / f"{read_group_id}_R1.fastq.gz",
             read1,
         )
         write_deterministic_gzip(
-            reads_dir
-            / f"{read_group_id}_R2.fastq.gz",
+            reads_dir / f"{read_group_id}_R2.fastq.gz",
             read2,
         )
 
@@ -466,9 +445,7 @@ def main() -> None:
         "lib_b,ILLUMINA,flowcell1.L001.CGATGT\n"
     )
 
-    (
-        project_dir / "tests/data/samplesheet.csv"
-    ).write_text(
+    (project_dir / "tests/data/samplesheet.csv").write_text(
         samplesheet,
         encoding="utf-8",
     )

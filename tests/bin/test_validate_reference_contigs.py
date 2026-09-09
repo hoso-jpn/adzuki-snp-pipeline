@@ -38,7 +38,9 @@ def _write_fai(path: Path, rows: list[tuple[str, int]]) -> None:
 
 def _write_dict(path: Path, rows: list[tuple[str, int]]) -> None:
     lines = ["@HD\tVN:1.6\tSO:unsorted"]
-    lines += [f"@SQ\tSN:{name}\tLN:{length}\tM5:deadbeef\tUR:file:./ref.fa" for name, length in rows]
+    lines += [
+        f"@SQ\tSN:{name}\tLN:{length}\tM5:deadbeef\tUR:file:./ref.fa" for name, length in rows
+    ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -80,7 +82,9 @@ class ParseFaiTests(unittest.TestCase):
     def test_skips_blank_lines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             fai_path = Path(tmp) / "ref.fa.fai"
-            fai_path.write_text("Chr01\t1000\t0\t70\t71\n\n\nChr02\t2000\t0\t70\t71\n", encoding="utf-8")
+            fai_path.write_text(
+                "Chr01\t1000\t0\t70\t71\n\n\nChr02\t2000\t0\t70\t71\n", encoding="utf-8"
+            )
             records = validate_module.parse_fai(fai_path)
         self.assertEqual(len(records), 2)
 
@@ -137,8 +141,14 @@ class ParseDictTests(unittest.TestCase):
 
 class FindFirstMismatchTests(unittest.TestCase):
     def test_identical_lists_have_no_mismatch(self) -> None:
-        fai = [validate_module.ContigRecord(name=n, length=l) for n, l in _STANDARD_CONTIGS]
-        dict_records = [validate_module.ContigRecord(name=n, length=l) for n, l in _STANDARD_CONTIGS]
+        fai = [
+            validate_module.ContigRecord(name=name, length=length)
+            for name, length in _STANDARD_CONTIGS
+        ]
+        dict_records = [
+            validate_module.ContigRecord(name=name, length=length)
+            for name, length in _STANDARD_CONTIGS
+        ]
         self.assertIsNone(validate_module.find_first_mismatch(fai, dict_records))
 
     def test_reports_count_mismatch(self) -> None:
@@ -179,15 +189,22 @@ class FindFirstMismatchTests(unittest.TestCase):
 
     def test_same_contig_set_but_different_order_is_a_mismatch(self) -> None:
         # This is the critical case a naive set-equality comparison would miss.
-        fai = [validate_module.ContigRecord(name=n, length=l) for n, l in _STANDARD_CONTIGS]
+        fai = [
+            validate_module.ContigRecord(name=name, length=length)
+            for name, length in _STANDARD_CONTIGS
+        ]
         reordered = [_STANDARD_CONTIGS[1], _STANDARD_CONTIGS[0], _STANDARD_CONTIGS[2]]
-        dict_records = [validate_module.ContigRecord(name=n, length=l) for n, l in reordered]
+        dict_records = [
+            validate_module.ContigRecord(name=name, length=length) for name, length in reordered
+        ]
         message = validate_module.find_first_mismatch(fai, dict_records)
         self.assertIsNotNone(message)
 
 
 class MainCliTests(unittest.TestCase):
-    def _run(self, fai_rows: list[tuple[str, int]], dict_rows: list[tuple[str, int]]) -> tuple[int, str]:
+    def _run(
+        self, fai_rows: list[tuple[str, int]], dict_rows: list[tuple[str, int]]
+    ) -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as tmp:
             fai_path = Path(tmp) / "ref.fa.fai"
             dict_path = Path(tmp) / "ref.dict"
@@ -195,9 +212,7 @@ class MainCliTests(unittest.TestCase):
             _write_dict(dict_path, dict_rows)
             stderr = io.StringIO()
             with contextlib.redirect_stderr(stderr):
-                exit_code = validate_module.main(
-                    ["--fai", str(fai_path), "--dict", str(dict_path)]
-                )
+                exit_code = validate_module.main(["--fai", str(fai_path), "--dict", str(dict_path)])
             return exit_code, stderr.getvalue()
 
     def test_matching_generated_style_pair_succeeds(self) -> None:

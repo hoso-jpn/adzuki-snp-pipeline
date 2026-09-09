@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Locus-stream normalized VCF records into the biallelic-SNP GS input."""
+
 from __future__ import annotations
 
 import argparse
@@ -72,8 +73,14 @@ def _temporary_path(final_path: Path) -> Path:
     return Path(name)
 
 
-def _flush_locus(chrom: str, pos: int, records: list[LocusRecord], output: TextIO,
-                 duplicates: TextIO, stats: ClassificationStats) -> None:
+def _flush_locus(
+    chrom: str,
+    pos: int,
+    records: list[LocusRecord],
+    output: TextIO,
+    duplicates: TextIO,
+    stats: ClassificationStats,
+) -> None:
     counts = Counter(record.allele_key for record in records)
     for record in records:
         if counts[record.allele_key] == 1:
@@ -97,46 +104,61 @@ def _write_accounting(path: Path, cohort_id: str, stats: ClassificationStats) ->
         handle.write(f"{cohort_id}\toutput_records\t{stats.output_records}\n")
 
 
-def _write_summary(path: Path, cohort_id: str, stats: ClassificationStats,
-                   duplicate_path: Path) -> None:
+def _write_summary(
+    path: Path, cohort_id: str, stats: ClassificationStats, duplicate_path: Path
+) -> None:
     with path.open("w", encoding="utf-8") as handle:
         handle.write("Variant normalization and classification summary\n")
         handle.write(f"Cohort ID: {cohort_id}\n")
-        handle.write("Total input records (post bcftools norm -m- splitting): "
-                     f"{stats.total_input_records}\n")
+        handle.write(
+            f"Total input records (post bcftools norm -m- splitting): {stats.total_input_records}\n"
+        )
         for name in VARIANT_CLASSES:
             handle.write(f"  {name}: {stats.class_counts[name]}\n")
-        handle.write("Only 'snp'-classified records are eligible for the GS panel; "
-                     "mnp/indel/symbolic_or_star records are excluded here, not "
-                     "silently dropped further downstream.\n")
-        handle.write("Duplicate (CHROM, POS, REF, ALT) keys: "
-                     f"{stats.distinct_duplicate_keys} distinct key(s), "
-                     f"{stats.duplicate_key_records} record(s) total -- every occurrence "
-                     "of a colliding key is excluded, not just the extras, since there is "
-                     "no automatic way to decide which one is correct.\n")
+        handle.write(
+            "Only 'snp'-classified records are eligible for the GS panel; "
+            "mnp/indel/symbolic_or_star records are excluded here, not "
+            "silently dropped further downstream.\n"
+        )
+        handle.write(
+            "Duplicate (CHROM, POS, REF, ALT) keys: "
+            f"{stats.distinct_duplicate_keys} distinct key(s), "
+            f"{stats.duplicate_key_records} record(s) total -- every occurrence "
+            "of a colliding key is excluded, not just the extras, since there is "
+            "no automatic way to decide which one is correct.\n"
+        )
         if stats.distinct_duplicate_keys:
             handle.write("Colliding keys:\n")
             with duplicate_path.open(encoding="utf-8") as evidence:
                 shutil.copyfileobj(evidence, handle)
         handle.write(f"Output records (eligible for GS hard-filtering): {stats.output_records}\n")
-        handle.write("FILTER has been reset to '.' on every output record: bcftools norm "
-                     "propagates the original record's FILTER value to every split child "
-                     "regardless of that child's new shape, which can leave a semantically "
-                     "mismatched tag; the GS-specific hard-filter step downstream makes its "
-                     "own PASS/FAIL decision from a clean slate.\n")
+        handle.write(
+            "FILTER has been reset to '.' on every output record: bcftools norm "
+            "propagates the original record's FILTER value to every split child "
+            "regardless of that child's new shape, which can leave a semantically "
+            "mismatched tag; the GS-specific hard-filter step downstream makes its "
+            "own PASS/FAIL decision from a clean slate.\n"
+        )
 
 
-def stream_classify_vcf(normalized_vcf: Path, cohort_id: str, output_path: Path,
-                        accounting_path: Path, summary_path: Path) -> ClassificationStats:
+def stream_classify_vcf(
+    normalized_vcf: Path,
+    cohort_id: str,
+    output_path: Path,
+    accounting_path: Path,
+    summary_path: Path,
+) -> ClassificationStats:
     """Process a contig-grouped, position-sorted VCF with locus-bounded memory."""
     finals = (output_path, accounting_path, summary_path)
     temps = tuple(_temporary_path(path) for path in finals)
     duplicate_path = _temporary_path(summary_path.with_name(summary_path.name + ".duplicates"))
     stats = ClassificationStats(0, {name: 0 for name in VARIANT_CLASSES})
     try:
-        with (gzip.open(normalized_vcf, "rt", encoding="utf-8") as source,
-              temps[0].open("w", encoding="utf-8") as output,
-              duplicate_path.open("w", encoding="utf-8") as duplicates):
+        with (
+            gzip.open(normalized_vcf, "rt", encoding="utf-8") as source,
+            temps[0].open("w", encoding="utf-8") as output,
+            duplicate_path.open("w", encoding="utf-8") as duplicates,
+        ):
             saw_header = False
             current_locus: tuple[str, int] | None = None
             locus_records: list[LocusRecord] = []
@@ -149,13 +171,17 @@ def stream_classify_vcf(normalized_vcf: Path, cohort_id: str, output_path: Path,
                     continue
                 if line.startswith("##"):
                     if saw_header:
-                        raise MalformedVcfError(f"{normalized_vcf}:{line_number}: metadata after #CHROM header")
+                        raise MalformedVcfError(
+                            f"{normalized_vcf}:{line_number}: metadata after #CHROM header"
+                        )
                     if not line.startswith("##FILTER="):
                         output.write(line + "\n")
                     continue
                 if line.startswith("#CHROM"):
                     if saw_header:
-                        raise MalformedVcfError(f"{normalized_vcf}:{line_number}: duplicate #CHROM header")
+                        raise MalformedVcfError(
+                            f"{normalized_vcf}:{line_number}: duplicate #CHROM header"
+                        )
                     header_fields = line.split("\t")
                     if len(header_fields) <= 9:
                         raise MalformedVcfError(
@@ -184,7 +210,9 @@ def stream_classify_vcf(normalized_vcf: Path, cohort_id: str, output_path: Path,
                         f"{normalized_vcf}:{line_number}: POS is not an integer: {pos_text!r}"
                     ) from error
                 if pos < 1:
-                    raise MalformedVcfError(f"{normalized_vcf}:{line_number}: POS must be positive: {pos}")
+                    raise MalformedVcfError(
+                        f"{normalized_vcf}:{line_number}: POS must be positive: {pos}"
+                    )
 
                 if chrom != current_contig:
                     if chrom in closed_contigs:
@@ -210,9 +238,26 @@ def stream_classify_vcf(normalized_vcf: Path, cohort_id: str, output_path: Path,
                 variant_class = classify_variant(ref, alt)
                 stats.class_counts[variant_class] += 1
                 if variant_class == ELIGIBLE_CLASS:
-                    locus_records.append(LocusRecord(
-                        ref, alt, "\t".join((chrom, pos_text, id_, ref, alt, qual,
-                                             RESET_FILTER_VALUE, info, format_, samples))))
+                    locus_records.append(
+                        LocusRecord(
+                            ref,
+                            alt,
+                            "\t".join(
+                                (
+                                    chrom,
+                                    pos_text,
+                                    id_,
+                                    ref,
+                                    alt,
+                                    qual,
+                                    RESET_FILTER_VALUE,
+                                    info,
+                                    format_,
+                                    samples,
+                                )
+                            ),
+                        )
+                    )
             if not saw_header:
                 raise MalformedVcfError(f"{normalized_vcf}: no #CHROM header line found")
             if current_locus is not None:
@@ -244,8 +289,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        stream_classify_vcf(args.normalized_vcf, args.cohort_id, args.output,
-                            args.accounting_output, args.summary_output)
+        stream_classify_vcf(
+            args.normalized_vcf,
+            args.cohort_id,
+            args.output,
+            args.accounting_output,
+            args.summary_output,
+        )
     except (OSError, MalformedVcfError) as error:
         print(f"classify_normalized_variants.py: error: {error}", file=sys.stderr)
         return 1

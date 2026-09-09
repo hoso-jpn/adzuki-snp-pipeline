@@ -144,8 +144,7 @@ def validate_container_identity(process_name: str, value: str) -> str:
         raise ValueError(f"container identity for '{process_name}' is empty")
     if any(character.isspace() for character in value):
         raise ValueError(
-            f"container identity for '{process_name}' contains whitespace; "
-            f"{_REDACTED}"
+            f"container identity for '{process_name}' contains whitespace; {_REDACTED}"
         )
     if _FILE_URI_SCHEME_RE.match(value):
         raise ValueError(
@@ -220,8 +219,7 @@ def _assert_string_is_publishable(location: str, value: str) -> None:
         )
     if _FILE_URI_SCHEME_RE.match(value):
         raise HostMetadataLeakError(
-            f"{location} is a file:// URI, which encodes a host filesystem path; "
-            f"{_REDACTED}."
+            f"{location} is a file:// URI, which encodes a host filesystem path; {_REDACTED}."
         )
     if _URL_CREDENTIALS_RE.search(value):
         raise HostMetadataLeakError(

@@ -23,7 +23,6 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-
 ANNOTATION_NAMES: tuple[str, ...] = (
     "QD",
     "QUAL",
@@ -231,9 +230,7 @@ def compute_filter_breakdown(records: Iterable[VcfRecord]) -> FilterBreakdown:
 
     for record in records:
         total_records += 1
-        combination_counts[record.filter_value] = (
-            combination_counts.get(record.filter_value, 0) + 1
-        )
+        combination_counts[record.filter_value] = combination_counts.get(record.filter_value, 0) + 1
 
         if record.filter_value == "PASS":
             pass_records += 1
@@ -362,9 +359,7 @@ def summarize_records(
 
     for record in records:
         total_records += 1
-        combination_counts[record.filter_value] = (
-            combination_counts.get(record.filter_value, 0) + 1
-        )
+        combination_counts[record.filter_value] = combination_counts.get(record.filter_value, 0) + 1
         tags = _filter_tags(record)
         tag_set = set(tags)
 
@@ -420,8 +415,22 @@ def build_filter_breakdown_rows(
     rows: list[list[str]] = [
         [cohort_id, stage, variant_type, "summary", "total_records", str(breakdown.total_records)],
         [cohort_id, stage, variant_type, "summary", "pass_records", str(breakdown.pass_records)],
-        [cohort_id, stage, variant_type, "summary", "non_pass_records", str(breakdown.non_pass_records)],
-        [cohort_id, stage, variant_type, "summary", "multi_tag_records", str(breakdown.multi_tag_records)],
+        [
+            cohort_id,
+            stage,
+            variant_type,
+            "summary",
+            "non_pass_records",
+            str(breakdown.non_pass_records),
+        ],
+        [
+            cohort_id,
+            stage,
+            variant_type,
+            "summary",
+            "multi_tag_records",
+            str(breakdown.multi_tag_records),
+        ],
         [
             cohort_id,
             stage,
@@ -453,9 +462,7 @@ def build_filter_breakdown_rows(
         )
 
     for tag in sorted(breakdown.tag_counts):
-        rows.append(
-            [cohort_id, stage, variant_type, "tag", tag, str(breakdown.tag_counts[tag])]
-        )
+        rows.append([cohort_id, stage, variant_type, "tag", tag, str(breakdown.tag_counts[tag])])
 
     return rows
 

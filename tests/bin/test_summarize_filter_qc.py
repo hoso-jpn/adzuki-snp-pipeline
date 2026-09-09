@@ -19,7 +19,6 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "summarize_filter_qc.py"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -110,7 +109,9 @@ class FilterBreakdownTests(unittest.TestCase):
         self.assertEqual(breakdown.total_records, 3)
         self.assertEqual(breakdown.pass_records, 1)
         self.assertEqual(breakdown.non_pass_records, 2)
-        self.assertEqual(breakdown.total_records, breakdown.pass_records + breakdown.non_pass_records)
+        self.assertEqual(
+            breakdown.total_records, breakdown.pass_records + breakdown.non_pass_records
+        )
         self.assertEqual(breakdown.multi_tag_records, 1)
 
     def test_multi_tag_fixture_tag_counts_can_exceed_non_pass_records(self) -> None:
@@ -240,7 +241,9 @@ class OutputContractTests(unittest.TestCase):
         breakdown = qc.compute_filter_breakdown(records)
         coverages = qc.compute_annotation_coverage(records, "snp")
 
-        summary_text = qc.build_filter_qc_summary_text("cohort", "filtered", "snp", breakdown, coverages)
+        summary_text = qc.build_filter_qc_summary_text(
+            "cohort", "filtered", "snp", breakdown, coverages
+        )
 
         self.assertIn("Reconciliation: total (3) = PASS (1) + non-PASS (2)", summary_text)
 
@@ -269,9 +272,7 @@ class StreamingEquivalenceTests(unittest.TestCase):
                     expected,
                 )
 
-    @unittest.skipUnless(
-        Path("/proc/self/statm").exists(), "needs /proc to sample a child's RSS"
-    )
+    @unittest.skipUnless(Path("/proc/self/statm").exists(), "needs /proc to sample a child's RSS")
     def test_peak_memory_does_not_grow_with_record_count(self) -> None:
         small, large = 4_000, 64_000
         measurements = {}
@@ -508,8 +509,7 @@ def _write_generated_filter_vcf(path: Path, record_count: int) -> Path:
         for index in range(record_count):
             filter_value = "PASS" if index % 3 == 0 else "SNP_QD_LOW;SNP_SOR_HIGH"
             handle.write(
-                f"chr1\t{index + 1}\t.\tA\tT\t50\t{filter_value}\t"
-                "QD=1.5;SOR=4.2;FS=10;MQ=55\n"
+                f"chr1\t{index + 1}\t.\tA\tT\t50\t{filter_value}\tQD=1.5;SOR=4.2;FS=10;MQ=55\n"
             )
     return path
 
@@ -551,6 +551,14 @@ def _peak_rss_kib_for_filter_qc(vcf: Path, directory: Path) -> int:
     _stdout, stderr = process.communicate()
     if process.returncode != 0:
         raise AssertionError(f"summarizer failed: {stderr.decode(errors='replace')}")
+
+    # A sample was never taken -- the child exited or /proc became
+    # unreadable before the first read. Returning 0 here would silently
+    # make the comparison meaningless: 0 for the small run turns the
+    # growth check into a false failure, and 0 for the large run turns it
+    # into a false pass. Fail on the measurement itself instead.
+    if peak_pages == 0:
+        raise AssertionError("could not sample the summarizer's RSS before it exited")
 
     return peak_pages * page_kib
 

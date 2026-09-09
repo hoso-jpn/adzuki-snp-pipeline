@@ -2,8 +2,13 @@ name: Test
 on:
   push:
     branches: [ main ]
+  # Issue #53: no `branches:` filter here on purpose. A `pull_request`
+  # branch filter matches the *base*, so restricting it to `main` left
+  # every stacked PR (one opened against another feature branch) with no
+  # check run at all -- PR #60 reached review with zero workflow runs.
+  # Dropping the filter is the conservative choice: it can only add
+  # coverage, and it does not depend on this project's branch naming.
   pull_request:
-    branches: [ main ]
 jobs:
   nf-test:
     runs-on: ubuntu-latest
