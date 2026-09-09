@@ -84,6 +84,12 @@ profileの`-profile test,docker`をmodified/unmodifiedで実行して比較し�
   work directoryにroot所有entryは0（unmodified runでは208）。published artifactは
   203 entryすべてhost user所有。
 
+`-profile test,docker_amd64`でも同じsyntheticを実行し、73 processすべて成功、work
+directoryのroot所有entry 0、published artifactすべてhost user所有を確認しました。生成された
+73件の`.command.run`すべてに`-u $(id -u):$(id -g)`と`--platform linux/amd64`の双方が
+含まれています。ただしこれはamd64 host上の実行であり、Apple Silicon実機でのemulation経路の
+検証ではありません。
+
 ### scientific output
 
 publishされたVCF / TSV / TXT 68件のうち53件はunmodified runとbyte-identicalでした。
@@ -115,5 +121,5 @@ sample metadata / accounting TSVはbyte-identicalです。
 - 検証はsynthetic fixture（2 sample / 3 read group）でのみ実施しています。real cohortや
   327検体規模での再実行は行っていません。MULTIQC tmpfsのmemory影響も同fixture規模でしか
   観測していません。
-- `-profile docker_amd64`（Apple Silicon emulation経路）はamd64 hostで実効config値のみ
-  確認しており、Apple Silicon実機でのrun検証は行っていません。
+- `-profile docker_amd64`はamd64 host上でのrun（両option併存とownership）までを確認して
+  おり、Apple Silicon実機でのemulation経路の検証は行っていません。
