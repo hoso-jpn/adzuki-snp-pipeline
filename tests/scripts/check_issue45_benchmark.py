@@ -4,6 +4,7 @@
 import argparse
 import json
 import shutil
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -38,7 +39,13 @@ def main():
                 raise ValueError("Expected one synthetic BAM/index identity")
             shutil.copyfile(candidates.pop(), inputs / (sid + suffix))
     stop = threading.Event()
-    producer = ToolRunner(root, inputs, reference, stop)
+    # Hosted CI has fewer CPUs than the 32-thread benchmark machine. Docker
+    # rejects quotas exceeding its host CPU count before starting the tool.
+    # Cap only synthetic test quotas; preserve every scientific CLI argument.
+    available_cpus = min(
+        4, int(subprocess.check_output(["docker", "info", "--format", "{{.NCPU}}"], text=True))
+    )
+    producer = ToolRunner(root, inputs, reference, stop, cpu_limit=available_cpus)
 
     def generate(sid):
         producer.run(
@@ -96,7 +103,7 @@ def main():
     ]
     for groups in (baseline, split, grouped):
         validate_tiling(groups, contigs)
-    runner = ToolRunner(root, gvcfs, reference, stop)
+    runner = ToolRunner(root, gvcfs, reference, stop, cpu_limit=available_cpus)
     results = {}
     # The two equally sized synthetic contigs cannot represent both long
     # chromosomes and small scaffolds. Test splitting and grouping separately
@@ -158,4 +165,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        if "--output-dir" in sys.argv:
+            output = Path(sys.argv[sys.argv.index("--output-dir") + 1])
+            for path in sorted(output.rglob("*.execution.json")):
+                record = json.loads(path.read_text())
+                if record["docker_exit_code"] != 0:
+                    log = path.with_name(path.name.replace(".execution.json", ".log"))
+                    print(
+                        f"Synthetic {record['process']} failed with Docker exit {record['docker_exit_code']}",
+                        file=sys.stderr,
+                    )
+                    print("\n".join(log.read_text().splitlines()[-30:]), file=sys.stderr)
+        raise

@@ -294,11 +294,12 @@ def joint_integrity(path, expected_samples, contigs):
 
 
 class ToolRunner:
-    def __init__(self, root, input_dir, reference_dir, stop_event):
+    def __init__(self, root, input_dir, reference_dir, stop_event, cpu_limit=None):
         self.root = root.resolve()
         self.input_dir = input_dir.resolve()
         self.reference_dir = reference_dir.resolve()
         self.stop_event = stop_event
+        self.cpu_limit = cpu_limit
         self.helper = Path(__file__).resolve().parent
 
     def run(self, directory, process, arguments, cpus=8, memory_gib=16):
@@ -312,6 +313,7 @@ class ToolRunner:
         container = f"issue45-{os.getpid()}-{directory.name}-{process}".lower()
         container = re.sub(r"[^a-z0-9_.-]", "-", container)
         relative = directory.relative_to(self.root)
+        effective_cpus = min(cpus, self.cpu_limit) if self.cpu_limit is not None else cpus
         command = [
             "docker",
             "run",
@@ -322,7 +324,7 @@ class ToolRunner:
             "--label",
             f"adzuki.issue45_benchmark={self.root.name}",
             "--cpus",
-            str(cpus),
+            str(effective_cpus),
             "--memory",
             f"{memory_gib}g",
             "--memory-swap",
@@ -381,7 +383,8 @@ class ToolRunner:
             docker_exit_code=exit_code,
             container_state=state,
             elapsed_including_container_seconds=time.monotonic() - start,
-            allocated_cpus=cpus,
+            allocated_cpus=effective_cpus,
+            requested_cpus=cpus,
             allocated_memory_bytes=memory_gib * 1024**3,
             attempt=1,
             retry_count=0,
