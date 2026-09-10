@@ -43,6 +43,16 @@ qc = _load_module("summarize_filter_qc", SCRIPT_PATH)
 class ParseFilteredVcfTests(unittest.TestCase):
     """Tests for parse_filtered_vcf against real and hand-crafted VCFs."""
 
+    def test_rejects_missing_duplicate_or_late_header(self) -> None:
+        header = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+        row = "chr1\t1\t.\tA\tC\t50\tPASS\tQD=10"
+        for lines in ([], [row], [header, header], [header, row, "##source=late"]):
+            with self.subTest(lines=lines), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "invalid.vcf.gz"
+                _write_gzip_vcf(path, lines)
+                with self.assertRaises(qc.MalformedVcfError):
+                    list(qc.parse_filtered_vcf(path))
+
     def test_real_filtered_snp_vcf(self) -> None:
         records = list(qc.parse_filtered_vcf(FIXTURES_DIR / "filtered_snp.vcf.gz"))
 
@@ -248,6 +258,37 @@ class OutputContractTests(unittest.TestCase):
         self.assertIn("Reconciliation: total (3) = PASS (1) + non-PASS (2)", summary_text)
 
 
+class StagedOutputTests(unittest.TestCase):
+    def test_failed_second_rename_restores_existing_results(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = (Path(tmp) / "a.tsv", Path(tmp) / "b.tsv")
+            outputs[0].write_text("previous\n")
+            replace = Path.replace
+
+            def fail_second(source, target):
+                if target == outputs[1]:
+                    raise OSError("injected publish failure")
+                return replace(source, target)
+
+            with mock.patch.object(Path, "replace", fail_second), self.assertRaises(OSError):
+                with qc.staged_qc_outputs(outputs) as staged:
+                    for path in staged:
+                        path.write_text("new\n")
+            self.assertEqual("previous\n", outputs[0].read_text())
+            self.assertFalse(outputs[1].exists())
+            self.assertEqual([outputs[0]], list(Path(tmp).iterdir()))
+
+    def test_rejects_output_aliases_and_input_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "input"
+            path.write_text("original")
+            for outputs, inputs in (((path, path), ()), ((path,), (path,))):
+                with self.subTest(outputs=outputs), self.assertRaises(ValueError):
+                    with qc.staged_qc_outputs(outputs, inputs=inputs):
+                        self.fail("invalid output was accepted")
+            self.assertEqual("original", path.read_text())
+
+
 class StreamingEquivalenceTests(unittest.TestCase):
     """The fused production summary must match the historical two-pass result."""
 
@@ -304,6 +345,35 @@ class StreamingEquivalenceTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     """Tests for the main() CLI entry point: success and failure exit codes."""
+
+    def test_output_write_failure_does_not_publish_partial_results(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outputs = [root / "b.tsv", root / "a.tsv", root / "missing" / "s.txt"]
+            args = [
+                "--filtered-vcf",
+                str(FIXTURES_DIR / "filtered_snp.vcf.gz"),
+                "--cohort-id",
+                "cohort",
+                "--stage",
+                "filtered",
+                "--variant-type",
+                "snp",
+                "--filter-breakdown-output",
+                str(outputs[0]),
+                "--annotation-qc-output",
+                str(outputs[1]),
+                "--summary-output",
+                str(outputs[2]),
+            ]
+            with contextlib.redirect_stderr(io.StringIO()):
+                try:
+                    status = qc.main(args)
+                except OSError:
+                    status = 1
+            self.assertEqual(1, status)
+            self.assertFalse(any(path.exists() for path in outputs))
+            self.assertEqual([], list(root.iterdir()))
 
     def test_main_succeeds_and_writes_all_three_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
