@@ -108,6 +108,8 @@ Longxiaodou 4の設定例は[`conf/references/longxiaodou4.config.example`](conf
 
 SNP / indel hard-filter thresholdもparameter化されています。現在値はGATK系の一般的なhard-filter値を出発点としたもので、Longxiaodou 4 / PRJNA1138464 / アズキ集団に対する最適値ではありません。
 
+20-sample public cohortでannotation分布・欠損率・事前定義3条件の感度を実測し、現行thresholdとGATK FILTERのrecord単位一致を確認しました。判断は**KEEP**です。truth setによる生物学的妥当性・accuracyは未検証であり、default thresholdは変更していません。
+
 ## 主要出力
 
 ```text
