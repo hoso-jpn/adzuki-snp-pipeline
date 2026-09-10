@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 
 HELPERS = Path(__file__).resolve().parents[2] / "benchmarks/issue45"
 sys.path.insert(0, str(HELPERS))
+import run_benchmarks as benchmark_runner  # noqa: E402
 import run_generation as runner  # noqa: E402
 
 
@@ -128,6 +129,56 @@ class MeasurementTests(unittest.TestCase):
             second = subprocess.run(args, capture_output=True, check=False)
             self.assertNotEqual(0, second.returncode)
             self.assertEqual(original, output.read_bytes())
+
+
+class BenchmarkRestorationTests(unittest.TestCase):
+    def test_benchmark_failure_and_launch_headroom_failure_both_restore_trial(self):
+        for available in (3 * 1024**3, 120 * 1024**3):
+            with self.subTest(available=available), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                before = GenerationRestorationTests().prepare(root)
+                calls = []
+
+                def execute(arguments, **kwargs):
+                    calls.append(arguments)
+                    return subprocess.CompletedProcess(arguments, 0)
+
+                with (
+                    patch.object(benchmark_runner, "inspect", return_value=before),
+                    patch.object(benchmark_runner, "serving", return_value=True),
+                    patch.object(benchmark_runner, "memory", return_value=(available, 0)),
+                    patch.object(benchmark_runner.subprocess, "check_output", return_value=""),
+                    patch.object(benchmark_runner.subprocess, "run", side_effect=execute),
+                    patch.object(benchmark_runner.threading, "Thread"),
+                    patch.object(
+                        benchmark_runner.shutil,
+                        "disk_usage",
+                        return_value=Mock(free=4_000_000_000_000),
+                    ),
+                ):
+                    with self.assertRaises((RuntimeError, ValueError)):
+                        with benchmark_runner.ResourceGuard(root, "a" * 12):
+                            raise RuntimeError("synthetic benchmark failure")
+                record_text = (root / "resource-preparation.private.json").read_text()
+                self.assertTrue(json.loads(record_text)["restored"])
+                self.assertEqual(["docker", "start", before["Id"]], calls[-1])
+                self.assertNotIn("do-not-record-this", record_text)
+
+    def test_active_request_prevents_any_trial_stop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            before = GenerationRestorationTests().prepare(root)
+            with (
+                patch.object(benchmark_runner, "inspect", return_value=before),
+                patch.object(
+                    benchmark_runner.subprocess, "check_output", return_value="active connection"
+                ),
+                patch.object(benchmark_runner.subprocess, "run") as execute,
+            ):
+                with self.assertRaisesRegex(ValueError, "busy"):
+                    with benchmark_runner.ResourceGuard(root, "a" * 12):
+                        self.fail("Must not enter")
+            execute.assert_not_called()
 
 
 if __name__ == "__main__":

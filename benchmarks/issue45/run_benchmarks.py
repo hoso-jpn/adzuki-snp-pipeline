@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+"""Run the validated E0-E4 suite with an authorized local trial pause and restore."""
+
+import argparse
+import datetime
+import json
+import shutil
+import signal
+import subprocess
+import threading
+import time
+from pathlib import Path
+
+from execute_experiments import execute_suite
+from run_generation import inspect, memory, serving, snapshot
+from stage_generation import sha256
+
+
+class ResourceGuard:
+    def __init__(self, root, expected_trial_id):
+        self.root = root
+        self.expected_trial_id = expected_trial_id
+        self.stop = threading.Event()
+        self.monitor_done = threading.Event()
+        self.monitor = None
+        self.stopped_trial = False
+        self.record = {}
+
+    def save(self):
+        (self.root / "resource-preparation.private.json").write_text(
+            json.dumps(self.record, indent=2) + "\n"
+        )
+
+    def stop_owned(self):
+        containers = subprocess.check_output(
+            ["docker", "ps", "-q", "--filter", f"label=adzuki.issue45_benchmark={self.root.name}"],
+            text=True,
+        ).split()
+        if containers:
+            subprocess.run(
+                ["docker", "stop", "--time", "30", *containers],
+                check=False,
+                stdout=subprocess.DEVNULL,
+            )
+        remaining = subprocess.check_output(
+            ["docker", "ps", "-q", "--filter", f"label=adzuki.issue45_benchmark={self.root.name}"],
+            text=True,
+        ).split()
+        if remaining:
+            subprocess.run(["docker", "kill", *remaining], check=False, stdout=subprocess.DEVNULL)
+            remaining = subprocess.check_output(
+                [
+                    "docker",
+                    "ps",
+                    "-q",
+                    "--filter",
+                    f"label=adzuki.issue45_benchmark={self.root.name}",
+                ],
+                text=True,
+            ).split()
+        if remaining:
+            raise RuntimeError(
+                "Owned benchmark containers remain active; restoring large trial is unsafe"
+            )
+
+    def monitor_host(self):
+        bad = 0
+        try:
+            with (self.root / "host.tsv").open("x") as handle:
+                handle.write("timestamp\tmem_available_bytes\tswap_bytes\tstorage_free_bytes\n")
+                while not self.monitor_done.is_set():
+                    available, swap = memory()
+                    free = shutil.disk_usage(self.root).free
+                    handle.write(
+                        f"{datetime.datetime.now(datetime.timezone.utc).isoformat()}\t{available}\t{swap}\t{free}\n"
+                    )
+                    handle.flush()
+                    bad = (
+                        bad + 1
+                        if available < 8 * 1024**3
+                        or swap - self.record["benchmark_swap_start_bytes"] > 512 * 1024**2
+                        else 0
+                    )
+                    if bad >= 3 or free < 1_200_000_000_000:
+                        raise RuntimeError(
+                            "Host available memory, swap delta, or storage guard failed"
+                        )
+                    self.monitor_done.wait(5)
+        except BaseException as error:
+            self.record["monitor_failure"] = str(error)
+            self.stop.set()
+            self.stop_owned()
+
+    def __enter__(self):
+        before = inspect("freetoken-qwen38-flash-next-trial")
+        if len(self.expected_trial_id) < 12 or not before["Id"].startswith(self.expected_trial_id):
+            raise ValueError("Inventoried local trial identity changed")
+        if not before["State"]["Running"] or before["State"]["Paused"]:
+            raise ValueError("Local trial is not in its inventoried running state")
+        if before["HostConfig"]["PortBindings"] != {
+            "1919/tcp": [{"HostIp": "127.0.0.1", "HostPort": "1919"}]
+        }:
+            raise ValueError("Trial exposure changed")
+        if (
+            subprocess.check_output(
+                ["ss", "-Htn", "state", "established", "(", "sport", "=", ":1919", ")"], text=True
+            ).strip()
+            or not serving()
+        ):
+            raise ValueError("Trial is busy or its restoration baseline cannot be verified")
+        self.before = before
+        available, swap = memory()
+        self.record = {
+            "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "before": snapshot(before),
+            "before_models_endpoint_200": True,
+            "before_mem_available_bytes": available,
+            "before_swap_bytes": swap,
+            "storage_before_bytes": shutil.disk_usage(self.root).free,
+            "stop_command": ["docker", "stop", "--time", "30", before["Id"]],
+            "restore_command": ["docker", "start", before["Id"]],
+            "reason": "Owner-authorized reversible local inference trial pause for Issue45 E0-E4 RAM headroom",
+            "restored": False,
+        }
+        self.save()
+        try:
+            self.stopped_trial = True
+            subprocess.run(self.record["stop_command"], check=True)
+            available, swap = memory()
+            self.record.update(
+                after_stop_mem_available_bytes=available, benchmark_swap_start_bytes=swap
+            )
+            self.save()
+            if available < 110 * 1024**3 or shutil.disk_usage(self.root).free < 2_000_000_000_000:
+                raise ValueError("Benchmark launch headroom gate failed")
+            self.monitor = threading.Thread(target=self.monitor_host, daemon=True)
+            self.monitor.start()
+            return self
+        except BaseException:
+            self.restore()
+            raise
+
+    def restore(self):
+        self.monitor_done.set()
+        if self.monitor is not None:
+            self.monitor.join(timeout=60)
+        try:
+            self.stop_owned()
+            available, swap = memory()
+            self.record.update(
+                benchmark_end_mem_available_bytes=available, benchmark_swap_end_bytes=swap
+            )
+            if self.stopped_trial:
+                result = subprocess.run(self.record["restore_command"], check=False)
+                self.record["restore_exit_code"] = result.returncode
+                for _ in range(120):
+                    if serving():
+                        break
+                    time.sleep(5)
+                after = inspect(self.before["Id"])
+                self.record["after"] = snapshot(after)
+                self.record["restored"] = (
+                    result.returncode == 0
+                    and after["State"]["Running"]
+                    and serving()
+                    and after["Config"] == self.before["Config"]
+                    and after["HostConfig"] == self.before["HostConfig"]
+                )
+        except BaseException as error:
+            self.record["restoration_failure"] = str(error)
+            raise
+        finally:
+            self.record["finished_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            self.save()
+        if not self.record["restored"]:
+            raise RuntimeError("Local trial restoration failed; explicit follow-up required")
+
+    def __exit__(self, exc_type, error, traceback):
+        if error is not None:
+            self.record["benchmark_failure"] = str(error)
+        self.restore()
+        if self.stop.is_set() and error is None:
+            raise RuntimeError("Benchmark failed its host resource guard")
+        return False
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--validated-cohort", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--expected-trial-id", required=True)
+    args = parser.parse_args()
+    validated = json.loads(args.validated_cohort.read_text())
+    evidence = validated["evidence"]
+    if (
+        evidence.get("sample_count") != 51
+        or not evidence.get("lineage_verified")
+        or not evidence.get("benchmark_ready")
+    ):
+        raise ValueError(
+            "51-sample independent lineage validation is required before pausing any workload"
+        )
+    root = args.output_dir.resolve()
+    root.mkdir(parents=True, exist_ok=False)
+    helper = Path(__file__).resolve().parent
+    (root / "execution_lineage.json").write_text(
+        json.dumps(
+            {
+                "validated_cohort_sha256": sha256(args.validated_cohort),
+                "helper_sha256": {path.name: sha256(path) for path in sorted(helper.glob("*.py"))},
+                "production_sha": evidence["production_sha"],
+                "maximum_concurrent_tasks": 3,
+                "batch_size": 50,
+                "window_size_bp": 20_000_000,
+                "small_scaffold_max_bp": 1_000_000,
+                "benchmark_ready": True,
+                "lineage_verified": True,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    guard = ResourceGuard(root, args.expected_trial_id)
+
+    def interrupted(signum, _frame):
+        guard.stop.set()
+        guard.stop_owned()
+        raise KeyboardInterrupt(f"Received signal {signum}")
+
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
+    with guard:
+        execute_suite(root, validated, guard.stop)
+
+
+if __name__ == "__main__":
+    main()

@@ -74,3 +74,74 @@ The generation wrapper has been exercised with the repository's synthetic
 multi-read-group fixture and compared to the full frozen-main workflow. Both
 samples' complete gVCF record streams were byte-identical. This verifies the
 wrapper path only; the real 51-sample lineage and E0–E4 gates are separate.
+
+`validate_generated_cohort.py` checks all 51 gVCFs after generation and service
+restoration finish. It binds the published hard links to successful task outputs,
+checks the actual launcher/container and expanded HaplotypeCaller parameters,
+matches ordered contigs and shared INFO/FORMAT/FILTER/ALT definitions, reads every
+BGZF member to verify CRC/EOF, and compares the complete sequential and indexed
+bcftools record streams. Reference FASTA, FAI, dictionary, launch files and each
+gVCF/index are checksum verified. Only its successful final manifest opens the
+lineage gate; a partially validated cohort leaves no successful final manifest.
+
+```bash
+python3 benchmarks/issue45/validate_generated_cohort.py \
+  --run-dir "$GENERATION_RUN" \
+  --production-checkout "$PRODUCTION_CHECKOUT" \
+  --output-dir "$NEW_VALIDATION_DIRECTORY"
+python3 benchmarks/issue45/run_benchmarks.py \
+  --validated-cohort "$NEW_VALIDATION_DIRECTORY/validated_cohort.private.json" \
+  --output-dir "$NEW_BENCHMARK_DIRECTORY" \
+  --expected-trial-id "$INVENTORIED_TRIAL_ID"
+```
+
+The benchmark controller independently pauses/restores the authorized trial and
+requires 110 GiB available RAM and 2.0 TB free storage before execution. Runtime
+host guards match generation. Three interval tasks run concurrently, each with
+8 CPU / 16 GiB allocation; GenomicsDB has a 13,107 MiB heap, GenotypeGVCFs 15 GiB.
+Gather uses 4 CPU / 8 GiB, and Reblock 4 CPU / 16 GiB. Docker memory+swap limits
+equal the memory allocation for these targeted tasks. This fixed comparison
+policy differs from unconstrained host scheduling and is recorded explicitly.
+No cache dropping, host tuning, or production resource change is performed.
+Task wall-time sums and complete experiment elapsed time are distinct metrics;
+the latter also includes index/integrity verification and scheduling overhead.
+
+The executor uses the preparation helper's plans, then independently checks exact
+tiling and dictionary order. Each import must log both the 50-sample first batch
+and one-sample second batch, plus both completions. Sample-name-map uses explicit
+index paths and enables GATK's map validation in addition to the stricter external
+header checks. Multiple intervals trigger GATK's documented serial reader
+initialization fallback even when eight reader threads were requested; this is
+recorded as part of the grouping result, without changing the requested flags.
+
+All GenotypeGVCFs calls use `--only-output-calls-starting-in-intervals true` to give
+each window ownership of variant starts. For whole-contig tasks this does not
+exclude any reference coordinate. Synthetic whole-contig/split tests check the
+resulting sample, variant, genotype and accounting contracts. The flag exists in
+the pinned 4.6.2.0 executable, although its help marks it deprecated.
+
+E3 invokes the actual tool name **ReblockGVCF** (singular), with explicit GQ bands
+20/100, `keep-all-alts=true`, `floor-blocks=false`, and `drop-low-quals=false`.
+Keeping alternate alleles avoids introducing optional allele dropping into this
+first compression experiment. Reblocking still changes reference-confidence
+representation and can change genotyping annotations/qualities; only measured
+comparisons can justify adoption. Its outputs are a separate checksum-tracked
+input set and never replace the production gVCFs.
+
+The comparison preserves full-record hashes and separately audits every variant
+key, INFO field and per-sample FORMAT change. The pinned
+[QualByDepth implementation](https://github.com/broadinstitute/gatk/blob/4.6.2.0/src/main/java/org/broadinstitute/hellbender/tools/walkers/annotator/QualByDepth.java)
+replaces raw QD at least 35 with a random draw around 30 (standard deviation 3).
+Different task partitions can therefore change QD while QUAL, AD, GT and all
+other fields remain identical. Such differences are classified only if the raw
+QD reconstructed from the unchanged genotypes/AD exceeds 35 with a rounding
+margin, every other record field agrees, and membership of the frozen main's
+QD<2 filter is unchanged. All other differences remain unexplained until review;
+neither QD nor any other annotation is silently discarded from evidence.
+
+Each task retains command, log, allocation, exit/OOM state and measurements.
+Only finished, explicitly named benchmark containers are removed; bind-mounted
+data and logs remain. Tool failures retain their experiment evidence. E3 failure
+does not prevent the independent E4 comparison; failures in their common baseline
+stop the suite. Results always await comparative scientific review and do not
+automatically select thresholds, architecture decisions or the 327-sample gate.

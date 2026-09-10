@@ -40,6 +40,13 @@ jobs:
       - name: Check isolated gVCF generation against the full synthetic workflow
         run: python3 tests/scripts/check_issue45_generation.py --output-dir "$RUNNER_TEMP/issue45-generation-regression"
 
+      - name: Check targeted benchmark commands and data integrity on synthetic inputs
+        run: >-
+          python3 tests/scripts/check_issue45_benchmark.py
+          --generation-run "$RUNNER_TEMP/issue45-generation-regression"
+          --reference-directory "$GITHUB_WORKSPACE/tests/data/reference"
+          --output-dir "$RUNNER_TEMP/issue45-benchmark-regression"
+
       - name: Run nf-test suite (pipeline-level and module-level)
         run: >-
           nf-test test

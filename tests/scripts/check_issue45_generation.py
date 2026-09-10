@@ -39,7 +39,11 @@ def main():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
     from test_issue45_generation_preparation import build_fixture, stage_fixture
 
-    staged = stage_fixture(build_fixture(root / "synthetic-staging-contract"))
+    fixture = build_fixture(root / "synthetic-staging-contract")
+    (fixture / "production/nextflow.config").write_text(
+        f"includeConfig '{production}/nextflow.config'\n"
+    )
+    staged = stage_fixture(fixture)
     flat = subprocess.check_output(
         ["nextflow", "config", str(staged), "-flat"], cwd=staged, text=True
     )
@@ -50,6 +54,12 @@ def main():
             )
     if "${params.outdir}" in flat:
         raise RuntimeError("Unexpanded publishDir in staged configuration")
+    if "process.'withName:GATK_HAPLOTYPECALLER'.publishDir.mode = 'link'" not in flat:
+        raise RuntimeError("Production config overrode gVCF hard-link publication")
+    if "process.'withName:SAMTOOLS_INDEX'.publishDir = []" not in flat:
+        raise RuntimeError("BAM publication was not disabled for isolated generation")
+    if any("reads/trimmed" in line for line in flat.splitlines() if "withName:FASTP" in line):
+        raise RuntimeError("Trimmed FASTQs would be redundantly published")
     commit = subprocess.check_output(
         ["git", "-C", str(production), "rev-parse", "HEAD"], text=True
     ).strip()
