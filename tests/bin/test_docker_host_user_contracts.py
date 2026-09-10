@@ -76,14 +76,11 @@ class DockerHostUserOptionTests(unittest.TestCase):
         # applies to every Docker run, including profile combinations
         # this repository does not document.
         profiles_start = self.config_text.index("\nprofiles {")
-        base_assignments = RUN_OPTIONS_ASSIGNMENT.findall(
-            self.config_text[:profiles_start]
-        )
+        base_assignments = RUN_OPTIONS_ASSIGNMENT.findall(self.config_text[:profiles_start])
         self.assertEqual(
             base_assignments,
             [HOST_USER_OPTION],
-            "nextflow.config no longer sets the host-user docker.runOptions "
-            "outside profiles",
+            "nextflow.config no longer sets the host-user docker.runOptions outside profiles",
         )
 
     def test_every_run_options_assignment_keeps_the_host_user_option(self) -> None:
@@ -111,8 +108,7 @@ class DockerHostUserOptionTests(unittest.TestCase):
         # `--platform` appears only in `runOptions` and that no
         # `docker.platform` key exists are pinned here.
         settings = [
-            line for line in self.config_text.splitlines()
-            if not line.strip().startswith("//")
+            line for line in self.config_text.splitlines() if not line.strip().startswith("//")
         ]
         self.assertEqual([line for line in settings if "docker.platform" in line], [])
         platform_lines = [line for line in settings if PLATFORM_OPTION in line]

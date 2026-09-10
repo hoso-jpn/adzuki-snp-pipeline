@@ -1,4 +1,5 @@
 """Unit and structural regression tests for the locus-stream classifier."""
+
 from __future__ import annotations
 
 import contextlib
@@ -21,6 +22,7 @@ def _load_module(name: str, path: Path) -> types.ModuleType:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     import sys
+
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
@@ -29,13 +31,12 @@ def _load_module(name: str, path: Path) -> types.ModuleType:
 classifier = _load_module("classify_normalized_variants", SCRIPT_PATH)
 HEADER = (
     "##fileformat=VCFv4.2\n"
-    "##FILTER=<ID=Old,Description=\"stale\">\n"
+    '##FILTER=<ID=Old,Description="stale">\n'
     "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample_a\tsample_b\n"
 )
 
 
-def _row(chrom: str, pos: int, ref: str = "A", alt: str = "G",
-         filter_: str = "Old") -> str:
+def _row(chrom: str, pos: int, ref: str = "A", alt: str = "G", filter_: str = "Old") -> str:
     return f"{chrom}\t{pos}\t.\t{ref}\t{alt}\t50\t{filter_}\tDP=9\tGT\t0/1\t1/1\n"
 
 
@@ -47,32 +48,50 @@ class Harness:
         with gzip.open(source, "wt", encoding="utf-8") as handle:
             handle.write(text)
         paths = root / "output.vcf", root / "accounting.tsv", root / "summary.txt"
-        code = classifier.main([
-            "--normalized-vcf", str(source), "--cohort-id", "cohort",
-            "--output", str(paths[0]), "--accounting-output", str(paths[1]),
-            "--summary-output", str(paths[2]),
-        ])
+        code = classifier.main(
+            [
+                "--normalized-vcf",
+                str(source),
+                "--cohort-id",
+                "cohort",
+                "--output",
+                str(paths[0]),
+                "--accounting-output",
+                str(paths[1]),
+                "--summary-output",
+                str(paths[2]),
+            ]
+        )
         return code, paths
 
     @staticmethod
     def data_lines(path: Path) -> list[str]:
-        return [line for line in path.read_text(encoding="utf-8").splitlines()
-                if line and not line.startswith("#")]
+        return [
+            line
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")
+        ]
 
     @staticmethod
     def metrics(path: Path) -> dict[str, str]:
-        return {fields[1]: fields[2] for fields in
-                (line.split("\t") for line in path.read_text().splitlines()[1:])}
+        return {
+            fields[1]: fields[2]
+            for fields in (line.split("\t") for line in path.read_text().splitlines()[1:])
+        }
 
 
 class ClassifyVariantTests(unittest.TestCase):
     def test_existing_classifications(self) -> None:
-        cases = (("A", "G", "snp"), ("AT", "GC", "mnp"),
-                 ("A", "ATT", "indel"), ("ATT", "A", "indel"),
-                 ("A", "*", "symbolic_or_star"),
-                 ("A", "<DEL>", "symbolic_or_star"),
-                 ("A", "A[chr2:100[", "symbolic_or_star"),
-                 ("A", ".", "no_alt"))
+        cases = (
+            ("A", "G", "snp"),
+            ("AT", "GC", "mnp"),
+            ("A", "ATT", "indel"),
+            ("ATT", "A", "indel"),
+            ("A", "*", "symbolic_or_star"),
+            ("A", "<DEL>", "symbolic_or_star"),
+            ("A", "A[chr2:100[", "symbolic_or_star"),
+            ("A", ".", "no_alt"),
+        )
         for ref, alt, expected in cases:
             with self.subTest(alt=alt):
                 self.assertEqual(classifier.classify_variant(ref, alt), expected)
@@ -92,11 +111,12 @@ class StreamingContractTests(unittest.TestCase, Harness):
         self.addCleanup(lambda: __import__("shutil").rmtree(root))
         paths = root / "out.vcf", root / "account.tsv", root / "summary.txt"
         stats = classifier.stream_classify_vcf(
-            FIXTURES_DIR / "classify_normal_mixed.vcf.gz", "cohort", *paths)
+            FIXTURES_DIR / "classify_normal_mixed.vcf.gz", "cohort", *paths
+        )
         self.assertEqual(stats.total_input_records, 5)
-        self.assertEqual(stats.class_counts,
-                         {"snp": 2, "mnp": 1, "indel": 1,
-                          "symbolic_or_star": 1, "no_alt": 0})
+        self.assertEqual(
+            stats.class_counts, {"snp": 2, "mnp": 1, "indel": 1, "symbolic_or_star": 1, "no_alt": 0}
+        )
         text = paths[0].read_text()
         self.assertNotIn("##FILTER=", text)
         self.assertIn("sample_a\tsample_b", text)
@@ -105,9 +125,12 @@ class StreamingContractTests(unittest.TestCase, Harness):
         self.assertEqual(stat.S_IMODE(paths[0].stat().st_mode), 0o644)
 
     def test_same_locus_non_adjacent_duplicate_excludes_every_occurrence(self) -> None:
-        code, paths = self.run_text(HEADER + _row("chr1", 100, "A", "G")
-                                    + _row("chr1", 100, "A", "C")
-                                    + _row("chr1", 100, "A", "G"))
+        code, paths = self.run_text(
+            HEADER
+            + _row("chr1", 100, "A", "G")
+            + _row("chr1", 100, "A", "C")
+            + _row("chr1", 100, "A", "G")
+        )
         self.assertEqual(code, 0)
         rows = self.data_lines(paths[0])
         self.assertEqual([(r.split("\t")[3], r.split("\t")[4]) for r in rows], [("A", "C")])
@@ -122,8 +145,9 @@ class StreamingContractTests(unittest.TestCase, Harness):
         text += _row("chr1", 101, "C", "T") + _row("chr1", 102, "G", "A")
         code, paths = self.run_text(text)
         self.assertEqual(code, 0)
-        self.assertEqual([int(r.split("\t")[1]) for r in self.data_lines(paths[0])],
-                         [100, 100, 101, 102])
+        self.assertEqual(
+            [int(r.split("\t")[1]) for r in self.data_lines(paths[0])], [100, 100, 101, 102]
+        )
 
     def test_empty_vcf_preserves_header_and_zero_accounting(self) -> None:
         code, paths = self.run_text(HEADER)
@@ -139,12 +163,14 @@ class StreamingContractTests(unittest.TestCase, Harness):
         self.assertEqual(self.metrics(paths[1])["no_alt_records"], "1")
 
     def test_unsorted_position_has_no_final_outputs(self) -> None:
-        self._assert_atomic_failure(HEADER + _row("chr1", 100) + _row("chr1", 200)
-                                    + _row("chr1", 100), "POS decreased")
+        self._assert_atomic_failure(
+            HEADER + _row("chr1", 100) + _row("chr1", 200) + _row("chr1", 100), "POS decreased"
+        )
 
     def test_contig_reentry_has_no_final_outputs(self) -> None:
-        self._assert_atomic_failure(HEADER + _row("chr1", 100) + _row("chr2", 100)
-                                    + _row("chr1", 200), "re-entered")
+        self._assert_atomic_failure(
+            HEADER + _row("chr1", 100) + _row("chr2", 100) + _row("chr1", 200), "re-entered"
+        )
 
     def test_late_malformed_row_has_no_final_or_temporary_outputs(self) -> None:
         text = HEADER + "".join(_row("chr1", i) for i in range(1, 2001)) + "chr1\t2001\n"
@@ -177,8 +203,12 @@ class StructuralMemoryRegressionTests(unittest.TestCase, Harness):
         self.assertEqual(code, 0)
         self.assertEqual(self.metrics(paths[1])["output_records"], "50000")
         source = SCRIPT_PATH.read_text(encoding="utf-8")
-        for legacy in ("candidates =", "output_records = tuple", '"\\n".join(lines)',
-                       "sample_fields = tuple"):
+        for legacy in (
+            "candidates =",
+            "output_records = tuple",
+            '"\\n".join(lines)',
+            "sample_fields = tuple",
+        ):
             self.assertNotIn(legacy, source)
         self.assertIn('line.split("\\t", 9)', source)
 

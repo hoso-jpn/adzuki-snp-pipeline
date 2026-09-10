@@ -191,13 +191,36 @@ FastQC / fastp HTML、BWA logs、FASTQ/BAM/VCF、variant QC、GS artifactsはMul
 
 ## Tests and CI
 
-```bash
-python3 -m unittest discover -s tests/bin -v
+Pythonの開発・CI依存はPython 3.12環境へ固定版を導入します。
 
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --requirement requirements-dev.txt
+```
+
+`.gitignore`は未追跡（untracked）の`.env`系ファイル、仮想環境、tool cacheの誤追加を防ぎます。
+既に追跡済み（tracked）のファイルには適用されず、secret scanの代わりにはなりません。
+`.env.example` / `.env.*.example`とsynthetic sequencing fixturesは追跡可能です。
+ローカルの環境・秘密情報ファイルを削除する必要はありません。
+
+Pythonだけで実行できるのは次の3つです。
+
+```bash
+.venv/bin/ruff check bin tests/bin tests/scripts
+.venv/bin/ruff format --check bin tests/bin tests/scripts
+
+python3 -m unittest discover -s tests/bin -v
+```
+
+Nextflow lintとnf-testはNextflow 26.04.6を、nf-testはさらにDockerを必要とします。nf-testは
+CIと同じ0.9.5をPATHへ導入します（`curl -fsSL https://get.nf-test.com | bash -s -- --version 0.9.5`
+等でinstallし、`nf-test`として実行できる状態にします）。
+
+```bash
 NXF_VER=26.04.6 nextflow lint .
 
 NXF_VER=26.04.6 \
-  ./nf-test test \
+  nf-test test \
   tests/pipeline/adzuki_snp_pipeline.nf.test \
   tests/modules/*.nf.test \
   --profile "test,docker"
@@ -213,7 +236,7 @@ nf-test test --tag issue52_containers     # container identity provenance
 nf-test test --tag issue51_host_user      # container出力のhost user所有
 ```
 
-GitHub Actionsはmainへのpush / pull requestでNextflow lint、Python unit tests、nf-testを実行します。real WGS cohortはCIでは実行しません。
+GitHub Actionsはmainへのpushと、base branchを問わず全pull requestで、Python 3.12と`requirements-dev.txt`の固定版を使ったRuff lint / format check、Nextflow lint、Python unit tests、nf-testを実行します。stacked PR（baseがmain以外のPR）もこの対象です。real WGS cohortはCIでは実行しません。
 
 ## Releases
 

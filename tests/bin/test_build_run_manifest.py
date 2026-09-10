@@ -32,35 +32,57 @@ sys.path.insert(0, str(REPO_ROOT / "bin"))
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 
 REFERENCE_CLI_ARGS = [
-    "--reference-id", "GCF_000000000.1",
-    "--reference-species", "Vigna angularis",
-    "--reference-cultivar", "Synthetic",
-    "--reference-accession", "GCF_000000000.1",
+    "--reference-id",
+    "GCF_000000000.1",
+    "--reference-species",
+    "Vigna angularis",
+    "--reference-cultivar",
+    "Synthetic",
+    "--reference-accession",
+    "GCF_000000000.1",
 ]
 
 PARAMETER_CLI_ARGS = [
-    "--sample-ploidy", "2",
-    "--genomicsdb-batch-size", "50",
-    "--optical-duplicate-pixel-distance", "100",
+    "--sample-ploidy",
+    "2",
+    "--genomicsdb-batch-size",
+    "50",
+    "--optical-duplicate-pixel-distance",
+    "100",
     "--enable-gs-panel",
-    "--snp-filter-qd-min", "2.0",
-    "--snp-filter-qual-min", "30.0",
-    "--snp-filter-sor-max", "3.0",
-    "--snp-filter-fs-max", "60.0",
-    "--snp-filter-mq-min", "40.0",
-    "--snp-filter-mq-rank-sum-min", "-12.5",
-    "--snp-filter-read-pos-rank-sum-min", "-8.0",
-    "--indel-filter-qd-min", "2.0",
-    "--indel-filter-qual-min", "30.0",
-    "--indel-filter-fs-max", "200.0",
-    "--indel-filter-read-pos-rank-sum-min", "-20.0",
+    "--snp-filter-qd-min",
+    "2.0",
+    "--snp-filter-qual-min",
+    "30.0",
+    "--snp-filter-sor-max",
+    "3.0",
+    "--snp-filter-fs-max",
+    "60.0",
+    "--snp-filter-mq-min",
+    "40.0",
+    "--snp-filter-mq-rank-sum-min",
+    "-12.5",
+    "--snp-filter-read-pos-rank-sum-min",
+    "-8.0",
+    "--indel-filter-qd-min",
+    "2.0",
+    "--indel-filter-qual-min",
+    "30.0",
+    "--indel-filter-fs-max",
+    "200.0",
+    "--indel-filter-read-pos-rank-sum-min",
+    "-20.0",
 ]
 
 CONTAINER_CLI_ARGS = [
-    "--bwa-mem2-container", "bwa-mem2:test",
-    "--samtools-container", "samtools:test",
-    "--gatk-container", "gatk:test",
-    "--python-container", "python:test",
+    "--bwa-mem2-container",
+    "bwa-mem2:test",
+    "--samtools-container",
+    "samtools:test",
+    "--gatk-container",
+    "gatk:test",
+    "--python-container",
+    "python:test",
 ]
 
 
@@ -233,9 +255,7 @@ class BuildSampleEntriesTests(unittest.TestCase):
             entries = manifest_module.build_sample_entries(rows)
 
         self.assertEqual(len(entries), 2)
-        self.assertNotEqual(
-            entries[0]["fastq_1"]["checksum"], entries[1]["fastq_1"]["checksum"]
-        )
+        self.assertNotEqual(entries[0]["fastq_1"]["checksum"], entries[1]["fastq_1"]["checksum"])
 
     def test_identical_fastq_path_reused_across_rows_is_hashed_once(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -390,20 +410,31 @@ class MainCliTests(unittest.TestCase):
         output = tmp_path / "run_manifest.json"
 
         argv = [
-            "--cohort-id", "cohort",
-            "--pipeline-version", "0.2.0-dev",
-            "--git-commit", "abc123",
-            "--nextflow-version", "26.04.6",
+            "--cohort-id",
+            "cohort",
+            "--pipeline-version",
+            "0.2.0-dev",
+            "--git-commit",
+            "abc123",
+            "--nextflow-version",
+            "26.04.6",
             *CONTAINER_CLI_ARGS,
             *REFERENCE_CLI_ARGS,
-            "--reference-fasta", str(fasta),
-            "--reference-fai", str(fai),
-            "--reference-dict", str(seq_dict),
+            "--reference-fasta",
+            str(fasta),
+            "--reference-fai",
+            str(fai),
+            "--reference-dict",
+            str(seq_dict),
             *PARAMETER_CLI_ARGS,
-            "--samplesheet", str(samplesheet),
-            "--variant-qc-tsv", str(variant_qc),
-            "--variant-type-accounting-tsv", str(variant_type_accounting),
-            "--output", str(output),
+            "--samplesheet",
+            str(samplesheet),
+            "--variant-qc-tsv",
+            str(variant_qc),
+            "--variant-type-accounting-tsv",
+            str(variant_type_accounting),
+            "--output",
+            str(output),
         ]
 
         if gs_panel:
@@ -445,7 +476,11 @@ class MainCliTests(unittest.TestCase):
             _write_samplesheet(
                 samplesheet, [("sample_a", "sample_a_L001", fq1, fq2, "lib_a", "ILLUMINA", "fc.1")]
             )
-            fasta, fai, seq_dict = tmp_path / "ref.fa", tmp_path / "ref.fa.fai", tmp_path / "ref.dict"
+            fasta, fai, seq_dict = (
+                tmp_path / "ref.fa",
+                tmp_path / "ref.fa.fai",
+                tmp_path / "ref.dict",
+            )
             fasta.write_bytes(b"fasta")
             fai.write_bytes(b"fai")
             seq_dict.write_bytes(b"dict")
@@ -456,19 +491,29 @@ class MainCliTests(unittest.TestCase):
             output = tmp_path / "run_manifest.json"
 
             argv = [
-                "--cohort-id", "cohort",
-                "--pipeline-version", "0.2.0-dev",
-                "--nextflow-version", "26.04.6",
+                "--cohort-id",
+                "cohort",
+                "--pipeline-version",
+                "0.2.0-dev",
+                "--nextflow-version",
+                "26.04.6",
                 *CONTAINER_CLI_ARGS,
                 *REFERENCE_CLI_ARGS,
-                "--reference-fasta", str(fasta),
-                "--reference-fai", str(fai),
-                "--reference-dict", str(seq_dict),
+                "--reference-fasta",
+                str(fasta),
+                "--reference-fai",
+                str(fai),
+                "--reference-dict",
+                str(seq_dict),
                 *PARAMETER_CLI_ARGS,
-                "--samplesheet", str(samplesheet),
-                "--variant-qc-tsv", str(variant_qc),
-                "--variant-type-accounting-tsv", str(variant_type_accounting),
-                "--output", str(output),
+                "--samplesheet",
+                str(samplesheet),
+                "--variant-qc-tsv",
+                str(variant_qc),
+                "--variant-type-accounting-tsv",
+                str(variant_type_accounting),
+                "--output",
+                str(output),
             ]
             exit_code = manifest_module.main(argv)
             payload = json.loads(output.read_text(encoding="utf-8"))
@@ -482,7 +527,11 @@ class MainCliTests(unittest.TestCase):
             tmp_path = Path(tmp)
             samplesheet = tmp_path / "samplesheet.csv"
             samplesheet.write_text("sample_id,fastq_1\nsample_a,r1.fastq.gz\n", encoding="utf-8")
-            fasta, fai, seq_dict = tmp_path / "ref.fa", tmp_path / "ref.fa.fai", tmp_path / "ref.dict"
+            fasta, fai, seq_dict = (
+                tmp_path / "ref.fa",
+                tmp_path / "ref.fa.fai",
+                tmp_path / "ref.dict",
+            )
             fasta.write_bytes(b"fasta")
             fai.write_bytes(b"fai")
             seq_dict.write_bytes(b"dict")
@@ -493,19 +542,29 @@ class MainCliTests(unittest.TestCase):
             output = tmp_path / "run_manifest.json"
 
             argv = [
-                "--cohort-id", "cohort",
-                "--pipeline-version", "0.2.0-dev",
-                "--nextflow-version", "26.04.6",
+                "--cohort-id",
+                "cohort",
+                "--pipeline-version",
+                "0.2.0-dev",
+                "--nextflow-version",
+                "26.04.6",
                 *CONTAINER_CLI_ARGS,
                 *REFERENCE_CLI_ARGS,
-                "--reference-fasta", str(fasta),
-                "--reference-fai", str(fai),
-                "--reference-dict", str(seq_dict),
+                "--reference-fasta",
+                str(fasta),
+                "--reference-fai",
+                str(fai),
+                "--reference-dict",
+                str(seq_dict),
                 *PARAMETER_CLI_ARGS,
-                "--samplesheet", str(samplesheet),
-                "--variant-qc-tsv", str(variant_qc),
-                "--variant-type-accounting-tsv", str(variant_type_accounting),
-                "--output", str(output),
+                "--samplesheet",
+                str(samplesheet),
+                "--variant-qc-tsv",
+                str(variant_qc),
+                "--variant-type-accounting-tsv",
+                str(variant_type_accounting),
+                "--output",
+                str(output),
             ]
             stderr = io.StringIO()
             with contextlib.redirect_stderr(stderr):
