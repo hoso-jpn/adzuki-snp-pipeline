@@ -18,8 +18,12 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import os
+import shutil
 import sys
+import tempfile
 from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -140,19 +144,30 @@ def parse_filtered_vcf(path: Path) -> Iterator[VcfRecord]:
     it was computed from. Records are yielded one at a time so callers do
     not need to materialize the VCF in memory.
     """
+    header_fields = None
+    fixed_columns = ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO"]
     with gzip.open(path, "rt", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             line = line.rstrip("\n")
 
-            if not line or line.startswith("#"):
+            if not line:
                 continue
+            if line.startswith("##") and header_fields is None:
+                continue
+            if line.startswith("#CHROM\t") and header_fields is None:
+                header_fields = line.split("\t")
+                if header_fields[:8] != fixed_columns:
+                    raise MalformedVcfError(f"{path}: malformed #CHROM header")
+                continue
+            if line.startswith("#") or header_fields is None:
+                raise MalformedVcfError(f"{path}: line {line_number}: missing or misplaced header")
 
             fields = line.split("\t")
 
-            if len(fields) < 8:
+            if len(fields) != len(header_fields):
                 raise MalformedVcfError(
                     f"{path}: line {line_number}: data row has {len(fields)} "
-                    "tab-separated fields, expected at least 8"
+                    f"tab-separated fields, expected {len(header_fields)}"
                 )
 
             yield VcfRecord(
@@ -162,6 +177,8 @@ def parse_filtered_vcf(path: Path) -> Iterator[VcfRecord]:
                 filter_value=fields[6],
                 info=_parse_info(fields[7]),
             )
+    if header_fields is None:
+        raise MalformedVcfError(f"{path}: no #CHROM header line found")
 
 
 def _parse_info(info_field: str) -> dict[str, str]:
@@ -551,6 +568,58 @@ def write_tsv(path: Path, header: tuple[str, ...], rows: list[list[str]]) -> Non
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+@contextmanager
+def staged_qc_outputs(paths: tuple[Path, ...], *, inputs: tuple[Path, ...] = ()):
+    """Stage small QC outputs, rolling back ordinary write/rename failures.
+
+    No final is changed until every output has been written. Existing results
+    are preserved on failure. This is not a multi-file crash transaction.
+    """
+    resolved = [path.resolve() for path in paths]
+    if len(set(resolved)) != len(paths):
+        raise ValueError("QC output paths must be distinct")
+    for path in paths:
+        if path.exists() and not path.is_file():
+            raise ValueError("QC output must be a regular file")
+        if any(
+            path.resolve() == source.resolve()
+            or (path.exists() and source.exists() and path.samefile(source))
+            for source in inputs
+        ):
+            raise ValueError("QC output must not overwrite an input")
+    temporary: list[Path] = []
+    published: list[int] = []
+    backups: dict[int, Path] = {}
+
+    def reserve(path: Path) -> Path:
+        fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+        os.close(fd)
+        staged = Path(name)
+        temporary.append(staged)
+        return staged
+
+    try:
+        staged = tuple(reserve(path) for path in paths)
+        yield staged
+        for index, path in enumerate(paths):
+            if path.exists():
+                backups[index] = reserve(path)
+                shutil.copyfile(path, backups[index])
+        for index, path in enumerate(paths):
+            staged[index].replace(path)
+            published.append(index)
+    except BaseException:
+        for index in reversed(published):
+            if index in backups:
+                backups[index].replace(paths[index])
+            else:
+                paths[index].unlink(missing_ok=True)
+        raise
+    finally:
+        for path in temporary:
+            path.unlink(missing_ok=True)
+
+
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     """Parse command-line arguments for the filter QC summarizer CLI."""
     parser = argparse.ArgumentParser(
@@ -612,36 +681,33 @@ def main(argv: list[str] | None = None) -> int:
             args.filtered_vcf,
             args.variant_type,
         )
-    except OSError as error:
-        print(
-            f"summarize_filter_qc.py: error: cannot read {args.filtered_vcf}: {error}",
-            file=sys.stderr,
-        )
-        return 1
-    except MalformedVcfError as error:
+        outputs = (args.filter_breakdown_output, args.annotation_qc_output, args.summary_output)
+        with staged_qc_outputs(outputs, inputs=(args.filtered_vcf,)) as staged:
+            write_tsv(
+                staged[0],
+                FILTER_BREAKDOWN_HEADER,
+                build_filter_breakdown_rows(
+                    args.cohort_id, args.stage, args.variant_type, breakdown
+                ),
+            )
+            write_tsv(
+                staged[1],
+                ANNOTATION_QC_HEADER,
+                build_annotation_qc_rows(args.cohort_id, args.stage, args.variant_type, coverages),
+            )
+            staged[2].write_text(
+                build_filter_qc_summary_text(
+                    args.cohort_id,
+                    args.stage,
+                    args.variant_type,
+                    breakdown,
+                    coverages,
+                ),
+                encoding="utf-8",
+            )
+    except (OSError, EOFError, UnicodeError, ValueError, MalformedVcfError) as error:
         print(f"summarize_filter_qc.py: error: {error}", file=sys.stderr)
         return 1
-
-    write_tsv(
-        args.filter_breakdown_output,
-        FILTER_BREAKDOWN_HEADER,
-        build_filter_breakdown_rows(args.cohort_id, args.stage, args.variant_type, breakdown),
-    )
-    write_tsv(
-        args.annotation_qc_output,
-        ANNOTATION_QC_HEADER,
-        build_annotation_qc_rows(args.cohort_id, args.stage, args.variant_type, coverages),
-    )
-    args.summary_output.write_text(
-        build_filter_qc_summary_text(
-            args.cohort_id,
-            args.stage,
-            args.variant_type,
-            breakdown,
-            coverages,
-        ),
-        encoding="utf-8",
-    )
 
     return 0
 
