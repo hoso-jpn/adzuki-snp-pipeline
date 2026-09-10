@@ -23,6 +23,12 @@ class GenerationRestorationTests(unittest.TestCase):
             "nextflow.config": "nextflow_config_sha256",
         }
         manifest = {}
+        (directory / "bin").mkdir()
+        helper = directory / "bin/synthetic_helper.py"
+        helper.write_text("synthetic fixture")
+        manifest["production_bin_sha256"] = {
+            helper.name: hashlib.sha256(helper.read_bytes()).hexdigest()
+        }
         for name, key in keys.items():
             data = name.encode()
             (directory / name).write_bytes(data)
@@ -105,6 +111,15 @@ class GenerationRestorationTests(unittest.TestCase):
             directory = Path(tmp)
             before = self.prepare(directory)
             (directory / "nextflow.config").write_text("changed config")
+            calls = self.invoke(directory, before, [])
+            self.assertEqual([], calls)
+            self.assertFalse((directory / "resource-preparation.private.json").exists())
+
+    def test_changed_frozen_production_script_is_rejected_before_stopping_trial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            before = self.prepare(directory)
+            (directory / "bin/synthetic_helper.py").write_text("changed")
             calls = self.invoke(directory, before, [])
             self.assertEqual([], calls)
             self.assertFalse((directory / "resource-preparation.private.json").exists())

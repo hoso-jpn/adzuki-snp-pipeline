@@ -18,7 +18,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from stage_generation import sha256
+from stage_generation import sha256, verify_frozen_bin
 
 
 def memory():
@@ -67,6 +67,7 @@ def main():
     args = parser.parse_args()
     root = args.run_dir.resolve()
     manifest = json.loads((root / "production_lineage_manifest.json").read_text())
+    verify_frozen_bin(root, manifest)
     for name, key in (
         ("generate.nf", "staged_wrapper_sha256"),
         ("samples.csv", "samplesheet_sha256"),

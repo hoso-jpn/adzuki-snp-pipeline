@@ -25,6 +25,22 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def verify_frozen_bin(run, manifest):
+    directory = run / "bin"
+    if directory.is_symlink():
+        raise ValueError("Frozen production bin must be local to the launch directory")
+    actual = {}
+    for path in directory.rglob("*"):
+        if "__pycache__" in path.parts or path.suffix == ".pyc":
+            continue
+        if path.is_symlink():
+            raise ValueError("Frozen production bin must not contain symlinks")
+        if path.is_file():
+            actual[str(path.relative_to(directory))] = sha256(path)
+    if not actual or actual != manifest["production_bin_sha256"]:
+        raise ValueError("Frozen production bin differs from the staged checksums")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("run-root", "production-checkout", "cohort-selection", "run-dir"):
@@ -153,7 +169,26 @@ def main():
         shutil.copyfile(source, destination)
         if sha256(destination) != references[role]["sha256"]:
             raise ValueError("Staged reference checksum mismatch")
-    (output / "bin").symlink_to(production / "bin", target_is_directory=True)
+    # Nextflow can mount the launch directory without the target of a bin
+    # symlink. Copy only git-tracked production scripts into the launch so their
+    # availability does not depend on a shared parent directory being mounted.
+    tracked = subprocess.check_output(
+        ["git", "-C", str(production), "ls-files", "-z", "--", "bin"], text=True
+    ).split("\0")
+    bin_hashes = {}
+    for relative in filter(None, tracked):
+        source = production / relative
+        if not relative.startswith("bin/") or source.is_symlink() or not source.is_file():
+            raise ValueError("Unexpected tracked production bin entry")
+        destination = output / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        digest = sha256(source)
+        if sha256(destination) != digest:
+            raise ValueError("Production script changed while staging")
+        bin_hashes[str(Path(relative).relative_to("bin"))] = digest
+    if not bin_hashes:
+        raise ValueError("No tracked production scripts found")
     template_path = Path(__file__).with_name("generate_gvcfs.nf.template")
     staged = output / "generate.nf"
     staged.write_text(template_path.read_text().replace("@PRODUCTION@", str(production)))
@@ -177,6 +212,7 @@ def main():
         "sample_count": 51,
         "production_sha": expected_sha,
         "production_checkout_clean": True,
+        "production_bin_sha256": bin_hashes,
         "wrapper_template_sha256": sha256(template_path),
         "preparation_helper_sha256": sha256(Path(__file__)),
         "execution_controller_sha256": sha256(Path(__file__).with_name("run_generation.py")),

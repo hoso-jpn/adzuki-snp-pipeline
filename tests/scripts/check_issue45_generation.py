@@ -6,6 +6,7 @@ import gzip
 import itertools
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -40,10 +41,32 @@ def main():
     from test_issue45_generation_preparation import build_fixture, stage_fixture
 
     fixture = build_fixture(root / "synthetic-staging-contract")
+    shutil.copytree(
+        production / "bin",
+        fixture / "production/bin",
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
     (fixture / "production/nextflow.config").write_text(
         f"includeConfig '{production}/nextflow.config'\n"
     )
     staged = stage_fixture(fixture)
+    execute(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            f"{staged}:/stage:ro",
+            "python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7",
+            "/stage/bin/validate_reference_contigs.py",
+            "--help",
+        ],
+        root,
+        "isolated-bin-namespace",
+    )
     flat = subprocess.check_output(
         ["nextflow", "config", str(staged), "-flat"], cwd=staged, text=True
     )
@@ -65,7 +88,9 @@ def main():
     ).strip()
     template = Path(__file__).resolve().parents[2] / "benchmarks/issue45/generate_gvcfs.nf.template"
     (root / "generate.nf").write_text(template.read_text().replace("@PRODUCTION@", str(production)))
-    (root / "bin").symlink_to(production / "bin", target_is_directory=True)
+    shutil.copytree(
+        production / "bin", root / "bin", ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
+    )
     rows = list(csv.DictReader((production / "tests/data/samplesheet.csv").open()))
     for row in rows:
         for key in ("fastq_1", "fastq_2"):

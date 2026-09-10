@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from stage_generation import sha256
+from stage_generation import sha256, verify_frozen_bin
 
 BCFTOOLS = (
     "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:"
@@ -188,6 +188,7 @@ def main():
     )
     manifest_path = root / "production_lineage_manifest.json"
     manifest = json.loads(manifest_path.read_text())
+    verify_frozen_bin(root, manifest)
     if manifest["sample_count"] != 51 or len(manifest["samples"]) != 51:
         raise ValueError("Expected the frozen 51-sample cohort")
     samples = manifest["samples"]

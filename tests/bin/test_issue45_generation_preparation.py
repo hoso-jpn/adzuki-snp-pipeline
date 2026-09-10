@@ -19,6 +19,10 @@ def build_fixture(root):
     root.mkdir(parents=True, exist_ok=True)
     production = root / "production"
     production.mkdir()
+    (production / "bin").mkdir()
+    script = production / "bin/validate_reference_contigs.py"
+    script.write_text("#!/usr/bin/env python3\nprint('synthetic fixture')\n")
+    script.chmod(0o755)
     (production / "nextflow.config").write_text("params.outdir = 'results'\n")
     data = root / "data"
     (data / "audit").mkdir(parents=True)
@@ -87,7 +91,20 @@ def stage_fixture(root):
     ]
     with (
         patch.object(sys, "argv", arguments),
-        patch.object(stage.subprocess, "check_output", side_effect=["a" * 40 + "\n", ""]),
+        patch.object(
+            stage.subprocess,
+            "check_output",
+            side_effect=[
+                "a" * 40 + "\n",
+                "",
+                "\0".join(
+                    str(p.relative_to(root / "production"))
+                    for p in sorted((root / "production/bin").rglob("*"))
+                    if p.is_file() and "__pycache__" not in p.parts
+                )
+                + "\0",
+            ],
+        ),
         patch.object(stage.shutil, "disk_usage", return_value=Mock(free=4_000_000_000_000)),
         contextlib.redirect_stdout(io.StringIO()),
     ):
@@ -132,6 +149,13 @@ class PreparationTests(unittest.TestCase):
             manifest = json.loads((output / "production_lineage_manifest.json").read_text())
             self.assertFalse(manifest["benchmark_ready"])
             self.assertFalse(manifest["lineage_verified"])
+            stage.verify_frozen_bin(output, manifest)
+            self.assertFalse((output / "bin").is_symlink())
+            helper = output / "bin/validate_reference_contigs.py"
+            self.assertTrue(helper.stat().st_mode & 0o111)
+            helper.write_text("changed")
+            with self.assertRaisesRegex(ValueError, "staged checksums"):
+                stage.verify_frozen_bin(output, manifest)
 
 
 if __name__ == "__main__":

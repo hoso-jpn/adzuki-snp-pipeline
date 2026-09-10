@@ -132,10 +132,19 @@ production checkoutとPR #61 checkoutを分離し、productionのmoduleを変更
 wrapperと固定mainのfull workflowのgVCF全recordがbyte-identicalであることを確認しました。
 これは実行経路の回帰検証であり、51-sample real benchmarkの代替ではありません。
 
-不足31検体のFASTQ（約150.6 GB）はchecksum確認付きで取得中です。全51検体の公開FASTQ容量は
-207.4 GBです。実gVCFの生成・全件validation・E0〜E4測定はまだ完了しておらず、
+不足31検体のFASTQ（約150.6 GB）の取得と、再利用分を含む全102 filesのchecksum検証が完了しました。
+全51検体の公開FASTQ容量は207.4 GBです。実gVCFの生成・全件validation・E0〜E4測定はまだ完了しておらず、
 `benchmark_ready=false` / `lineage_verified=false`、PRはDraftを維持します。
 327-sampleの最終Gateは実測後に決定します。
+
+全102 FASTQのpublished MD5検証・SHA256固定後、最初のgenerationを開始しましたが、
+Docker内から外部`bin` symlinkの参照先が見えず、reference validationがexit 127で停止しました。
+gVCFは0件で、4 FASTP taskのみ完了しています。解析container停止とlocal trial復旧を確認し、
+失敗runの約47.1 GBとログを保持しました。
+[sanitized failure evidence](evidence/issue45/generation_failure_20260910_194131.json)に記録します。
+production codeは変更せず、git-tracked scriptsをchecksum付きでlaunch directoryへコピーする
+staging修正と、mount範囲を限定した回帰を追加しました。新run IDで全51検体を再実行し、
+失敗runのpartial outputは入力に使いません。
 
 ## Earlier inventory, before download authorization
 

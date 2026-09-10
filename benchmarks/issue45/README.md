@@ -11,10 +11,18 @@ creating a new run directory. All 51 BioSamples must be unique. Its manifest
 records the production SHA, wrapper/helper hashes, reference identity, input
 checksums, library identity and scientific parameters before execution. The
 benchmark-ready and lineage-verified flags remain false until output validation.
+The production `bin` files are copied from the git-tracked file list, preserving
+executable modes. Their SHA256 values are recorded and checked before launch and
+after generation. An external `bin` symlink is insufficient: a task container may
+mount the launch directory without mounting the symlink target. The regression
+test mounts only the launch directory and invokes the real reference validator.
 The old40 FASTQs are copied locally from their audited archive into the dedicated
 input directory, with SHA256 verification before replacing the new run's own
 symlinks. The archived originals are preserved. This adds 56.7 GB to the initial
 1.9 TB conservative peak-storage estimate and avoids reliance on trash retention.
+The first failed generation's 46,032,388 KiB (about 47.1 GB) are also retained;
+the conservative total estimate therefore increases to about 2.004 TB. The new
+launch still requires the original 2.95 TB free-space gate.
 
 The generation template imports the frozen main modules for FASTP, reference
 validation/indexing, mapping/sorting, per-sample merge, duplicate marking, BAM
