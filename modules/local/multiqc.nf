@@ -4,11 +4,6 @@ process MULTIQC {
 
     container 'quay.io/biocontainers/multiqc:1.35--pyhdfd78af_1@sha256:b65e3fe879df27b92334dda0fd987a6e21bdee09a2848551d4f287099a93b7ac'
 
-    publishDir(
-        "${params.outdir}/qc/multiqc",
-        mode: 'copy'
-    )
-
     // Issue #51: container tasks now run as the launching host user
     // (nextflow.config's `docker.runOptions`), and an unprivileged user
     // cannot create `/multiqc` at the container filesystem root the way

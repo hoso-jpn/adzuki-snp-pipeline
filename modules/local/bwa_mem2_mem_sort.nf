@@ -42,12 +42,6 @@ process BWA_MEM2_MEM_SORT {
 
     container 'community.wave.seqera.io/library/bwa-mem2_htslib_samtools:db98f81f55b64113@sha256:5ebd1290d9680195817ce75915b79ae2e608834c017824b7e2bc7b141509b242'
 
-    publishDir(
-        "${params.outdir}/logs/mapping",
-        mode: 'copy',
-        pattern: '*.bwa-mem2.log'
-    )
-
     input:
     tuple val(meta), path(read1), path(read2)
     tuple val(reference_meta), path(fasta)

@@ -216,6 +216,7 @@ nextflow_pipeline {
 
         then {
             assert workflow.success
+            PublishedOutputContract.verify(outputDir.toString())
 
             // Issue #11: the default genomicsdb_batch_size (50) and the
             // 80%-of-task.memory Xmx ceiling actually reach the real
@@ -1337,6 +1338,7 @@ nextflow_pipeline {
 
         then {
             assert workflow.success
+            PublishedOutputContract.verify(outputDir.toString(), false)
 
             // Issue #20: sample_ploidy is now propagated to both
             // HaplotypeCaller and GenotypeGVCFs, so a non-default ploidy
@@ -1625,6 +1627,7 @@ nextflow_pipeline {
 
         then {
             assert workflow.success
+            PublishedOutputContract.verify(outputDir.toString(), true, false)
 
             // BWA_MEM2_INDEX must not run at all when a prebuilt index
             // is supplied -- only the 3 BWA_MEM2_MEM_SORT mapping tasks
@@ -1904,6 +1907,7 @@ nextflow_pipeline {
 
         then {
             assert workflow.success
+            PublishedOutputContract.verify(outputDir.toString(), true, true, false)
 
             // GATK_CREATE_SEQUENCE_DICTIONARY must not run at all when a
             // prebuilt dict is supplied.
