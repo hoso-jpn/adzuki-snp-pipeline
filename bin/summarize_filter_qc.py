@@ -18,7 +18,12 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import os
+import shutil
 import sys
+import tempfile
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -131,41 +136,49 @@ class AnnotationCoverage:
     filter_hit_rate: str
 
 
-def parse_filtered_vcf(path: Path) -> list[VcfRecord]:
-    """Parse the FILTER, QUAL, and INFO columns of a bgzipped VCF.
+def parse_filtered_vcf(path: Path) -> Iterator[VcfRecord]:
+    """Yield the FILTER, QUAL, and INFO columns of a bgzipped VCF.
 
     Every other column (ID, REF, ALT, FORMAT, sample genotypes) is
     ignored; this tool only needs the filter outcome and the annotations
-    it was computed from.
+    it was computed from. Records are yielded one at a time so callers do
+    not need to materialize the VCF in memory.
     """
-    records: list[VcfRecord] = []
-
+    header_fields = None
+    fixed_columns = ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO"]
     with gzip.open(path, "rt", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             line = line.rstrip("\n")
 
-            if not line or line.startswith("#"):
+            if not line:
                 continue
+            if line.startswith("##") and header_fields is None:
+                continue
+            if line.startswith("#CHROM\t") and header_fields is None:
+                header_fields = line.split("\t")
+                if header_fields[:8] != fixed_columns:
+                    raise MalformedVcfError(f"{path}: malformed #CHROM header")
+                continue
+            if line.startswith("#") or header_fields is None:
+                raise MalformedVcfError(f"{path}: line {line_number}: missing or misplaced header")
 
             fields = line.split("\t")
 
-            if len(fields) < 8:
+            if len(fields) != len(header_fields):
                 raise MalformedVcfError(
                     f"{path}: line {line_number}: data row has {len(fields)} "
-                    "tab-separated fields, expected at least 8"
+                    f"tab-separated fields, expected {len(header_fields)}"
                 )
 
-            records.append(
-                VcfRecord(
-                    chrom=fields[0],
-                    pos=fields[1],
-                    qual=fields[5],
-                    filter_value=fields[6],
-                    info=_parse_info(fields[7]),
-                )
+            yield VcfRecord(
+                chrom=fields[0],
+                pos=fields[1],
+                qual=fields[5],
+                filter_value=fields[6],
+                info=_parse_info(fields[7]),
             )
-
-    return records
+    if header_fields is None:
+        raise MalformedVcfError(f"{path}: no #CHROM header line found")
 
 
 def _parse_info(info_field: str) -> dict[str, str]:
@@ -223,14 +236,17 @@ def _format_rate(numerator: int, denominator: int) -> str:
     return f"{numerator / denominator:.6f}"
 
 
-def compute_filter_breakdown(records: list[VcfRecord]) -> FilterBreakdown:
+def compute_filter_breakdown(records: Iterable[VcfRecord]) -> FilterBreakdown:
     """Compute FILTER-value accounting: total, PASS, tags, and combinations."""
     combination_counts: dict[str, int] = {}
     tag_counts: dict[str, int] = {}
     pass_records = 0
     multi_tag_records = 0
 
+    total_records = 0
+
     for record in records:
+        total_records += 1
         combination_counts[record.filter_value] = combination_counts.get(record.filter_value, 0) + 1
 
         if record.filter_value == "PASS":
@@ -245,8 +261,6 @@ def compute_filter_breakdown(records: list[VcfRecord]) -> FilterBreakdown:
         for tag in tags:
             tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
-    total_records = len(records)
-
     return FilterBreakdown(
         total_records=total_records,
         pass_records=pass_records,
@@ -258,7 +272,7 @@ def compute_filter_breakdown(records: list[VcfRecord]) -> FilterBreakdown:
 
 
 def compute_annotation_coverage(
-    records: list[VcfRecord],
+    records: Iterable[VcfRecord],
     variant_type: str,
 ) -> list[AnnotationCoverage]:
     """Compute per-annotation presence and filter-hit accounting.
@@ -268,13 +282,42 @@ def compute_annotation_coverage(
     its filter, so it must not dilute the rate for records that could be.
     """
     tag_by_annotation = FILTER_TAG_BY_VARIANT_TYPE[variant_type]
-    total_records = len(records)
+    present_counts = {annotation: 0 for annotation in ANNOTATION_NAMES}
+    filter_tagged_counts = {annotation: 0 for annotation in ANNOTATION_NAMES}
+    total_records = 0
+
+    for record in records:
+        total_records += 1
+        tags = set(_filter_tags(record))
+
+        for annotation in ANNOTATION_NAMES:
+            if _is_present(_annotation_value(record, annotation)):
+                present_counts[annotation] += 1
+
+            filter_tag = tag_by_annotation[annotation]
+            if filter_tag is not None and filter_tag in tags:
+                filter_tagged_counts[annotation] += 1
+
+    return _build_annotation_coverages(
+        variant_type,
+        total_records,
+        present_counts,
+        filter_tagged_counts,
+    )
+
+
+def _build_annotation_coverages(
+    variant_type: str,
+    total_records: int,
+    present_counts: dict[str, int],
+    filter_tagged_counts: dict[str, int],
+) -> list[AnnotationCoverage]:
+    """Finalize annotation counters into the stable output representation."""
+    tag_by_annotation = FILTER_TAG_BY_VARIANT_TYPE[variant_type]
     coverages: list[AnnotationCoverage] = []
 
     for annotation in ANNOTATION_NAMES:
-        present_records = sum(
-            1 for record in records if _is_present(_annotation_value(record, annotation))
-        )
+        present_records = present_counts[annotation]
         missing_records = total_records - present_records
         evaluable_rate = _format_rate(present_records, total_records)
         filter_tag = tag_by_annotation[annotation]
@@ -294,7 +337,7 @@ def compute_annotation_coverage(
             )
             continue
 
-        filter_tagged_records = sum(1 for record in records if filter_tag in _filter_tags(record))
+        filter_tagged_records = filter_tagged_counts[annotation]
 
         coverages.append(
             AnnotationCoverage(
@@ -310,6 +353,73 @@ def compute_annotation_coverage(
         )
 
     return coverages
+
+
+def summarize_records(
+    records: Iterable[VcfRecord],
+    variant_type: str,
+) -> tuple[FilterBreakdown, list[AnnotationCoverage]]:
+    """Aggregate FILTER and annotation QC together in one pass.
+
+    The retained state is bounded by the number of distinct FILTER values,
+    FILTER tags, and the fixed annotation set; it does not grow with the
+    number of VCF records.
+    """
+    tag_by_annotation = FILTER_TAG_BY_VARIANT_TYPE[variant_type]
+    combination_counts: dict[str, int] = {}
+    tag_counts: dict[str, int] = {}
+    present_counts = {annotation: 0 for annotation in ANNOTATION_NAMES}
+    filter_tagged_counts = {annotation: 0 for annotation in ANNOTATION_NAMES}
+    total_records = 0
+    pass_records = 0
+    multi_tag_records = 0
+
+    for record in records:
+        total_records += 1
+        combination_counts[record.filter_value] = combination_counts.get(record.filter_value, 0) + 1
+        tags = _filter_tags(record)
+        tag_set = set(tags)
+
+        if record.filter_value == "PASS":
+            pass_records += 1
+        else:
+            if len(tags) > 1:
+                multi_tag_records += 1
+
+            for tag in tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        for annotation in ANNOTATION_NAMES:
+            if _is_present(_annotation_value(record, annotation)):
+                present_counts[annotation] += 1
+
+            filter_tag = tag_by_annotation[annotation]
+            if filter_tag is not None and filter_tag in tag_set:
+                filter_tagged_counts[annotation] += 1
+
+    breakdown = FilterBreakdown(
+        total_records=total_records,
+        pass_records=pass_records,
+        non_pass_records=total_records - pass_records,
+        multi_tag_records=multi_tag_records,
+        combination_counts=combination_counts,
+        tag_counts=tag_counts,
+    )
+    coverages = _build_annotation_coverages(
+        variant_type,
+        total_records,
+        present_counts,
+        filter_tagged_counts,
+    )
+    return breakdown, coverages
+
+
+def summarize_filtered_vcf(
+    path: Path,
+    variant_type: str,
+) -> tuple[FilterBreakdown, list[AnnotationCoverage]]:
+    """Stream one filtered VCF into its two QC summaries."""
+    return summarize_records(parse_filtered_vcf(path), variant_type)
 
 
 def build_filter_breakdown_rows(
@@ -458,6 +568,58 @@ def write_tsv(path: Path, header: tuple[str, ...], rows: list[list[str]]) -> Non
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+@contextmanager
+def staged_qc_outputs(paths: tuple[Path, ...], *, inputs: tuple[Path, ...] = ()):
+    """Stage small QC outputs, rolling back ordinary write/rename failures.
+
+    No final is changed until every output has been written. Existing results
+    are preserved on failure. This is not a multi-file crash transaction.
+    """
+    resolved = [path.resolve() for path in paths]
+    if len(set(resolved)) != len(paths):
+        raise ValueError("QC output paths must be distinct")
+    for path in paths:
+        if path.exists() and not path.is_file():
+            raise ValueError("QC output must be a regular file")
+        if any(
+            path.resolve() == source.resolve()
+            or (path.exists() and source.exists() and path.samefile(source))
+            for source in inputs
+        ):
+            raise ValueError("QC output must not overwrite an input")
+    temporary: list[Path] = []
+    published: list[int] = []
+    backups: dict[int, Path] = {}
+
+    def reserve(path: Path) -> Path:
+        fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+        os.close(fd)
+        staged = Path(name)
+        temporary.append(staged)
+        return staged
+
+    try:
+        staged = tuple(reserve(path) for path in paths)
+        yield staged
+        for index, path in enumerate(paths):
+            if path.exists():
+                backups[index] = reserve(path)
+                shutil.copyfile(path, backups[index])
+        for index, path in enumerate(paths):
+            staged[index].replace(path)
+            published.append(index)
+    except BaseException:
+        for index in reversed(published):
+            if index in backups:
+                backups[index].replace(paths[index])
+            else:
+                paths[index].unlink(missing_ok=True)
+        raise
+    finally:
+        for path in temporary:
+            path.unlink(missing_ok=True)
+
+
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     """Parse command-line arguments for the filter QC summarizer CLI."""
     parser = argparse.ArgumentParser(
@@ -515,40 +677,37 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
     try:
-        records = parse_filtered_vcf(args.filtered_vcf)
-    except OSError as error:
-        print(
-            f"summarize_filter_qc.py: error: cannot read {args.filtered_vcf}: {error}",
-            file=sys.stderr,
+        breakdown, coverages = summarize_filtered_vcf(
+            args.filtered_vcf,
+            args.variant_type,
         )
-        return 1
-    except MalformedVcfError as error:
+        outputs = (args.filter_breakdown_output, args.annotation_qc_output, args.summary_output)
+        with staged_qc_outputs(outputs, inputs=(args.filtered_vcf,)) as staged:
+            write_tsv(
+                staged[0],
+                FILTER_BREAKDOWN_HEADER,
+                build_filter_breakdown_rows(
+                    args.cohort_id, args.stage, args.variant_type, breakdown
+                ),
+            )
+            write_tsv(
+                staged[1],
+                ANNOTATION_QC_HEADER,
+                build_annotation_qc_rows(args.cohort_id, args.stage, args.variant_type, coverages),
+            )
+            staged[2].write_text(
+                build_filter_qc_summary_text(
+                    args.cohort_id,
+                    args.stage,
+                    args.variant_type,
+                    breakdown,
+                    coverages,
+                ),
+                encoding="utf-8",
+            )
+    except (OSError, EOFError, UnicodeError, ValueError, MalformedVcfError) as error:
         print(f"summarize_filter_qc.py: error: {error}", file=sys.stderr)
         return 1
-
-    breakdown = compute_filter_breakdown(records)
-    coverages = compute_annotation_coverage(records, args.variant_type)
-
-    write_tsv(
-        args.filter_breakdown_output,
-        FILTER_BREAKDOWN_HEADER,
-        build_filter_breakdown_rows(args.cohort_id, args.stage, args.variant_type, breakdown),
-    )
-    write_tsv(
-        args.annotation_qc_output,
-        ANNOTATION_QC_HEADER,
-        build_annotation_qc_rows(args.cohort_id, args.stage, args.variant_type, coverages),
-    )
-    args.summary_output.write_text(
-        build_filter_qc_summary_text(
-            args.cohort_id,
-            args.stage,
-            args.variant_type,
-            breakdown,
-            coverages,
-        ),
-        encoding="utf-8",
-    )
 
     return 0
 
