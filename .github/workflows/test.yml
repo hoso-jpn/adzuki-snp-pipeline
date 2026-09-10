@@ -37,6 +37,9 @@ jobs:
       - name: Lint
         run: nextflow lint .
 
+      - name: Check isolated gVCF generation against the full synthetic workflow
+        run: python3 tests/scripts/check_issue45_generation.py --output-dir "$RUNNER_TEMP/issue45-generation-regression"
+
       - name: Run nf-test suite (pipeline-level and module-level)
         run: >-
           nf-test test
