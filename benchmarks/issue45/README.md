@@ -91,6 +91,10 @@ BGZF member to verify CRC/EOF, and compares the complete sequential and indexed
 bcftools record streams. Reference FASTA, FAI, dictionary, launch files and each
 gVCF/index are checksum verified. Only its successful final manifest opens the
 lineage gate; a partially validated cohort leaves no successful final manifest.
+The bcftools traversal containers use `--log-driver none`: their complete record
+stream goes directly to the validator, avoiding a second sequencing-data copy in
+Docker's root-filesystem logs. stderr remains in the validation directory. This
+is a per-container option and does not change Docker daemon configuration.
 
 ```bash
 python3 benchmarks/issue45/validate_generated_cohort.py \

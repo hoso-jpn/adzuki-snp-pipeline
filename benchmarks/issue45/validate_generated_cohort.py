@@ -140,6 +140,11 @@ def bcftools_records(path, contigs, indexed, log_dir):
         "--rm",
         "--name",
         name,
+        # stdout is the full sequencing record stream, consumed below. Do not
+        # duplicate it into Docker's root-filesystem json-file log. stderr is
+        # retained explicitly in the dedicated validation directory.
+        "--log-driver",
+        "none",
         "--network",
         "none",
         "--cpus",
