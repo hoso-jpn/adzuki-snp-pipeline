@@ -2,13 +2,33 @@ name: Lint
 on:
   push:
     branches: [ main ]
+  # Issue #53: no `branches:` filter here on purpose. A `pull_request`
+  # branch filter matches the *base*, so restricting it to `main` left
+  # every stacked PR (one opened against another feature branch) with no
+  # check run at all -- PR #60 reached review with zero workflow runs.
+  # Dropping the filter is the conservative choice: it can only add
+  # coverage, and it does not depend on this project's branch naming.
   pull_request:
-    branches: [ main ]
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install development dependencies
+        run: python3 -m pip install --requirement requirements-dev.txt
+
+      - name: Lint Python
+        run: ruff check bin tests/bin tests/scripts
+
+      - name: Check Python formatting
+        run: ruff format --check bin tests/bin tests/scripts
+
       - name: Check README exists
         run: test -f README.md
       - name: Check docs exist

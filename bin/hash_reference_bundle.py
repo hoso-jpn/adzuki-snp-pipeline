@@ -81,9 +81,7 @@ def _index_suffix(filename: str) -> str:
     return ""
 
 
-def build_rows(
-    *, fasta: Path, fai: Path, dict_file: Path, bwa_indexes: list[Path]
-) -> list[str]:
+def build_rows(*, fasta: Path, fai: Path, dict_file: Path, bwa_indexes: list[Path]) -> list[str]:
     """Build one `role<TAB>filename<TAB>checksum` row per reference file."""
     if len(bwa_indexes) != len(BWA_INDEX_SUFFIXES):
         raise MalformedReferenceBundleError(
@@ -93,9 +91,7 @@ def build_rows(
             "set would be recorded as though it were the whole mapping input"
         )
 
-    actual_suffixes = sorted(
-        _index_suffix(Path(index).name) for index in bwa_indexes
-    )
+    actual_suffixes = sorted(_index_suffix(Path(index).name) for index in bwa_indexes)
     if actual_suffixes != sorted(BWA_INDEX_SUFFIXES):
         raise MalformedReferenceBundleError(
             "the BWA-MEM2 index files do not match this pipeline's index "

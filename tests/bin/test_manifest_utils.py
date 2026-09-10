@@ -128,16 +128,12 @@ class SharedImplementationTests(unittest.TestCase):
     def test_run_manifest_uses_the_shared_functions(self) -> None:
         for name in SHARED_FUNCTION_NAMES:
             with self.subTest(function=name):
-                self.assertIs(
-                    getattr(run_manifest_module, name), getattr(manifest_utils, name)
-                )
+                self.assertIs(getattr(run_manifest_module, name), getattr(manifest_utils, name))
 
     def test_gs_manifest_uses_the_shared_functions(self) -> None:
         for name in SHARED_FUNCTION_NAMES:
             with self.subTest(function=name):
-                self.assertIs(
-                    getattr(gs_manifest_module, name), getattr(manifest_utils, name)
-                )
+                self.assertIs(getattr(gs_manifest_module, name), getattr(manifest_utils, name))
 
     def test_gs_manifest_uses_the_shared_container_identity_guard(self) -> None:
         self.assertIs(
@@ -177,9 +173,7 @@ class RefactorRegressionTests(unittest.TestCase):
         # The self-referential hash both manifests carry: recomputing it
         # over the document minus the hash field must reproduce it.
         manifest = _build_run_manifest_fixture()
-        without_hash = {
-            key: value for key, value in manifest.items() if key != "manifest_hash"
-        }
+        without_hash = {key: value for key, value in manifest.items() if key != "manifest_hash"}
         self.assertEqual(
             manifest_utils.canonical_json_hash(without_hash), manifest["manifest_hash"]
         )
@@ -209,9 +203,7 @@ class ChecksumFilesTests(unittest.TestCase):
             (second / "same.tsv").write_text("two\n", encoding="utf-8")
 
             with self.assertRaises(ValueError) as raised:
-                manifest_utils.checksum_files(
-                    [first / "same.tsv", second / "same.tsv"]
-                )
+                manifest_utils.checksum_files([first / "same.tsv", second / "same.tsv"])
 
             self.assertIn("duplicate checksum file name", str(raised.exception))
 
@@ -266,9 +258,7 @@ class WriteJsonAtomicTests(unittest.TestCase):
             # The previous manifest is intact...
             self.assertEqual(json.loads(output.read_text(encoding="utf-8")), existing)
             # ...and no partial temp file was left beside it.
-            self.assertEqual(
-                sorted(p.name for p in Path(tmp).iterdir()), ["manifest.json"]
-            )
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["manifest.json"])
 
 
 class RejectionMessageRedactionTests(unittest.TestCase):
@@ -379,9 +369,7 @@ class RejectionMessageRedactionTests(unittest.TestCase):
         for label, value, category, forbidden in self.PUBLISHABILITY_REJECTIONS:
             with self.subTest(case=label):
                 with self.assertRaises(manifest_utils.HostMetadataLeakError) as raised:
-                    manifest_utils.assert_no_host_metadata(
-                        {"reference": {"fasta": value}}
-                    )
+                    manifest_utils.assert_no_host_metadata({"reference": {"fasta": value}})
                 message = str(raised.exception)
 
                 # The location is the actionable half, and is built from
@@ -439,9 +427,7 @@ class RejectionMessageRedactionTests(unittest.TestCase):
 class TimeHelperTests(unittest.TestCase):
     def test_run_id_is_sortable_and_uses_the_injected_moment(self) -> None:
         moment = datetime(2026, 8, 14, 12, 34, 56, tzinfo=UTC)
-        self.assertEqual(
-            manifest_utils.new_run_id(moment, "abcd1234"), "20260814T123456Z-abcd1234"
-        )
+        self.assertEqual(manifest_utils.new_run_id(moment, "abcd1234"), "20260814T123456Z-abcd1234")
 
     def test_utc_now_iso_uses_the_injected_moment(self) -> None:
         moment = datetime(2026, 8, 14, 12, 34, 56, tzinfo=UTC)

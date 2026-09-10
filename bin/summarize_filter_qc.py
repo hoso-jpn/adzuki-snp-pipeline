@@ -22,7 +22,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-
 ANNOTATION_NAMES: tuple[str, ...] = (
     "QD",
     "QUAL",
@@ -232,9 +231,7 @@ def compute_filter_breakdown(records: list[VcfRecord]) -> FilterBreakdown:
     multi_tag_records = 0
 
     for record in records:
-        combination_counts[record.filter_value] = (
-            combination_counts.get(record.filter_value, 0) + 1
-        )
+        combination_counts[record.filter_value] = combination_counts.get(record.filter_value, 0) + 1
 
         if record.filter_value == "PASS":
             pass_records += 1
@@ -276,9 +273,7 @@ def compute_annotation_coverage(
 
     for annotation in ANNOTATION_NAMES:
         present_records = sum(
-            1
-            for record in records
-            if _is_present(_annotation_value(record, annotation))
+            1 for record in records if _is_present(_annotation_value(record, annotation))
         )
         missing_records = total_records - present_records
         evaluable_rate = _format_rate(present_records, total_records)
@@ -299,9 +294,7 @@ def compute_annotation_coverage(
             )
             continue
 
-        filter_tagged_records = sum(
-            1 for record in records if filter_tag in _filter_tags(record)
-        )
+        filter_tagged_records = sum(1 for record in records if filter_tag in _filter_tags(record))
 
         coverages.append(
             AnnotationCoverage(
@@ -329,8 +322,22 @@ def build_filter_breakdown_rows(
     rows: list[list[str]] = [
         [cohort_id, stage, variant_type, "summary", "total_records", str(breakdown.total_records)],
         [cohort_id, stage, variant_type, "summary", "pass_records", str(breakdown.pass_records)],
-        [cohort_id, stage, variant_type, "summary", "non_pass_records", str(breakdown.non_pass_records)],
-        [cohort_id, stage, variant_type, "summary", "multi_tag_records", str(breakdown.multi_tag_records)],
+        [
+            cohort_id,
+            stage,
+            variant_type,
+            "summary",
+            "non_pass_records",
+            str(breakdown.non_pass_records),
+        ],
+        [
+            cohort_id,
+            stage,
+            variant_type,
+            "summary",
+            "multi_tag_records",
+            str(breakdown.multi_tag_records),
+        ],
         [
             cohort_id,
             stage,
@@ -362,9 +369,7 @@ def build_filter_breakdown_rows(
         )
 
     for tag in sorted(breakdown.tag_counts):
-        rows.append(
-            [cohort_id, stage, variant_type, "tag", tag, str(breakdown.tag_counts[tag])]
-        )
+        rows.append([cohort_id, stage, variant_type, "tag", tag, str(breakdown.tag_counts[tag])])
 
     return rows
 
