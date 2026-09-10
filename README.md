@@ -198,6 +198,11 @@ python3 -m venv .venv
 .venv/bin/python -m pip install --requirement requirements-dev.txt
 ```
 
+`.gitignore`は未追跡（untracked）の`.env`系ファイル、仮想環境、tool cacheの誤追加を防ぎます。
+既に追跡済み（tracked）のファイルには適用されず、secret scanの代わりにはなりません。
+`.env.example` / `.env.*.example`とsynthetic sequencing fixturesは追跡可能です。
+ローカルの環境・秘密情報ファイルを削除する必要はありません。
+
 Pythonだけで実行できるのは次の3つです。
 
 ```bash
