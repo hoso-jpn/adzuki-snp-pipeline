@@ -1,0 +1,325 @@
+{
+  "address_space_limit_bytes": 536870912,
+  "analysis_commit": "b221ba82635059f2e8172e5f2d164b5c90360414",
+  "measurement_host": "seedcore-01",
+  "python_version": "3.12.3",
+  "results": [
+    {
+      "exit_code": 0,
+      "host_after": {
+        "available_bytes": 3359072256,
+        "pswpin": 667737681920,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "host_before": {
+        "available_bytes": 3331129344,
+        "pswpin": 667737681920,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "input_sha256": "a9633638711ead06e5cb4792870243006db54d66a78fe31246165e03d3fbedb7",
+      "new_peak_rss_bytes": 16777216,
+      "new_wall_seconds": 34.28445944003761,
+      "old_current_replay": null,
+      "old_current_replay_blocker": "Insufficient available host RAM; old implementation not launched.",
+      "outputs": {
+        "annotation_qc.tsv": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "a628ad9a6488c78427ffff37e9fed9ef2447e1197c44d924176e19cac28b7e16",
+          "sha256": "a628ad9a6488c78427ffff37e9fed9ef2447e1197c44d924176e19cac28b7e16"
+        },
+        "filter_breakdown.tsv": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "44842c598d3da20e14950282e815d5b7e4626293b7e6274436fe551777e8331b",
+          "sha256": "44842c598d3da20e14950282e815d5b7e4626293b7e6274436fe551777e8331b"
+        },
+        "filter_qc.summary.txt": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "a07a450661415071685f363bfb8fc4b2d8e3589981a74bbf4dd4bfd3770d313f",
+          "sha256": "a07a450661415071685f363bfb8fc4b2d8e3589981a74bbf4dd4bfd3770d313f"
+        }
+      },
+      "record_count": 8748064,
+      "sample_count": 10,
+      "swap_in_delta_bytes": 0,
+      "swap_out_delta_bytes": 0,
+      "swap_used_delta_bytes": 0,
+      "variant_type": "snp"
+    },
+    {
+      "exit_code": 0,
+      "host_after": {
+        "available_bytes": 3346796544,
+        "pswpin": 667737681920,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "host_before": {
+        "available_bytes": 3361452032,
+        "pswpin": 667737681920,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "input_sha256": "38fdd88b06ad2448905df905a30c52defa661cfdfde604068125eee6097801b5",
+      "new_peak_rss_bytes": 17039360,
+      "new_wall_seconds": 5.97805060306564,
+      "old_current_replay": null,
+      "old_current_replay_blocker": "Insufficient available host RAM; old implementation not launched.",
+      "outputs": {
+        "annotation_qc.tsv": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "0bb57b518f316d48022364979db9557f02db63ce5c9d572ecc699b6a5e44b248",
+          "sha256": "0bb57b518f316d48022364979db9557f02db63ce5c9d572ecc699b6a5e44b248"
+        },
+        "filter_breakdown.tsv": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "2b7538362075bb242c7e7a5d48ef259440dd202dadb703957e295726ca6292fa",
+          "sha256": "2b7538362075bb242c7e7a5d48ef259440dd202dadb703957e295726ca6292fa"
+        },
+        "filter_qc.summary.txt": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "2010b1ecc89ac8e412e16c2a3e134aed5e4c93b909c1120c9ab0103c2ecf0709",
+          "sha256": "2010b1ecc89ac8e412e16c2a3e134aed5e4c93b909c1120c9ab0103c2ecf0709"
+        }
+      },
+      "record_count": 1422224,
+      "sample_count": 10,
+      "swap_in_delta_bytes": 0,
+      "swap_out_delta_bytes": 0,
+      "swap_used_delta_bytes": 0,
+      "variant_type": "indel"
+    },
+    {
+      "exit_code": 0,
+      "host_after": {
+        "available_bytes": 3370020864,
+        "pswpin": 667737681920,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "host_before": {
+        "available_bytes": 3346796544,
+        "pswpin": 667737681920,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "input_sha256": "180aefa9a242cb189849582e15636979d2b1219e9a4b80bc1f5c5725f103ed3c",
+      "new_peak_rss_bytes": 16777216,
+      "new_wall_seconds": 49.471704128198326,
+      "old_current_replay": null,
+      "old_current_replay_blocker": "Insufficient available host RAM; old implementation not launched.",
+      "outputs": {
+        "annotation_qc.tsv": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "8605c3e32e0da91f2945b38864a2a8eb9e07d2ff6c5f0fd3cd4c51acbdea14ca",
+          "sha256": "8605c3e32e0da91f2945b38864a2a8eb9e07d2ff6c5f0fd3cd4c51acbdea14ca"
+        },
+        "filter_breakdown.tsv": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "151f409f383a40bf86d501086ae4d35414e52f4ff89d277a15ab46aa1ac00cb6",
+          "sha256": "151f409f383a40bf86d501086ae4d35414e52f4ff89d277a15ab46aa1ac00cb6"
+        },
+        "filter_qc.summary.txt": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "b5a7db8f53b4eaebd877d64dc678acf28e3387e3c3384d3800b5ad1d9fa58313",
+          "sha256": "b5a7db8f53b4eaebd877d64dc678acf28e3387e3c3384d3800b5ad1d9fa58313"
+        }
+      },
+      "record_count": 10296980,
+      "sample_count": 20,
+      "swap_in_delta_bytes": 0,
+      "swap_out_delta_bytes": 0,
+      "swap_used_delta_bytes": 0,
+      "variant_type": "snp"
+    },
+    {
+      "exit_code": 0,
+      "host_after": {
+        "available_bytes": 3371016192,
+        "pswpin": 667737681920,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "host_before": {
+        "available_bytes": 3378524160,
+        "pswpin": 667737681920,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "input_sha256": "e7be83066a3391166ad7dae480af8d4973515cec93ecba5d14ba0755e03c543f",
+      "new_peak_rss_bytes": 16777216,
+      "new_wall_seconds": 8.191051065921783,
+      "old_current_replay": null,
+      "old_current_replay_blocker": "Insufficient available host RAM; old implementation not launched.",
+      "outputs": {
+        "annotation_qc.tsv": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "5215a908fad55a67d160baf8581179c4e84d22d8b3ccf51d693fa6e97725097b",
+          "sha256": "5215a908fad55a67d160baf8581179c4e84d22d8b3ccf51d693fa6e97725097b"
+        },
+        "filter_breakdown.tsv": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "09ff4c8c7243dbf4efdecd6c47e22ac7602c859b225a3dc8f6787c9b23c800fa",
+          "sha256": "09ff4c8c7243dbf4efdecd6c47e22ac7602c859b225a3dc8f6787c9b23c800fa"
+        },
+        "filter_qc.summary.txt": {
+          "byte_identical_to_historical_output": true,
+          "historical_sha256": "f2b01f61bc9a4c96800ff823cc3177cc773658d39f3e64f3ae12639f7c46f18f",
+          "sha256": "f2b01f61bc9a4c96800ff823cc3177cc773658d39f3e64f3ae12639f7c46f18f"
+        }
+      },
+      "record_count": 1649635,
+      "sample_count": 20,
+      "swap_in_delta_bytes": 0,
+      "swap_out_delta_bytes": 0,
+      "swap_used_delta_bytes": 0,
+      "variant_type": "indel"
+    }
+  ],
+  "script_sha256": "8991b9211d9d5c2599b1bbfac4cb5e1228413f66553e770221bf029f26f42e72",
+  "source_cohorts": [
+    {
+      "gatk_container": "broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb",
+      "inputs": [
+        {
+          "filename": "cohort.snp.filtered.vcf.gz",
+          "gatk_version": "4.6.2.0",
+          "historical_qc_sha256": {
+            "annotation_qc.tsv": "a628ad9a6488c78427ffff37e9fed9ef2447e1197c44d924176e19cac28b7e16",
+            "filter_breakdown.tsv": "44842c598d3da20e14950282e815d5b7e4626293b7e6274436fe551777e8331b",
+            "filter_qc.summary.txt": "a07a450661415071685f363bfb8fc4b2d8e3589981a74bbf4dd4bfd3770d313f"
+          },
+          "ordered_contigs_match_reference": true,
+          "record_count": 8748064,
+          "sample_order_matches_manifest": true,
+          "sha256": "a9633638711ead06e5cb4792870243006db54d66a78fe31246165e03d3fbedb7",
+          "variant_type": "snp"
+        },
+        {
+          "filename": "cohort.indel.filtered.vcf.gz",
+          "gatk_version": "4.6.2.0",
+          "historical_qc_sha256": {
+            "annotation_qc.tsv": "0bb57b518f316d48022364979db9557f02db63ce5c9d572ecc699b6a5e44b248",
+            "filter_breakdown.tsv": "2b7538362075bb242c7e7a5d48ef259440dd202dadb703957e295726ca6292fa",
+            "filter_qc.summary.txt": "2010b1ecc89ac8e412e16c2a3e134aed5e4c93b909c1120c9ab0103c2ecf0709"
+          },
+          "ordered_contigs_match_reference": true,
+          "record_count": 1422224,
+          "sample_order_matches_manifest": true,
+          "sha256": "38fdd88b06ad2448905df905a30c52defa661cfdfde604068125eee6097801b5",
+          "variant_type": "indel"
+        }
+      ],
+      "manifest_sha256": "5fdd3503555d546ee076893cc417b080399a7ef2376572761aad044e97a25e25",
+      "nextflow_version": "26.04.6",
+      "pipeline_commit": "f129a01ada403a138b01edcfaea4c261b25f8eb1",
+      "raw_vcf_manifest_checksum_verified": true,
+      "reference": {
+        "dict": {
+          "filename": "GCF_016808095.1_ASM1680809v1_genomic.dict",
+          "sha256": "8b46bbdf860fbd4af1844ec8aa68117f8c1ffe53063ab6c73854d51643fbddea"
+        },
+        "fai": {
+          "filename": "GCF_016808095.1_ASM1680809v1_genomic.fna.fai",
+          "sha256": "c5db64484f1c2e8a14368ca68b51e3d4ce8a5afefd277b3780085bd9128ddde5"
+        },
+        "fasta": {
+          "filename": "GCF_016808095.1_ASM1680809v1_genomic.fna",
+          "sha256": "e9838db1b048b54b21534285aaf95eae64cb3019d85af270b44e20b3d545f383"
+        }
+      },
+      "reference_accession": "GCF_016808095.1",
+      "run_id": "20260825T034415Z-bbf0fe60",
+      "sample_count": 10,
+      "samples": [
+        "SRR29909067",
+        "SRR29909068",
+        "SRR29909069",
+        "SRR29909070",
+        "SRR29909072",
+        "SRR29909073",
+        "SRR29909074",
+        "SRR29909135",
+        "SRR29909418",
+        "SRR29909421"
+      ]
+    },
+    {
+      "gatk_container": "broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb",
+      "inputs": [
+        {
+          "filename": "cohort.snp.filtered.vcf.gz",
+          "gatk_version": "4.6.2.0",
+          "historical_qc_sha256": {
+            "annotation_qc.tsv": "8605c3e32e0da91f2945b38864a2a8eb9e07d2ff6c5f0fd3cd4c51acbdea14ca",
+            "filter_breakdown.tsv": "151f409f383a40bf86d501086ae4d35414e52f4ff89d277a15ab46aa1ac00cb6",
+            "filter_qc.summary.txt": "b5a7db8f53b4eaebd877d64dc678acf28e3387e3c3384d3800b5ad1d9fa58313"
+          },
+          "ordered_contigs_match_reference": true,
+          "record_count": 10296980,
+          "sample_order_matches_manifest": true,
+          "sha256": "180aefa9a242cb189849582e15636979d2b1219e9a4b80bc1f5c5725f103ed3c",
+          "variant_type": "snp"
+        },
+        {
+          "filename": "cohort.indel.filtered.vcf.gz",
+          "gatk_version": "4.6.2.0",
+          "historical_qc_sha256": {
+            "annotation_qc.tsv": "5215a908fad55a67d160baf8581179c4e84d22d8b3ccf51d693fa6e97725097b",
+            "filter_breakdown.tsv": "09ff4c8c7243dbf4efdecd6c47e22ac7602c859b225a3dc8f6787c9b23c800fa",
+            "filter_qc.summary.txt": "f2b01f61bc9a4c96800ff823cc3177cc773658d39f3e64f3ae12639f7c46f18f"
+          },
+          "ordered_contigs_match_reference": true,
+          "record_count": 1649635,
+          "sample_order_matches_manifest": true,
+          "sha256": "e7be83066a3391166ad7dae480af8d4973515cec93ecba5d14ba0755e03c543f",
+          "variant_type": "indel"
+        }
+      ],
+      "manifest_sha256": "74d936de2a39b3b59a036a27debef0e176bc27703c07faa1a18f697f118cd82c",
+      "nextflow_version": "26.04.6",
+      "pipeline_commit": "556f38fd93008e0e4093a2fbd836e8d141afd8a4",
+      "raw_vcf_manifest_checksum_verified": true,
+      "reference": {
+        "dict": {
+          "filename": "GCF_016808095.1_ASM1680809v1_genomic.dict",
+          "sha256": "8b46bbdf860fbd4af1844ec8aa68117f8c1ffe53063ab6c73854d51643fbddea"
+        },
+        "fai": {
+          "filename": "GCF_016808095.1_ASM1680809v1_genomic.fna.fai",
+          "sha256": "c5db64484f1c2e8a14368ca68b51e3d4ce8a5afefd277b3780085bd9128ddde5"
+        },
+        "fasta": {
+          "filename": "GCF_016808095.1_ASM1680809v1_genomic.fna",
+          "sha256": "e9838db1b048b54b21534285aaf95eae64cb3019d85af270b44e20b3d545f383"
+        }
+      },
+      "reference_accession": "GCF_016808095.1",
+      "run_id": "20260825T193559Z-c2e659b8",
+      "sample_count": 20,
+      "samples": [
+        "SRR29908836",
+        "SRR29908888",
+        "SRR29908965",
+        "SRR29909067",
+        "SRR29909068",
+        "SRR29909069",
+        "SRR29909070",
+        "SRR29909072",
+        "SRR29909073",
+        "SRR29909074",
+        "SRR29909124",
+        "SRR29909135",
+        "SRR29909171",
+        "SRR29909330",
+        "SRR29909372",
+        "SRR29909384",
+        "SRR29909418",
+        "SRR29909421",
+        "SRR29909423",
+        "SRR29909434"
+      ]
+    }
+  ]
+}

@@ -6,14 +6,18 @@ Run with: python3 -m unittest discover -s tests/bin -v
 from __future__ import annotations
 
 import contextlib
+import gzip
 import importlib.util
 import io
+import os
 import subprocess
 import sys
 import tempfile
+import time
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "summarize_filter_qc.py"
@@ -39,8 +43,18 @@ qc = _load_module("summarize_filter_qc", SCRIPT_PATH)
 class ParseFilteredVcfTests(unittest.TestCase):
     """Tests for parse_filtered_vcf against real and hand-crafted VCFs."""
 
+    def test_rejects_missing_duplicate_or_late_header(self) -> None:
+        header = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+        row = "chr1\t1\t.\tA\tC\t50\tPASS\tQD=10"
+        for lines in ([], [row], [header, header], [header, row, "##source=late"]):
+            with self.subTest(lines=lines), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "invalid.vcf.gz"
+                _write_gzip_vcf(path, lines)
+                with self.assertRaises(qc.MalformedVcfError):
+                    list(qc.parse_filtered_vcf(path))
+
     def test_real_filtered_snp_vcf(self) -> None:
-        records = qc.parse_filtered_vcf(FIXTURES_DIR / "filtered_snp.vcf.gz")
+        records = list(qc.parse_filtered_vcf(FIXTURES_DIR / "filtered_snp.vcf.gz"))
 
         self.assertEqual(len(records), 2)
         self.assertEqual(records[0].chrom, "chrSynthetic1")
@@ -50,12 +64,12 @@ class ParseFilteredVcfTests(unittest.TestCase):
         self.assertNotIn("MQRankSum", records[0].info)
 
     def test_real_empty_indel_vcf(self) -> None:
-        records = qc.parse_filtered_vcf(FIXTURES_DIR / "filtered_indel_empty.vcf.gz")
+        records = list(qc.parse_filtered_vcf(FIXTURES_DIR / "filtered_indel_empty.vcf.gz"))
 
         self.assertEqual(records, [])
 
     def test_multi_tag_fixture_parses_pass_and_multi_tag_rows(self) -> None:
-        records = qc.parse_filtered_vcf(FIXTURES_DIR / "filtered_snp_multi_tag.vcf.gz")
+        records = list(qc.parse_filtered_vcf(FIXTURES_DIR / "filtered_snp_multi_tag.vcf.gz"))
 
         self.assertEqual(len(records), 3)
         self.assertEqual(records[0].filter_value, "PASS")
@@ -69,7 +83,7 @@ class ParseFilteredVcfTests(unittest.TestCase):
             _write_gzip_vcf(broken_path, ["#CHROM\tPOS", "chr1\t100\t.\tA\tT"])
 
             with self.assertRaises(qc.MalformedVcfError) as raised:
-                qc.parse_filtered_vcf(broken_path)
+                list(qc.parse_filtered_vcf(broken_path))
 
             self.assertIn(str(broken_path), str(raised.exception))
 
@@ -233,7 +247,7 @@ class OutputContractTests(unittest.TestCase):
         )
 
     def test_summary_text_states_total_equals_pass_plus_nonpass(self) -> None:
-        records = qc.parse_filtered_vcf(FIXTURES_DIR / "filtered_snp_multi_tag.vcf.gz")
+        records = list(qc.parse_filtered_vcf(FIXTURES_DIR / "filtered_snp_multi_tag.vcf.gz"))
         breakdown = qc.compute_filter_breakdown(records)
         coverages = qc.compute_annotation_coverage(records, "snp")
 
@@ -244,8 +258,122 @@ class OutputContractTests(unittest.TestCase):
         self.assertIn("Reconciliation: total (3) = PASS (1) + non-PASS (2)", summary_text)
 
 
+class StagedOutputTests(unittest.TestCase):
+    def test_failed_second_rename_restores_existing_results(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = (Path(tmp) / "a.tsv", Path(tmp) / "b.tsv")
+            outputs[0].write_text("previous\n")
+            replace = Path.replace
+
+            def fail_second(source, target):
+                if target == outputs[1]:
+                    raise OSError("injected publish failure")
+                return replace(source, target)
+
+            with mock.patch.object(Path, "replace", fail_second), self.assertRaises(OSError):
+                with qc.staged_qc_outputs(outputs) as staged:
+                    for path in staged:
+                        path.write_text("new\n")
+            self.assertEqual("previous\n", outputs[0].read_text())
+            self.assertFalse(outputs[1].exists())
+            self.assertEqual([outputs[0]], list(Path(tmp).iterdir()))
+
+    def test_rejects_output_aliases_and_input_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "input"
+            path.write_text("original")
+            for outputs, inputs in (((path, path), ()), ((path,), (path,))):
+                with self.subTest(outputs=outputs), self.assertRaises(ValueError):
+                    with qc.staged_qc_outputs(outputs, inputs=inputs):
+                        self.fail("invalid output was accepted")
+            self.assertEqual("original", path.read_text())
+
+
+class StreamingEquivalenceTests(unittest.TestCase):
+    """The fused production summary must match the historical two-pass result."""
+
+    def test_all_committed_fixtures_match_the_reference_helpers(self) -> None:
+        fixtures = (
+            ("filtered_snp.vcf.gz", "snp"),
+            ("filtered_snp_multi_tag.vcf.gz", "snp"),
+            ("filtered_indel_empty.vcf.gz", "indel"),
+        )
+
+        for fixture_name, variant_type in fixtures:
+            with self.subTest(fixture=fixture_name):
+                path = FIXTURES_DIR / fixture_name
+                records = list(qc.parse_filtered_vcf(path))
+                expected = (
+                    qc.compute_filter_breakdown(records),
+                    qc.compute_annotation_coverage(records, variant_type),
+                )
+
+                self.assertEqual(
+                    qc.summarize_filtered_vcf(path, variant_type),
+                    expected,
+                )
+
+    @unittest.skipUnless(Path("/proc/self/statm").exists(), "needs /proc to sample a child's RSS")
+    def test_peak_memory_does_not_grow_with_record_count(self) -> None:
+        small, large = 4_000, 64_000
+        measurements = {}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            for record_count in (small, large):
+                vcf = _write_generated_filter_vcf(
+                    directory / f"in_{record_count}.vcf.gz",
+                    record_count,
+                )
+                output_dir = directory / f"out_{record_count}"
+                output_dir.mkdir()
+                measurements[record_count] = _peak_rss_kib_for_filter_qc(
+                    vcf,
+                    output_dir,
+                )
+
+        growth = measurements[large] - measurements[small]
+        self.assertLess(
+            growth,
+            8 * 1024,
+            "peak RSS grew by "
+            f"{growth} KiB between {small} and {large} records "
+            f"({measurements[small]} -> {measurements[large]} KiB), "
+            "which suggests records are being retained",
+        )
+
+
 class CliTests(unittest.TestCase):
     """Tests for the main() CLI entry point: success and failure exit codes."""
+
+    def test_output_write_failure_does_not_publish_partial_results(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outputs = [root / "b.tsv", root / "a.tsv", root / "missing" / "s.txt"]
+            args = [
+                "--filtered-vcf",
+                str(FIXTURES_DIR / "filtered_snp.vcf.gz"),
+                "--cohort-id",
+                "cohort",
+                "--stage",
+                "filtered",
+                "--variant-type",
+                "snp",
+                "--filter-breakdown-output",
+                str(outputs[0]),
+                "--annotation-qc-output",
+                str(outputs[1]),
+                "--summary-output",
+                str(outputs[2]),
+            ]
+            with contextlib.redirect_stderr(io.StringIO()):
+                try:
+                    status = qc.main(args)
+                except OSError:
+                    status = 1
+            self.assertEqual(1, status)
+            self.assertFalse(any(path.exists() for path in outputs))
+            self.assertEqual([], list(root.iterdir()))
 
     def test_main_succeeds_and_writes_all_three_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -277,6 +405,79 @@ class CliTests(unittest.TestCase):
             self.assertTrue(filter_breakdown_output.exists())
             self.assertTrue(annotation_qc_output.exists())
             self.assertTrue(summary_output.exists())
+
+    def test_main_uses_single_pass_summary_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+
+            with (
+                mock.patch.object(
+                    qc,
+                    "compute_filter_breakdown",
+                    side_effect=AssertionError("legacy second pass was called"),
+                ),
+                mock.patch.object(
+                    qc,
+                    "compute_annotation_coverage",
+                    side_effect=AssertionError("legacy second pass was called"),
+                ),
+            ):
+                exit_code = qc.main(
+                    [
+                        "--filtered-vcf",
+                        str(FIXTURES_DIR / "filtered_snp.vcf.gz"),
+                        "--cohort-id",
+                        "cohort",
+                        "--stage",
+                        "filtered",
+                        "--variant-type",
+                        "snp",
+                        "--filter-breakdown-output",
+                        str(tmp_path / "b.tsv"),
+                        "--annotation-qc-output",
+                        str(tmp_path / "a.tsv"),
+                        "--summary-output",
+                        str(tmp_path / "s.txt"),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+
+    def test_late_malformed_row_leaves_no_final_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            broken_path = tmp_path / "late-broken.vcf.gz"
+            _write_gzip_vcf(
+                broken_path,
+                [
+                    "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+                    "chr1\t100\t.\tA\tT\t50\tPASS\tQD=10.0",
+                    "chr1\t200\t.\tA\tT",
+                ],
+            )
+            outputs = [tmp_path / "b.tsv", tmp_path / "a.tsv", tmp_path / "s.txt"]
+
+            exit_code = qc.main(
+                [
+                    "--filtered-vcf",
+                    str(broken_path),
+                    "--cohort-id",
+                    "cohort",
+                    "--stage",
+                    "filtered",
+                    "--variant-type",
+                    "snp",
+                    "--filter-breakdown-output",
+                    str(outputs[0]),
+                    "--annotation-qc-output",
+                    str(outputs[1]),
+                    "--summary-output",
+                    str(outputs[2]),
+                ]
+            )
+
+            self.assertEqual(exit_code, 1)
+            self.assertTrue(all(not path.exists() for path in outputs))
 
     def test_main_fails_clearly_for_a_missing_input_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -367,10 +568,69 @@ class CliTests(unittest.TestCase):
 
 def _write_gzip_vcf(path: Path, lines: list[str]) -> None:
     """Write minimal gzip-compressed VCF-like text for a test fixture."""
-    import gzip
-
     with gzip.open(path, "wt", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
+
+
+def _write_generated_filter_vcf(path: Path, record_count: int) -> Path:
+    """Write a large deterministic fixture without materializing its rows."""
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        handle.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
+        for index in range(record_count):
+            filter_value = "PASS" if index % 3 == 0 else "SNP_QD_LOW;SNP_SOR_HIGH"
+            handle.write(
+                f"chr1\t{index + 1}\t.\tA\tT\t50\t{filter_value}\tQD=1.5;SOR=4.2;FS=10;MQ=55\n"
+            )
+    return path
+
+
+def _peak_rss_kib_for_filter_qc(vcf: Path, directory: Path) -> int:
+    """Run the real CLI in a child and sample its retained-memory plateau."""
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--filtered-vcf",
+            str(vcf),
+            "--cohort-id",
+            "cohort",
+            "--stage",
+            "filtered",
+            "--variant-type",
+            "snp",
+            "--filter-breakdown-output",
+            str(directory / "filter_breakdown.tsv"),
+            "--annotation-qc-output",
+            str(directory / "annotation_qc.tsv"),
+            "--summary-output",
+            str(directory / "summary.txt"),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    statm = Path(f"/proc/{process.pid}/statm")
+    page_kib = os.sysconf("SC_PAGE_SIZE") // 1024
+    peak_pages = 0
+    while process.poll() is None:
+        try:
+            peak_pages = max(peak_pages, int(statm.read_text().split()[1]))
+        except (OSError, IndexError, ValueError):
+            break
+        time.sleep(0.002)
+
+    _stdout, stderr = process.communicate()
+    if process.returncode != 0:
+        raise AssertionError(f"summarizer failed: {stderr.decode(errors='replace')}")
+
+    # A sample was never taken -- the child exited or /proc became
+    # unreadable before the first read. Returning 0 here would silently
+    # make the comparison meaningless: 0 for the small run turns the
+    # growth check into a false failure, and 0 for the large run turns it
+    # into a false pass. Fail on the measurement itself instead.
+    if peak_pages == 0:
+        raise AssertionError("could not sample the summarizer's RSS before it exited")
+
+    return peak_pages * page_kib
 
 
 if __name__ == "__main__":

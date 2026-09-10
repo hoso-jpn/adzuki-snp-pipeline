@@ -1,0 +1,17 @@
+Hard-filter threshold sensitivity summary
+Cohort ID: PRJNA1138464_20sample
+Variant type: indel
+Input file: cohort.indel.filtered.vcf.gz
+Input SHA256: e7be83066a3391166ad7dae480af8d4973515cec93ecba5d14ba0755e03c543f
+Scenario config: hard_filter_sensitivity_scenarios.json
+Scenario config SHA256: 506de403ae29453d2610a9f5ec7eedf934260af209cb99337a278a02be52bbfd
+Total records: 1649635
+Current ANY_FILTER discordant records: 0
+Current audit: MATCH
+
+Interpretation boundary:
+  These counts measure variant-set sensitivity to exploratory thresholds.
+  Without a truth set they do not estimate accuracy, precision, recall,
+  biological validity, or an optimal threshold.
+  QUAL can depend strongly on cohort/sample size and must not be read as
+  a cohort-independent quality score.

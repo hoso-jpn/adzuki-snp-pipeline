@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "scenarios": {
+    "lenient": {
+      "snp": {
+        "QD": 1.0,
+        "QUAL": 20.0,
+        "SOR": 4.0,
+        "FS": 100.0,
+        "MQ": 30.0,
+        "MQRankSum": -15.0,
+        "ReadPosRankSum": -10.0
+      },
+      "indel": {
+        "QD": 1.0,
+        "QUAL": 20.0,
+        "FS": 300.0,
+        "ReadPosRankSum": -25.0
+      }
+    },
+    "current": {
+      "snp": {
+        "QD": 2.0,
+        "QUAL": 30.0,
+        "SOR": 3.0,
+        "FS": 60.0,
+        "MQ": 40.0,
+        "MQRankSum": -12.5,
+        "ReadPosRankSum": -8.0
+      },
+      "indel": {
+        "QD": 2.0,
+        "QUAL": 30.0,
+        "FS": 200.0,
+        "ReadPosRankSum": -20.0
+      }
+    },
+    "stringent": {
+      "snp": {
+        "QD": 3.0,
+        "QUAL": 50.0,
+        "SOR": 2.0,
+        "FS": 30.0,
+        "MQ": 50.0,
+        "MQRankSum": -10.0,
+        "ReadPosRankSum": -5.0
+      },
+      "indel": {
+        "QD": 3.0,
+        "QUAL": 50.0,
+        "FS": 100.0,
+        "ReadPosRankSum": -10.0
+      }
+    }
+  }
+}
