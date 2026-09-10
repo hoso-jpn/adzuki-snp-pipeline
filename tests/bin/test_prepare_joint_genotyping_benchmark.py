@@ -246,6 +246,48 @@ class BenchmarkPreparationTests(unittest.TestCase):
                     for earlier, later in zip(spans, spans[1:], strict=False):
                         self.assertEqual(earlier[1] + 1, later[0])
 
+    def test_output_cannot_overwrite_any_input(self) -> None:
+        for source_name in (
+            "gvcfs.csv",
+            "reference.fa.fai",
+            "sample_000.g.vcf.gz",
+            "sample_000.g.vcf.gz.tbi",
+        ):
+            with self.subTest(source=source_name), tempfile.TemporaryDirectory() as tmp:
+                directory = Path(tmp)
+                fai, manifest = _build_inputs(directory, 51)
+                source = directory / source_name
+                original = source.read_bytes()
+
+                result, *outputs = _run(
+                    directory, fai, manifest, ["--sample-name-map-output", str(source)]
+                )
+
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(source.read_bytes(), original)
+                self.assertTrue(all(not output.exists() for output in outputs))
+
+    def test_late_output_failure_preserves_previous_results(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            fai, manifest = _build_inputs(directory, 51)
+            sample_map = directory / "sample_name_map.tsv"
+            interval_plan = directory / "interval_plan.tsv"
+            sample_map.write_bytes(b"previous sample map\n")
+            interval_plan.write_bytes(b"previous interval plan\n")
+
+            result, *_ = _run(
+                directory,
+                fai,
+                manifest,
+                ["--evidence-template-output", str(directory / "missing" / "evidence.json")],
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(sample_map.read_bytes(), b"previous sample map\n")
+            self.assertEqual(interval_plan.read_bytes(), b"previous interval plan\n")
+            self.assertFalse(any(directory.glob(".*.tmp")))
+
     def test_reference_dictionary_mismatch_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

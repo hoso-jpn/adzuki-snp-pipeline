@@ -13,6 +13,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from summarize_filter_qc import staged_qc_outputs
+
 MANIFEST_COLUMNS = ("sample_id", "gvcf", "gvcf_index")
 PIPELINE_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 CONTIG_HEADER = re.compile(r"^##contig=<ID=([^,>]+),length=([0-9]+)(?:,|>)")
@@ -482,16 +484,25 @@ def main(argv: list[str] | None = None) -> int:
             args.small_scaffold_max_bp,
         )
         evidence = build_evidence_template(args, inputs, reference_contigs)
-    except (OSError, gzip.BadGzipFile, UnicodeError, BenchmarkInputError) as error:
+        outputs = (
+            args.sample_name_map_output,
+            args.interval_plan_output,
+            args.evidence_template_output,
+        )
+        source_paths = (args.gvcf_manifest, args.reference_fai) + tuple(
+            path for item in inputs for path in (item.gvcf, item.gvcf_index)
+        )
+        with staged_qc_outputs(outputs, inputs=source_paths) as staged:
+            _write_sample_name_map(staged[0], inputs)
+            _write_tsv(staged[1], INTERVAL_PLAN_HEADER, interval_rows)
+            staged[2].write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+    except (OSError, EOFError, UnicodeError, ValueError, BenchmarkInputError) as error:
         print(f"prepare_joint_genotyping_benchmark.py: error: {error}", file=sys.stderr)
         return 1
 
-    _write_sample_name_map(args.sample_name_map_output, inputs)
-    _write_tsv(args.interval_plan_output, INTERVAL_PLAN_HEADER, interval_rows)
-    args.evidence_template_output.write_text(
-        json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
     return 0
 
 

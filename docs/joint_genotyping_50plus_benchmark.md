@@ -17,6 +17,8 @@ manifestは`sample_id,gvcf,gvcf_index`の3列CSVです。次のCLIは51検体未
 重複path、index欠損、reference contig name/length/order不一致を拒否し、全入力checksum、
 GATK sample-name-map、baseline/candidate interval plan、未記入のevidence JSONを生成します。
 相対pathはmanifestの親directoryを基準に解決します。sample名の空白は除去せず拒否します。
+出力先がmanifest・FAI・gVCF・indexと重なる場合は拒否します。3成果物はすべて書き込み後に公開し、
+通常のwrite/rename failureでは既存結果を保ちます。process/host crashをまたぐtransactionは保証しません。
 
 このCLIは**実行許可gateを完了しません**。`pipeline_commit`と`gatk_container`はCLIからの宣言であり、
 FAIの一致はreference配列の同一性を証明しません。`.tbi`の名前一致もindex内容の対応を証明しません。
