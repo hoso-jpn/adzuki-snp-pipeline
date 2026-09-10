@@ -29,6 +29,7 @@ from summarize_filter_qc import (
     _filter_tags,
     _is_present,
     parse_filtered_vcf,
+    staged_qc_outputs,
 )
 
 DEFAULT_SCENARIO_CONFIG = (
@@ -94,6 +95,7 @@ SENSITIVITY_HEADER = (
     "hit_rate_among_total",
     "observed_filter_tag_records",
     "predicted_minus_observed",
+    "discordant_records",
 )
 
 
@@ -141,6 +143,8 @@ class AnalysisResult:
     # it as evaluable would report an unevaluated record as one that
     # passed -- the exact conflation this tool exists to avoid.
     union_present_records: int
+    current_discordant: dict[str, int]
+    current_any_discordant: int
 
 
 def load_scenarios(path: Path) -> dict[str, dict[str, dict[str, float]]]:
@@ -150,7 +154,7 @@ def load_scenarios(path: Path) -> dict[str, dict[str, dict[str, float]]]:
     except (OSError, json.JSONDecodeError) as error:
         raise ScenarioConfigError(f"cannot read {path}: {error}") from error
 
-    if payload.get("schema_version") != 1:
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
         raise ScenarioConfigError(f"{path}: schema_version must be 1")
 
     scenarios = payload.get("scenarios")
@@ -242,6 +246,8 @@ def analyze_records(
     total_records = 0
     observed_any_hits = 0
     union_present_records = 0
+    current_discordant = {annotation: 0 for annotation in filtered_annotations}
+    current_any_discordant = 0
 
     for record in records:
         total_records += 1
@@ -250,6 +256,15 @@ def analyze_records(
             for annotation in ANNOTATION_NAMES
         }
         tags = set(_filter_tags(record))
+        if tags - expected_tags:
+            raise MalformedVcfError(
+                f"{record.chrom}:{record.pos}: unexpected FILTER tags for {variant_type}: "
+                f"{sorted(tags - expected_tags)}"
+            )
+        if record.filter_value in ("", "."):
+            raise MalformedVcfError(
+                f"{record.chrom}:{record.pos}: FILTER is unevaluated; need VariantFiltration output"
+            )
         if tags & expected_tags:
             observed_any_hits += 1
         if any(values[annotation] is not None for annotation in filtered_annotations):
@@ -268,11 +283,17 @@ def analyze_records(
             any_hit = False
             for annotation, threshold in by_variant_type[variant_type].items():
                 value = values[annotation]
-                if value is not None and _hits(value, OPERATORS[annotation], threshold):
+                predicted = value is not None and _hits(value, OPERATORS[annotation], threshold)
+                if predicted:
                     scenario_hits[scenario][annotation] += 1
                     any_hit = True
+                if scenario == "current":
+                    observed = FILTER_TAG_BY_VARIANT_TYPE[variant_type][annotation] in tags
+                    current_discordant[annotation] += int(predicted != observed)
             if any_hit:
                 scenario_any_hits[scenario] += 1
+            if scenario == "current":
+                current_any_discordant += int(any_hit != bool(tags))
 
     return AnalysisResult(
         total_records=total_records,
@@ -282,6 +303,8 @@ def analyze_records(
         observed_tag_hits=observed_tag_hits,
         observed_any_hits=observed_any_hits,
         union_present_records=union_present_records,
+        current_discordant=current_discordant,
+        current_any_discordant=current_any_discordant,
     )
 
 
@@ -376,6 +399,9 @@ def build_sensitivity_rows(
                     _format_rate(hit_records, result.total_records),
                     str(observed) if observed is not None else NOT_APPLICABLE,
                     str(hit_records - observed) if observed is not None else NOT_APPLICABLE,
+                    str(result.current_discordant[annotation])
+                    if scenario == "current"
+                    else NOT_APPLICABLE,
                 ]
             )
 
@@ -397,6 +423,7 @@ def build_sensitivity_rows(
                 _format_rate(any_hits, result.total_records),
                 str(observed_any) if observed_any is not None else NOT_APPLICABLE,
                 str(any_hits - observed_any) if observed_any is not None else NOT_APPLICABLE,
+                str(result.current_any_discordant) if scenario == "current" else NOT_APPLICABLE,
             ]
         )
     return rows
@@ -431,6 +458,13 @@ def build_summary(
             f"Scenario config: {args.scenario_config.name}",
             f"Scenario config SHA256: {_sha256(args.scenario_config)}",
             f"Total records: {result.total_records}",
+            f"Current ANY_FILTER discordant records: {result.current_any_discordant}",
+            "Current audit: "
+            + (
+                "MATCH"
+                if not any(result.current_discordant.values()) and not result.current_any_discordant
+                else "MISMATCH; defer threshold decision"
+            ),
             "",
             "Interpretation boundary:",
             "  These counts measure variant-set sensitivity to exploratory thresholds.",
@@ -472,13 +506,22 @@ def main(argv: list[str] | None = None) -> int:
             result,
         )
         summary = build_summary(args, result)
-    except (OSError, MalformedVcfError, ScenarioConfigError) as error:
+        outputs = (args.distribution_output, args.sensitivity_output, args.summary_output)
+        with staged_qc_outputs(outputs, inputs=(args.filtered_vcf, args.scenario_config)) as staged:
+            _write_tsv(staged[0], DISTRIBUTION_HEADER, distribution_rows)
+            _write_tsv(staged[1], SENSITIVITY_HEADER, sensitivity_rows)
+            staged[2].write_text(summary, encoding="utf-8")
+    except (
+        OSError,
+        EOFError,
+        UnicodeError,
+        ValueError,
+        MalformedVcfError,
+        ScenarioConfigError,
+    ) as error:
         print(f"analyze_hard_filter_sensitivity.py: error: {error}", file=sys.stderr)
         return 1
 
-    _write_tsv(args.distribution_output, DISTRIBUTION_HEADER, distribution_rows)
-    _write_tsv(args.sensitivity_output, SENSITIVITY_HEADER, sensitivity_rows)
-    args.summary_output.write_text(summary, encoding="utf-8")
     return 0
 
 

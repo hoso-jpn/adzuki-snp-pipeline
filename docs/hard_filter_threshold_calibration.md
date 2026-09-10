@@ -44,13 +44,19 @@ indelも`--variant-type indel`で同様に実行します。summaryにはinput�
 tag数の差を`predicted_minus_observed`として出します。0でない場合はthreshold判断を中止し、
 input/config lineage、GATK expression semantics、annotation parsingを調査します。
 
+件数差が0でも、異なるrecordの過剰・不足が相殺される可能性があります。
+`discordant_records`はcurrentの予測と観測をrecordごとに照合した不一致件数です。
+annotation別と`ANY_FILTER`の両方で0を要求します。SNP/indelの想定外tagや未評価のFILTER `.`は
+入力エラーとし、出力は全tableの書き込み成功後に公開します。`ANY_FILTER`のpresentは
+対象annotationが一つ以上あるrecord数であり、全annotationが揃うrecord数ではありません。
+
 ## Decision gate
 
 次をすべて確認した後にだけdefault policyを判断します。
 
 1. SNP/indel両方でinput SHA、record count、pipeline/reference/GATK identityが揃う。
 2. distributionの各annotationで`present + missing = total`、histogram合計がpresentに一致する。
-3. `current`のannotation別および`ANY_FILTER`の`predicted_minus_observed = 0`。
+3. `current`のannotation別および`ANY_FILTER`の`predicted_minus_observed = 0`かつ`discordant_records = 0`。
 4. lenient/current/stringentのhit率をannotation別・unionで比較し、QUALを過剰解釈しない。
 5. truth set不在と20-sample固有の限界をdecision recordへ残す。
 

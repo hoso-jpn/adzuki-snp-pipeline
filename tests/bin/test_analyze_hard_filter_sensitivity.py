@@ -18,6 +18,49 @@ SCENARIOS = REPO_ROOT / "conf" / "hard_filter_sensitivity_scenarios.json"
 
 
 class SensitivityCliTests(unittest.TestCase):
+    def test_current_audit_detects_cancelling_record_mismatches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            vcf = _write_vcf(
+                directory / "swapped.vcf.gz",
+                [
+                    "chr1\t1\t.\tA\tT\t50\tPASS\tQD=1",
+                    "chr1\t2\t.\tA\tT\t50\tSNP_QD_LOW\tQD=10",
+                ],
+            )
+            result, _, sensitivity, _ = _run(vcf, directory, "snp")
+            self.assertEqual(0, result.returncode, result.stderr)
+            current = {
+                r["annotation"]: r for r in _read_tsv(sensitivity) if r["scenario"] == "current"
+            }
+            for annotation in ("QD", "ANY_FILTER"):
+                self.assertEqual("0", current[annotation]["predicted_minus_observed"])
+                self.assertEqual("2", current[annotation]["discordant_records"])
+
+    def test_wrong_variant_type_filter_tag_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            vcf = _write_vcf(
+                directory / "wrong-type.vcf.gz",
+                [
+                    "chr1\t1\t.\tA\tAT\t50\tINDEL_QD_LOW\tQD=1",
+                ],
+            )
+            result, distribution, sensitivity, summary = _run(vcf, directory, "snp")
+            self.assertEqual(1, result.returncode)
+            self.assertIn("unexpected FILTER", result.stderr)
+            self.assertFalse(any(p.exists() for p in (distribution, sensitivity, summary)))
+
+    def test_output_failure_does_not_leave_partial_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            vcf = _write_vcf(directory / "empty.vcf.gz", [])
+            (directory / "summary.txt").mkdir()
+            result, distribution, sensitivity, _ = _run(vcf, directory, "snp")
+            self.assertEqual(1, result.returncode)
+            self.assertFalse(distribution.exists())
+            self.assertFalse(sensitivity.exists())
+
     def test_snp_counts_current_thresholds_and_missing_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
