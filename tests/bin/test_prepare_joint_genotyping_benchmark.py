@@ -229,9 +229,11 @@ class BenchmarkPreparationTests(unittest.TestCase):
             for name, length in lengths.items():
                 with self.subTest(contig=name):
                     spans = sorted(covered[name])
+                    self.assertEqual(1, spans[0][0])
+                    self.assertEqual(length, spans[-1][1])
                     self.assertEqual(sum(end - start + 1 for start, end in spans), length)
                     for earlier, later in zip(spans, spans[1:], strict=False):
-                        self.assertLess(earlier[1], later[0])
+                        self.assertEqual(earlier[1] + 1, later[0])
 
     def test_reference_dictionary_mismatch_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
