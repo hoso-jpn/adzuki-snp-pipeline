@@ -1,14 +1,14 @@
 # 50+ sample Joint Genotyping targeted benchmark protocol
 
 Issue #45で、327-sample full FASTQ→GS E2Eへ進む前にJoint Genotypingだけを隔離して評価する
-ためのプロトコルです。現時点では入力検証・candidate plan・evidence schemaだけを固定し、
-50+ sample実測値や採否判断は記録していません。
+ためのプロトコルです。入力検証・candidate plan・実行／監査helper・evidence schemaを用意しました。
+現時点では50+ sample実測値や最終採否判断は記録していません。
 
 ## 前提
 
 - 公開データ由来の51検体以上のgVCFを使い、`genomicsdb_batch_size=50`の実batchingを発生させる。
 - 全gVCFは同じreference、GATK、pipeline SHA、ploidy、HaplotypeCaller条件で生成されたものに限る。
-- 全327 FASTQの再処理は前提にせず、既存gVCFを再利用する。
+- 全327 FASTQの再処理は前提にしない。再利用可能なpublic artifactを優先し、同一lineageの51 gVCFを確保する。
 - 異なるlineageのgVCF混在、customer/private data、327-sample full E2Eは対象外。
 
 ## Preparation gate
@@ -46,6 +46,10 @@ python3 bin/prepare_joint_genotyping_benchmark.py \
 を参照してください。このfileはbenchmark実行用で絶対pathを含むためcommitしません。公開repositoryへ
 commitするのは、basename/checksumへsanitizeされたevidenceとmethod/result documentだけです。
 
+実行前の全件lineage/index検証、測定方法、資源制限、service復旧、失敗保存は
+[`benchmarks/issue45/README.md`](../benchmarks/issue45/README.md)に定義します。
+実行helperはproduction checkoutと分離し、production SHAとhelper SHAを別々に記録します。
+
 ## Targeted experiment order
 
 一度に複数要因を変えず、evidence templateの順に比較します。
@@ -59,7 +63,7 @@ commitするのは、basename/checksumへsanitizeされたevidenceとmethod/resu
 | E3 | sample-name-map | candidate | Yes | No | Reblock単独効果 |
 | E4 | sample-name-map | candidate | No | Yes | consolidate単独効果 |
 
-E3のReblockGVCFsは、入力gVCFのchecksumを保持したまま別の派生input setとして作り、size、時間、
+E3のReblockGVCFは、入力gVCFのchecksumを保持したまま別の派生input setとして作り、size、時間、
 sample/header/order、Joint Genotyping後のvariant/accounting equivalenceを比較します。採用前に
 scientific equivalenceを確認し、単なる容量削減だけでGOにしません。
 E3/E4はいずれもE2bと比較します。evidenceの`compare_to`が比較対象を明示します。
@@ -67,6 +71,18 @@ groupingはreference dictionary中で連続するsmall scaffoldだけに限定�
 保ちます。windowは1-based closed intervalで、gap/overlapのないpartitionとして検証します。
 small scaffold groupの合計もwindow size以下に制限し、大量のscaffoldが一つの巨大taskに
 集約されることを防ぎます。
+
+実測前に、各interval taskは8 CPU / 16 GiB、最大3 task並列、windowは20 Mb、small scaffoldは
+1 Mb以下と固定します。GenotypeGVCFsには全experimentで
+`--only-output-calls-starting-in-intervals true`を指定し、window境界のvariant開始位置の所有を
+一意にします。E3はGQ bands 20/100、`keep-all-alts=true`、`floor-blocks=false`、
+`drop-low-quals=false`とし、追加のallele droppingを導入しません。
+
+full-record checksumを保持したうえで、sample/contig order、GT、AC/AN、各INFO/FORMAT差を監査します。
+pinned GATKの高QD補正には乱数が使われるため、task分割によるQD差を別に数えます。
+QUAL/AD/GTから補正対象であることを説明でき、他の全fieldが同一で、current QD filter判定も
+変わらない場合だけ「説明済み」と分類します。欠損・NaN・評価不能なannotationを同等扱いしません。
+この分類は自動採用判断ではなく、実測後のscientific reviewの材料です。
 
 ## 必須計測
 
