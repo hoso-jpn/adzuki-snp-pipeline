@@ -1,0 +1,151 @@
+{
+  "address_space_limit_bytes": 30064771072,
+  "host": {
+    "cpu": "AMD Ryzen 7 5825U",
+    "kernel": "Linux 7.0.0-31-generic",
+    "logical_cpus": 16,
+    "ram_gib_approx": 46
+  },
+  "limitations": [
+    "Wall times include concurrent nf-test load; no controlled speedup claim.",
+    "Old 10-sample host swap-used increased 4096 bytes; all other swap-used deltas zero.",
+    "Host counters cannot attribute swap to this process.",
+    "Old/new direct comparison ran on local review host; new SNP and indel replays also ran on seedcore-01.",
+    "Production resource allocations and thresholds unchanged."
+  ],
+  "measurement_host": "local-review-host",
+  "results": [
+    {
+      "byte_identical_to_other_implementation_and_historical_outputs": true,
+      "exit_code": 0,
+      "host_after": {
+        "available_bytes": 38703624192,
+        "pswpin": 0,
+        "pswpout": 4096,
+        "swap_used_bytes": 4096
+      },
+      "host_before": {
+        "available_bytes": 40176254976,
+        "pswpin": 0,
+        "pswpout": 0,
+        "swap_used_bytes": 0
+      },
+      "implementation": "old",
+      "implementation_commit": "0aebc73efe298b82ace100152d10fbaf6d216283",
+      "input_sha256": "a9633638711ead06e5cb4792870243006db54d66a78fe31246165e03d3fbedb7",
+      "output_sha256": {
+        "annotation_qc.tsv": "a628ad9a6488c78427ffff37e9fed9ef2447e1197c44d924176e19cac28b7e16",
+        "filter_breakdown.tsv": "44842c598d3da20e14950282e815d5b7e4626293b7e6274436fe551777e8331b",
+        "filter_qc.summary.txt": "a07a450661415071685f363bfb8fc4b2d8e3589981a74bbf4dd4bfd3770d313f"
+      },
+      "peak_rss_bytes": 17443049472,
+      "python_version": "3.12.3",
+      "record_count": 8748064,
+      "sample_count": 10,
+      "script_sha256": "1fbf205641ee146180dd1e4a4669f91fbd6c618a7ce32e7ed560ad639d531d84",
+      "swap_in_delta_bytes": 0,
+      "swap_out_delta_bytes": 4096,
+      "swap_used_delta_bytes": 4096,
+      "wall_seconds": 321.5271133320057
+    },
+    {
+      "byte_identical_to_other_implementation_and_historical_outputs": true,
+      "exit_code": 0,
+      "host_after": {
+        "available_bytes": 40332709888,
+        "pswpin": 0,
+        "pswpout": 4096,
+        "swap_used_bytes": 4096
+      },
+      "host_before": {
+        "available_bytes": 38735065088,
+        "pswpin": 0,
+        "pswpout": 4096,
+        "swap_used_bytes": 4096
+      },
+      "implementation": "new",
+      "implementation_commit": "b221ba82635059f2e8172e5f2d164b5c90360414",
+      "input_sha256": "a9633638711ead06e5cb4792870243006db54d66a78fe31246165e03d3fbedb7",
+      "output_sha256": {
+        "annotation_qc.tsv": "a628ad9a6488c78427ffff37e9fed9ef2447e1197c44d924176e19cac28b7e16",
+        "filter_breakdown.tsv": "44842c598d3da20e14950282e815d5b7e4626293b7e6274436fe551777e8331b",
+        "filter_qc.summary.txt": "a07a450661415071685f363bfb8fc4b2d8e3589981a74bbf4dd4bfd3770d313f"
+      },
+      "peak_rss_bytes": 16465920,
+      "python_version": "3.12.3",
+      "record_count": 8748064,
+      "sample_count": 10,
+      "script_sha256": "8991b9211d9d5c2599b1bbfac4cb5e1228413f66553e770221bf029f26f42e72",
+      "swap_in_delta_bytes": 0,
+      "swap_out_delta_bytes": 0,
+      "swap_used_delta_bytes": 0,
+      "wall_seconds": 203.17173470600392
+    },
+    {
+      "byte_identical_to_other_implementation_and_historical_outputs": true,
+      "exit_code": 0,
+      "host_after": {
+        "available_bytes": 38876200960,
+        "pswpin": 0,
+        "pswpout": 4096,
+        "swap_used_bytes": 4096
+      },
+      "host_before": {
+        "available_bytes": 40159068160,
+        "pswpin": 0,
+        "pswpout": 4096,
+        "swap_used_bytes": 4096
+      },
+      "implementation": "old",
+      "implementation_commit": "0aebc73efe298b82ace100152d10fbaf6d216283",
+      "input_sha256": "180aefa9a242cb189849582e15636979d2b1219e9a4b80bc1f5c5725f103ed3c",
+      "output_sha256": {
+        "annotation_qc.tsv": "8605c3e32e0da91f2945b38864a2a8eb9e07d2ff6c5f0fd3cd4c51acbdea14ca",
+        "filter_breakdown.tsv": "151f409f383a40bf86d501086ae4d35414e52f4ff89d277a15ab46aa1ac00cb6",
+        "filter_qc.summary.txt": "b5a7db8f53b4eaebd877d64dc678acf28e3387e3c3384d3800b5ad1d9fa58313"
+      },
+      "peak_rss_bytes": 21337886720,
+      "python_version": "3.12.3",
+      "record_count": 10296980,
+      "sample_count": 20,
+      "script_sha256": "1fbf205641ee146180dd1e4a4669f91fbd6c618a7ce32e7ed560ad639d531d84",
+      "swap_in_delta_bytes": 0,
+      "swap_out_delta_bytes": 0,
+      "swap_used_delta_bytes": 0,
+      "wall_seconds": 387.3072694290022
+    },
+    {
+      "byte_identical_to_other_implementation_and_historical_outputs": true,
+      "exit_code": 0,
+      "host_after": {
+        "available_bytes": 39391174656,
+        "pswpin": 0,
+        "pswpout": 4096,
+        "swap_used_bytes": 4096
+      },
+      "host_before": {
+        "available_bytes": 38876200960,
+        "pswpin": 0,
+        "pswpout": 4096,
+        "swap_used_bytes": 4096
+      },
+      "implementation": "new",
+      "implementation_commit": "b221ba82635059f2e8172e5f2d164b5c90360414",
+      "input_sha256": "180aefa9a242cb189849582e15636979d2b1219e9a4b80bc1f5c5725f103ed3c",
+      "output_sha256": {
+        "annotation_qc.tsv": "8605c3e32e0da91f2945b38864a2a8eb9e07d2ff6c5f0fd3cd4c51acbdea14ca",
+        "filter_breakdown.tsv": "151f409f383a40bf86d501086ae4d35414e52f4ff89d277a15ab46aa1ac00cb6",
+        "filter_qc.summary.txt": "b5a7db8f53b4eaebd877d64dc678acf28e3387e3c3384d3800b5ad1d9fa58313"
+      },
+      "peak_rss_bytes": 16986112,
+      "python_version": "3.12.3",
+      "record_count": 10296980,
+      "sample_count": 20,
+      "script_sha256": "8991b9211d9d5c2599b1bbfac4cb5e1228413f66553e770221bf029f26f42e72",
+      "swap_in_delta_bytes": 0,
+      "swap_out_delta_bytes": 0,
+      "swap_used_delta_bytes": 0,
+      "wall_seconds": 300.95809947900125
+    }
+  ]
+}
