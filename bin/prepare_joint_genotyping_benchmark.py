@@ -427,8 +427,10 @@ def _write_tsv(path: Path, header: tuple[str, ...], rows: list[list[str]]) -> No
 def _write_sample_name_map(path: Path, inputs: tuple[GvcfInput, ...]) -> None:
     """Write GATK's headerless sample, gVCF, optional-index three-column form."""
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerows((item.sample_id, str(item.gvcf), str(item.gvcf_index)) for item in inputs)
+        # GATK splits literal tabs; it does not decode CSV quoting. Input
+        # validation rejects delimiters/newlines, so quotes remain literal.
+        for item in inputs:
+            handle.write(f"{item.sample_id}\t{item.gvcf}\t{item.gvcf_index}\n")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

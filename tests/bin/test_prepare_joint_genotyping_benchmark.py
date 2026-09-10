@@ -18,6 +18,17 @@ COMMIT = "b" * 40
 
 
 class BenchmarkPreparationTests(unittest.TestCase):
+    def test_sample_map_uses_literal_tabs_without_csv_quoting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / 'quoted"directory'
+            directory.mkdir()
+            fai, manifest = _build_inputs(directory, 51)
+            result, sample_map, _, _ = _run(directory, fai, manifest)
+            self.assertEqual(0, result.returncode, result.stderr)
+            first = sample_map.read_text().splitlines()[0].split("\t")
+            self.assertEqual(str(directory / "sample_000.g.vcf.gz"), first[1])
+            self.assertEqual(str(directory / "sample_000.g.vcf.gz.tbi"), first[2])
+
     def test_manifest_sample_names_are_not_silently_trimmed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
