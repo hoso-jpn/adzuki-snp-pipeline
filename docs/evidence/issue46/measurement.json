@@ -1,0 +1,147 @@
+{
+  "analysis_commit": "7bdf5be3909c38f13b7e94bd0f6ad5aa9e8370f9",
+  "cohort": {
+    "gatk_container": "broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb",
+    "inputs": [
+      {
+        "filename": "cohort.snp.filtered.vcf.gz",
+        "gatk_version": "4.6.2.0",
+        "historical_qc_sha256": {
+          "annotation_qc.tsv": "8605c3e32e0da91f2945b38864a2a8eb9e07d2ff6c5f0fd3cd4c51acbdea14ca",
+          "filter_breakdown.tsv": "151f409f383a40bf86d501086ae4d35414e52f4ff89d277a15ab46aa1ac00cb6",
+          "filter_qc.summary.txt": "b5a7db8f53b4eaebd877d64dc678acf28e3387e3c3384d3800b5ad1d9fa58313"
+        },
+        "ordered_contigs_match_reference": true,
+        "record_count": 10296980,
+        "sample_order_matches_manifest": true,
+        "sha256": "180aefa9a242cb189849582e15636979d2b1219e9a4b80bc1f5c5725f103ed3c",
+        "variant_type": "snp"
+      },
+      {
+        "filename": "cohort.indel.filtered.vcf.gz",
+        "gatk_version": "4.6.2.0",
+        "historical_qc_sha256": {
+          "annotation_qc.tsv": "5215a908fad55a67d160baf8581179c4e84d22d8b3ccf51d693fa6e97725097b",
+          "filter_breakdown.tsv": "09ff4c8c7243dbf4efdecd6c47e22ac7602c859b225a3dc8f6787c9b23c800fa",
+          "filter_qc.summary.txt": "f2b01f61bc9a4c96800ff823cc3177cc773658d39f3e64f3ae12639f7c46f18f"
+        },
+        "ordered_contigs_match_reference": true,
+        "record_count": 1649635,
+        "sample_order_matches_manifest": true,
+        "sha256": "e7be83066a3391166ad7dae480af8d4973515cec93ecba5d14ba0755e03c543f",
+        "variant_type": "indel"
+      }
+    ],
+    "manifest_sha256": "74d936de2a39b3b59a036a27debef0e176bc27703c07faa1a18f697f118cd82c",
+    "nextflow_version": "26.04.6",
+    "pipeline_commit": "556f38fd93008e0e4093a2fbd836e8d141afd8a4",
+    "raw_vcf_manifest_checksum_verified": true,
+    "reference": {
+      "dict": {
+        "filename": "GCF_016808095.1_ASM1680809v1_genomic.dict",
+        "sha256": "8b46bbdf860fbd4af1844ec8aa68117f8c1ffe53063ab6c73854d51643fbddea"
+      },
+      "fai": {
+        "filename": "GCF_016808095.1_ASM1680809v1_genomic.fna.fai",
+        "sha256": "c5db64484f1c2e8a14368ca68b51e3d4ce8a5afefd277b3780085bd9128ddde5"
+      },
+      "fasta": {
+        "filename": "GCF_016808095.1_ASM1680809v1_genomic.fna",
+        "sha256": "e9838db1b048b54b21534285aaf95eae64cb3019d85af270b44e20b3d545f383"
+      }
+    },
+    "reference_accession": "GCF_016808095.1",
+    "run_id": "20260825T193559Z-c2e659b8",
+    "sample_count": 20,
+    "samples": [
+      "SRR29908836",
+      "SRR29908888",
+      "SRR29908965",
+      "SRR29909067",
+      "SRR29909068",
+      "SRR29909069",
+      "SRR29909070",
+      "SRR29909072",
+      "SRR29909073",
+      "SRR29909074",
+      "SRR29909124",
+      "SRR29909135",
+      "SRR29909171",
+      "SRR29909330",
+      "SRR29909372",
+      "SRR29909384",
+      "SRR29909418",
+      "SRR29909421",
+      "SRR29909423",
+      "SRR29909434"
+    ]
+  },
+  "decision": "KEEP",
+  "limitations": [
+    "Single public 20-sample cohort; no truth set or accuracy/optimality claims.",
+    "No threshold or production parameter changes.",
+    "Host swap-used delta and swap-out delta zero; SNP run observed 12 KiB of host swap-in, not attributable to this process."
+  ],
+  "measurement_host": "seedcore-01",
+  "python_version": "3.12.3",
+  "results": [
+    {
+      "current_record_audit_matches": true,
+      "exit_code": 0,
+      "host_after": {
+        "available_bytes": 3372470272,
+        "pswpin": 667737694208,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "host_before": {
+        "available_bytes": 3307393024,
+        "pswpin": 667737681920,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "input_sha256": "180aefa9a242cb189849582e15636979d2b1219e9a4b80bc1f5c5725f103ed3c",
+      "output_sha256": {
+        "annotation_distribution.tsv": "d08827a1ca65fb2caff5da3249efe71dc9877f560553f5b214a85dfddb1adfa1",
+        "summary.txt": "96b3b18957de81cb3ddee20f76fd1c3df2625906774917fa91c353208bcb04e0",
+        "threshold_sensitivity.tsv": "c60dc19581486ae485bf37b769b6030882a72c2edb7e2741db9e196fef08e62e"
+      },
+      "peak_rss_bytes": 23330816,
+      "swap_in_delta_bytes": 12288,
+      "swap_out_delta_bytes": 0,
+      "swap_used_delta_bytes": 0,
+      "variant_type": "snp",
+      "wall_seconds": 99.19032854400575
+    },
+    {
+      "current_record_audit_matches": true,
+      "exit_code": 0,
+      "host_after": {
+        "available_bytes": 3381305344,
+        "pswpin": 667737694208,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "host_before": {
+        "available_bytes": 3379638272,
+        "pswpin": 667737694208,
+        "pswpout": 577822814208,
+        "swap_used_bytes": 3414462464
+      },
+      "input_sha256": "e7be83066a3391166ad7dae480af8d4973515cec93ecba5d14ba0755e03c543f",
+      "output_sha256": {
+        "annotation_distribution.tsv": "e9e6a6660013f552c7a75a2fb386511bf85c7758b1f65b9f57e4208688ac6e6d",
+        "summary.txt": "bcc708a8ca827af068026ebba235d0003618dac7eb0eb3eaa74def4865b564eb",
+        "threshold_sensitivity.tsv": "1b40897d3e3a326ce417c6ccd614124209ba3206326d0c71c4e852fa0b88f1c0"
+      },
+      "peak_rss_bytes": 23035904,
+      "swap_in_delta_bytes": 0,
+      "swap_out_delta_bytes": 0,
+      "swap_used_delta_bytes": 0,
+      "variant_type": "indel",
+      "wall_seconds": 15.08390939119272
+    }
+  ],
+  "scenario_sha256": "506de403ae29453d2610a9f5ec7eedf934260af209cb99337a278a02be52bbfd",
+  "script_sha256": "ac329a757a3b33e78a54fb51f6a9a63e63b997aaa0340841aff1ad20ec577615"
+}
