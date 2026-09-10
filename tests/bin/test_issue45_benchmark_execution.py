@@ -20,6 +20,13 @@ class BenchmarkExecutionTests(unittest.TestCase):
                 (row, row.replace("QD=30", "QD=1"), False),
                 (row, row.replace("MQ=60", "MQ=50"), False),
                 (row, row.replace("1/1", "0/1"), False),
+                (row.replace(";QD=30", ""), row, False),
+                (row.replace("QD=30", "QD=NaN"), row, False),
+                (
+                    row.replace("0,6", ".,."),
+                    row.replace("0,6", ".,.").replace("QD=30", "QD=27"),
+                    False,
+                ),
                 (
                     row.replace("\t300\t", "\t60\t"),
                     row.replace("\t300\t", "\t60\t").replace("QD=30", "QD=27"),

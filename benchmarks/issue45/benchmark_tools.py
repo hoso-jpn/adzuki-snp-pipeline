@@ -3,6 +3,7 @@
 import gzip
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -127,10 +128,22 @@ def compare_callsets(first, second, contigs):
                 )
                 if only_qd:
                     counts["qd_only_difference"] += 1
-                    raw = raw_qd(first_fields)
-                    if raw is not None and raw >= 35.01:
+                    try:
+                        raw = raw_qd(first_fields)
+                        left_qd, right_qd = float(left_info["QD"]), float(right_info["QD"])
+                    except (KeyError, ValueError, TypeError, IndexError):
+                        # Missing annotation or unevaluable AD is an unexplained
+                        # difference, never evidence of harmless QD jitter.
+                        continue
+                    if (
+                        raw is not None
+                        and math.isfinite(raw)
+                        and raw >= 35.01
+                        and math.isfinite(left_qd)
+                        and math.isfinite(right_qd)
+                    ):
                         counts["qd_only_high_qd_jitter_branch"] += 1
-                        if (float(left_info["QD"]) < 2) == (float(right_info["QD"]) < 2):
+                        if (left_qd < 2) == (right_qd < 2):
                             counts["qd_jitter_current_filter_unchanged"] += 1
             x, y = next(left, None), next(right, None)
     result = {
