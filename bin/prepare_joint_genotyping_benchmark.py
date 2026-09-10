@@ -138,13 +138,25 @@ def load_inputs(
                 f"{manifest}: columns must be exactly {', '.join(MANIFEST_COLUMNS)}"
             )
         for line_number, row in enumerate(reader, start=2):
-            sample_id = row["sample_id"].strip()
-            if not sample_id:
-                raise BenchmarkInputError(f"{manifest}: line {line_number}: empty sample_id")
+            if None in row or any(row[name] is None for name in MANIFEST_COLUMNS):
+                raise BenchmarkInputError(
+                    f"{manifest}: line {line_number}: expected exactly 3 fields"
+                )
+            sample_id = row["sample_id"]
+            if not sample_id or any(character.isspace() for character in sample_id):
+                raise BenchmarkInputError(f"{manifest}: line {line_number}: invalid sample_id")
             if sample_id in sample_ids:
                 raise BenchmarkInputError(f"{manifest}: duplicate sample_id: {sample_id}")
-            gvcf = Path(row["gvcf"]).expanduser().resolve()
-            gvcf_index = Path(row["gvcf_index"]).expanduser().resolve()
+            paths = []
+            for name in ("gvcf", "gvcf_index"):
+                value = row[name]
+                if not value or any(character in value for character in "\t\r\n"):
+                    raise BenchmarkInputError(
+                        f"{manifest}: line {line_number}: invalid {name} path"
+                    )
+                path = Path(value).expanduser()
+                paths.append((path if path.is_absolute() else manifest.parent / path).resolve())
+            gvcf, gvcf_index = paths
             if gvcf in gvcf_paths or gvcf_index in index_paths:
                 raise BenchmarkInputError(
                     f"{manifest}: line {line_number}: gVCF or index path is reused"
@@ -221,10 +233,32 @@ def build_interval_plan_rows(
 
     candidate_groups: list[tuple[str, list[str], int, int, str]] = []
     small: list[Contig] = []
+    small_group_count = 0
+
+    def flush_small() -> None:
+        nonlocal small_group_count
+        if not small:
+            return
+        small_group_count += 1
+        group_id = (
+            "small_scaffolds" if small_group_count == 1 else f"small_scaffolds_{small_group_count}"
+        )
+        candidate_groups.append(
+            (
+                group_id,
+                [contig.name for contig in small],
+                sum(contig.length for contig in small),
+                len(small),
+                "consecutive small scaffolds grouped in reference dictionary order",
+            )
+        )
+        small.clear()
+
     for contig in contigs:
         if contig.length <= small_scaffold_max_bp:
             small.append(contig)
             continue
+        flush_small()
         if contig.length <= window_size_bp:
             candidate_groups.append(
                 (contig.name, [contig.name], contig.length, 1, "unsplit contig")
@@ -247,16 +281,7 @@ def build_interval_plan_rows(
             start = end + 1
             window += 1
 
-    if small:
-        candidate_groups.append(
-            (
-                "small_scaffolds",
-                [contig.name for contig in small],
-                sum(contig.length for contig in small),
-                len(small),
-                "all contigs at or below small_scaffold_max_bp grouped for evaluation",
-            )
-        )
+    flush_small()
 
     for order, (group_id, intervals, total_bp, source_count, strategy) in enumerate(
         candidate_groups, start=1
@@ -272,6 +297,30 @@ def build_interval_plan_rows(
                 strategy,
             ]
         )
+    split_rows = []
+    for row in rows:
+        if row[0] != "candidate_split_group":
+            continue
+        intervals = json.loads(row[3])
+        if int(row[5]) == 1:
+            split_rows.append(["candidate_split_only", *row[1:]])
+        else:
+            lengths = {contig.name: contig.length for contig in contigs}
+            for name in intervals:
+                split_rows.append(
+                    [
+                        "candidate_split_only",
+                        name,
+                        "",
+                        json.dumps([name]),
+                        str(lengths[name]),
+                        "1",
+                        "ungrouped small scaffold",
+                    ]
+                )
+    for order, row in enumerate(split_rows, start=1):
+        row[2] = str(order)
+    rows.extend(split_rows)
     return rows
 
 
@@ -282,11 +331,12 @@ def build_evidence_template(
 ) -> dict[str, object]:
     """Build a machine-readable record with measurements deliberately unset."""
     experiments = [
-        ("E0", "repeated_variant_args", "baseline_per_contig", False, False),
-        ("E1", "sample_name_map", "baseline_per_contig", False, False),
-        ("E2", "sample_name_map", "candidate_split_group", False, False),
-        ("E3", "sample_name_map", "candidate_split_group", True, False),
-        ("E4", "sample_name_map", "candidate_split_group", False, True),
+        ("E0", None, "repeated_variant_args", "baseline_per_contig", False, False),
+        ("E1", "E0", "sample_name_map", "baseline_per_contig", False, False),
+        ("E2a", "E1", "sample_name_map", "candidate_split_only", False, False),
+        ("E2b", "E2a", "sample_name_map", "candidate_split_group", False, False),
+        ("E3", "E2b", "sample_name_map", "candidate_split_group", True, False),
+        ("E4", "E2b", "sample_name_map", "candidate_split_group", False, True),
     ]
     return {
         "schema_version": 1,
@@ -294,6 +344,17 @@ def build_evidence_template(
         "status": "PENDING_REAL_BENCHMARK",
         "pipeline_commit": args.pipeline_commit,
         "gatk_container": args.gatk_container,
+        "input_validation": {
+            "benchmark_ready": False,
+            "lineage_verified": False,
+            "declared_lineage_source": "CLI arguments; not verified against source run evidence",
+            "required_before_execution": [
+                "source-run manifests tying every gVCF checksum to pipeline SHA and GATK version",
+                "reference FASTA identity; FAI names/lengths/order alone do not identify sequence",
+                "index-content validation; matching .tbi filenames alone do not prove pairing",
+                "homogeneous ploidy and HaplotypeCaller parameters",
+            ],
+        },
         "reference": {
             "fai_name": args.reference_fai.name,
             "fai_sha256": _sha256(args.reference_fai),
@@ -321,6 +382,7 @@ def build_evidence_template(
         "experiments": [
             {
                 "experiment_id": experiment_id,
+                "compare_to": compare_to,
                 "gvcf_input_mode": input_mode,
                 "interval_plan_id": interval_plan,
                 "reblock_gvcfs": reblock,
@@ -337,9 +399,12 @@ def build_evidence_template(
                     "output_sample_count": None,
                     "output_sample_order_sha256": None,
                     "variant_accounting_sha256": None,
+                    "failure_count": None,
+                    "nextflow_version": None,
+                    "gatk_version": None,
                 },
             }
-            for experiment_id, input_mode, interval_plan, reblock, consolidate in experiments
+            for experiment_id, compare_to, input_mode, interval_plan, reblock, consolidate in experiments
         ],
         "decision": {
             "sample_name_map": "PENDING",
@@ -386,8 +451,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if not PIPELINE_COMMIT.fullmatch(args.pipeline_commit):
             raise BenchmarkInputError("--pipeline-commit must be a full lowercase 40-hex SHA")
-        if "@sha256:" not in args.gatk_container:
-            raise BenchmarkInputError("--gatk-container must be digest-pinned with @sha256:")
+        if not re.fullmatch(r"[^\s]+@sha256:[0-9a-f]{64}", args.gatk_container):
+            raise BenchmarkInputError(
+                "--gatk-container must have a complete lowercase SHA256 digest"
+            )
         for name in ("batch_size", "window_size_bp", "small_scaffold_max_bp"):
             if getattr(args, name) <= 0:
                 raise BenchmarkInputError(f"--{name.replace('_', '-')} must be positive")

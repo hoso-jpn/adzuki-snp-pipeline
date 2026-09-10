@@ -18,6 +18,53 @@ COMMIT = "b" * 40
 
 
 class BenchmarkPreparationTests(unittest.TestCase):
+    def test_manifest_sample_names_are_not_silently_trimmed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            fai, manifest = _build_inputs(directory, 51)
+            manifest.write_text(manifest.read_text().replace("sample_000,", " sample_000,"))
+            result, *outputs = _run(directory, fai, manifest)
+            self.assertEqual(1, result.returncode)
+            self.assertFalse(any(p.exists() for p in outputs))
+
+    def test_extra_manifest_column_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            fai, manifest = _build_inputs(directory, 51)
+            lines = manifest.read_text().splitlines()
+            lines[1] += ",unaccounted-source"
+            manifest.write_text("\n".join(lines) + "\n")
+            result, *outputs = _run(directory, fai, manifest)
+            self.assertEqual(1, result.returncode)
+            self.assertFalse(any(p.exists() for p in outputs))
+
+    def test_fake_container_digest_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            fai, manifest = _build_inputs(directory, 51)
+            result, *outputs = _run(
+                directory, fai, manifest, ["--gatk-container", "gatk@sha256:fake"]
+            )
+            self.assertEqual(1, result.returncode)
+            self.assertFalse(any(p.exists() for p in outputs))
+
+    def test_grouped_scaffolds_preserve_reference_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            contigs = (("small1", 500), ("chr1", 40000001), ("small2", 700))
+            fai, manifest = _build_inputs(directory, 51, contigs)
+            result, _, intervals, _ = _run(directory, fai, manifest)
+            self.assertEqual(0, result.returncode, result.stderr)
+            names = []
+            for row in _read_tsv(intervals):
+                if row["plan_id"] != "candidate_split_group":
+                    continue
+                for interval in json.loads(row["intervals_json"]):
+                    name = interval.split(":")[0]
+                    if not names or names[-1] != name:
+                        names.append(name)
+            self.assertEqual([c[0] for c in contigs], names)
+
     def test_51_inputs_produce_sample_map_interval_candidates_and_pending_evidence(
         self,
     ) -> None:
@@ -37,7 +84,9 @@ class BenchmarkPreparationTests(unittest.TestCase):
 
             interval_rows = _read_tsv(interval_plan)
             plan_ids = {row["plan_id"] for row in interval_rows}
-            self.assertEqual(plan_ids, {"baseline_per_contig", "candidate_split_group"})
+            self.assertEqual(
+                plan_ids, {"baseline_per_contig", "candidate_split_only", "candidate_split_group"}
+            )
             candidate = [row for row in interval_rows if row["plan_id"] == "candidate_split_group"]
             self.assertTrue(any("window" in row["strategy"] for row in candidate))
             small = next(row for row in candidate if row["interval_group_id"] == "small_scaffolds")
@@ -46,7 +95,16 @@ class BenchmarkPreparationTests(unittest.TestCase):
             evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
             self.assertEqual(evidence["status"], "PENDING_REAL_BENCHMARK")
             self.assertEqual(evidence["inputs"]["sample_count"], 51)
-            self.assertEqual(len(evidence["experiments"]), 5)
+            self.assertEqual(len(evidence["experiments"]), 6)
+            self.assertFalse(evidence["input_validation"]["benchmark_ready"])
+            self.assertFalse(evidence["input_validation"]["lineage_verified"])
+            experiments = {e["experiment_id"]: e for e in evidence["experiments"]}
+            for experiment in experiments.values():
+                if experiment["compare_to"] is None:
+                    continue
+                parent = experiments[experiment["compare_to"]]
+                factors = ("gvcf_input_mode", "interval_plan_id", "reblock_gvcfs", "consolidate")
+                self.assertEqual(1, sum(experiment[key] != parent[key] for key in factors))
             self.assertTrue(
                 all(
                     experiment["measurements"]["peak_rss_bytes"] is None
@@ -188,8 +246,9 @@ class BenchmarkPreparationTests(unittest.TestCase):
             self.assertTrue(all(not output.exists() for output in outputs))
 
 
-def _build_inputs(directory: Path, sample_count: int) -> tuple[Path, Path]:
-    contigs = (("chr1", 40_000_001), ("small1", 500), ("small2", 700))
+def _build_inputs(directory: Path, sample_count: int, contigs=None) -> tuple[Path, Path]:
+    if contigs is None:
+        contigs = (("chr1", 40_000_001), ("small1", 500), ("small2", 700))
     fai = directory / "reference.fa.fai"
     fai.write_text(
         "".join(f"{name}\t{length}\t0\t0\t0\n" for name, length in contigs),
