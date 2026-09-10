@@ -65,6 +65,8 @@ scientific equivalenceを確認し、単なる容量削減だけでGOにしま�
 E3/E4はいずれもE2bと比較します。evidenceの`compare_to`が比較対象を明示します。
 groupingはreference dictionary中で連続するsmall scaffoldだけに限定し、GatherVcfsの入力順を
 保ちます。windowは1-based closed intervalで、gap/overlapのないpartitionとして検証します。
+small scaffold groupの合計もwindow size以下に制限し、大量のscaffoldが一つの巨大taskに
+集約されることを防ぎます。
 
 ## 必須計測
 
@@ -88,7 +90,38 @@ sample-name-map、interval戦略、Reblock、consolidateはそれぞれ`ADOPT`/`
 現在の状態は**PENDING REAL BENCHMARK**です。production workflow、resource label、batch-size default、
 interval strategy、Reblock/consolidate policyは変更していません。
 
-## 2026-09-10の探索結果とblocker
+## 2026-09-10: 51-sample preparation in progress
+
+Ownerによる追加public FASTQ取得の承認後、ENAの全684 runを再取得しました。
+WGS / paired-endは327 run、327 unique BioSampleで、RAD-Seq / single-end 357 runを除外しました。
+既存20検体と、残りのeligible runをaccession昇順で選んだ31検体を固定しました。
+全51検体はPRJNA1138464、Vigna angularis、Illumina HiSeq Xです。
+この選定はvariant結果に依存しませんが、集団の無作為標本でもありません。
+
+- [全候補と除外理由](evidence/issue45/candidate_cohort.tsv)
+- [固定51検体と公開checksum](evidence/issue45/cohort_selection.json)
+- [既存20検体のchecksum / lineage audit](evidence/issue45/old20_lineage_audit.json)
+- Public metadata source: [ENA filereport API](https://www.ebi.ac.uk/ena/portal/api/filereport?accession=PRJNA1138464&result=read_run&format=tsv)
+
+旧20検体の40 FASTQはENA published MD5とsource manifest SHA256に一致し、20 gVCFのSHA256も
+source manifestと一致しました。reference FASTA/FAI/dictのSHA256と、全20 HaplotypeCallerの
+canonical parametersも一致します。旧実行から現在のmainへの上流module差分には、scientific
+commandの変更はありません。ただし旧20 gVCFには前段10検体runからのcached outputが含まれ、
+生成元SHAは単一ではありません。今回のprotocolのstrict single-SHA contractを維持するため、
+**FASTQは再利用し、gVCFは全51検体REGENERATE**とします。旧gVCFを新SHA由来とは表記しません。
+
+固定production SHAは`3158ca50c2c13c31bdc80db302c7df4bbb5670bf`です。
+production checkoutとPR #61 checkoutを分離し、productionのmoduleを変更せず、別途hashを
+記録するgVCF専用wrapperから呼び出します。synthetic 2検体（うち1検体は2 read groups）で、
+wrapperと固定mainのfull workflowのgVCF全recordがbyte-identicalであることを確認しました。
+これは実行経路の回帰検証であり、51-sample real benchmarkの代替ではありません。
+
+不足31検体のFASTQ（約150.6 GB）はchecksum確認付きで取得中です。全51検体の公開FASTQ容量は
+207.4 GBです。実gVCFの生成・全件validation・E0〜E4測定はまだ完了しておらず、
+`benchmark_ready=false` / `lineage_verified=false`、PRはDraftを維持します。
+327-sampleの最終Gateは実測後に決定します。
+
+## Earlier inventory, before download authorization
 
 `seedcore-01`の既知の公開cohort保管領域（Issues #11/#26/#33/#35）、pipeline checkouts、
 Issue #44 replay、data volumeのdirectory一覧を調査しました。既存run metadataから退避済みの
