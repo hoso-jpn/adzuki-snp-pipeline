@@ -7,6 +7,7 @@ import itertools
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -32,6 +33,23 @@ def main():
     root = args.output_dir.resolve()
     root.mkdir(parents=True, exist_ok=False)
     os.environ["NXF_VER"] = "26.04.6"
+    # Exercise the real stager's generated configuration, not just a hand-written
+    # test config. An earlier single-quoted publishDir kept ${params.outdir}
+    # literal and would have published real outputs into the wrong directory.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
+    from test_issue45_generation_preparation import build_fixture, stage_fixture
+
+    staged = stage_fixture(build_fixture(root / "synthetic-staging-contract"))
+    flat = subprocess.check_output(
+        ["nextflow", "config", str(staged), "-flat"], cwd=staged, text=True
+    )
+    for suffix in ("qc/fastp", "variants/gvcf"):
+        if str(staged / "results" / suffix) not in flat:
+            raise RuntimeError(
+                f"Staged publishDir did not resolve to the expected location: {suffix}"
+            )
+    if "${params.outdir}" in flat:
+        raise RuntimeError("Unexpanded publishDir in staged configuration")
     commit = subprocess.check_output(
         ["git", "-C", str(production), "rev-parse", "HEAD"], text=True
     ).strip()

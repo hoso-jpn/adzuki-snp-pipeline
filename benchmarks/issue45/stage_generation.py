@@ -219,11 +219,11 @@ docker.enabled = true
 docker.runOptions = '-u $(id -u):$(id -g) --label adzuki.issue45_run={output.name}'
 process {{
     withName: FASTP {{
-        publishDir = [path: '${{params.outdir}}/qc/fastp', mode: 'copy', pattern: '*.{{json,html}}']
+        publishDir = [path: "${{params.outdir}}/qc/fastp", mode: 'copy', pattern: '*.{{json,html}}']
     }}
     withName: SAMTOOLS_INDEX {{ publishDir = [] }}
     withName: GATK_HAPLOTYPECALLER {{
-        publishDir = [path: '${{params.outdir}}/variants/gvcf', mode: 'link', pattern: '*.g.vcf.gz*']
+        publishDir = [path: "${{params.outdir}}/variants/gvcf", mode: 'link', pattern: '*.g.vcf.gz*']
     }}
 }}
 trace {{
