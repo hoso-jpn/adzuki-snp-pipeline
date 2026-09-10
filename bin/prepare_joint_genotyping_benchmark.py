@@ -236,9 +236,10 @@ def build_interval_plan_rows(
     candidate_groups: list[tuple[str, list[str], int, int, str]] = []
     small: list[Contig] = []
     small_group_count = 0
+    small_bp = 0
 
     def flush_small() -> None:
-        nonlocal small_group_count
+        nonlocal small_group_count, small_bp
         if not small:
             return
         small_group_count += 1
@@ -255,10 +256,14 @@ def build_interval_plan_rows(
             )
         )
         small.clear()
+        small_bp = 0
 
     for contig in contigs:
         if contig.length <= small_scaffold_max_bp:
+            if small_bp + contig.length > window_size_bp:
+                flush_small()
             small.append(contig)
+            small_bp += contig.length
             continue
         flush_small()
         if contig.length <= window_size_bp:

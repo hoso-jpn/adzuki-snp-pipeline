@@ -18,6 +18,23 @@ COMMIT = "b" * 40
 
 
 class BenchmarkPreparationTests(unittest.TestCase):
+    def test_many_small_scaffolds_are_bounded_by_window_size(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            contigs = tuple((f"small{i}", 900_000) for i in range(51))
+            fai, manifest = _build_inputs(directory, 51, contigs)
+            result, _, intervals, _ = _run(directory, fai, manifest)
+            self.assertEqual(0, result.returncode, result.stderr)
+            groups = [
+                row for row in _read_tsv(intervals) if row["plan_id"] == "candidate_split_group"
+            ]
+            self.assertEqual(3, len(groups))
+            self.assertTrue(all(int(row["total_bp"]) <= 20_000_000 for row in groups))
+            self.assertEqual(
+                [name for name, _ in contigs],
+                [name for row in groups for name in json.loads(row["intervals_json"])],
+            )
+
     def test_sample_map_uses_literal_tabs_without_csv_quoting(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp) / 'quoted"directory'
