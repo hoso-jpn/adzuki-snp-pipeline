@@ -73,7 +73,10 @@ small scaffold groupの合計もwindow size以下に制限し、大量のscaffol
 集約されることを防ぎます。
 
 実測前に、各interval taskは8 CPU / 16 GiB、最大3 task並列、windowは20 Mb、small scaffoldは
-1 Mb以下と固定します。GenotypeGVCFsには全experimentで
+1 Mb以下と固定します。これは実測前の事前登録値です。16 GiBでE0が実際にOOM-killedとなったため、
+GenotypeGVCFsのみ実測に基づく共通ceilingへ改めました。経緯と根拠は
+「2026-09-11: E0 baselineは16 GiBで失敗」以降の各節を参照してください。
+16 GiBでのbaseline failureは置き換えず保持し、比較用measurementとは別に記録します。GenotypeGVCFsには全experimentで
 `--only-output-calls-starting-in-intervals true`を指定し、window境界のvariant開始位置の所有を
 一意にします。E3はGQ bands 20/100、`keep-all-alts=true`、`floor-blocks=false`、
 `drop-low-quals=false`とし、追加のallele droppingを導入しません。
@@ -103,8 +106,8 @@ sample-name-map、interval戦略、Reblock、consolidateはそれぞれ`ADOPT`/`
 不確実性が残る場合は`CONDITIONAL GO`、lineageまたはresource contractを満たせない場合は`NO-GO`
 とします。
 
-現在の状態は**PENDING REAL BENCHMARK**です。production workflow、resource label、batch-size default、
-interval strategy、Reblock/consolidate policyは変更していません。
+production workflow、resource label、batch-size default、interval strategy、
+Reblock/consolidate policyは変更していません。実測の進捗は以下の日付別節に追記します。
 
 ## 2026-09-10: 51-sample preparation in progress
 
@@ -163,3 +166,73 @@ targeted GenomicsDB実行には併せて十分なRAM余裕を確保する必要�
 
 コード上もsource-run provenance検証とindex内容検証を完了するまで実行gateを開きません。
 PR #61はDraft、Issue #45はopenのまま維持します。
+
+## 2026-09-11: 51検体gVCF生成完了とlineage検証
+
+`issue45-51gvcf-20260910-200521`で全51検体のgVCFを生成し、独立validationを完了しました。
+51 unique run accession、51 unique BioSample、51 unique gVCF SHA256で、gVCFの複製や
+sample名の書き換えはありません。ordered contigs、shared INFO/FORMAT/FILTER/ALT定義、
+expanded HaplotypeCaller parametersはいずれも51検体で単一値です。全gVCFのBGZF CRC/EOFと、
+通常読込みとindex経由の全record一致を確認しました。入力gVCFは合計48.03 GB、3,566,258,766 records、
+全taskがattempt 1で成功しています。この時点で`benchmark_ready=true` / `lineage_verified=true`
+となりました。
+
+## 2026-09-11: E0 baselineは16 GiBで失敗（negative evidenceとして保持）
+
+固定した16 GiB / heap 15 GiBで最初のE0を実行し、最長contig `NC_068970.1`（65,407,200 bp）の
+GenotypeGVCFsがexit 247 / `OOMKilled=true`で停止しました。peak RSSは15.98 GiBで、自身の
+16 GiB上限の99.9%です。progress meterは約1,218,671 records/分から3 records/分へ崩壊しており、
+これはGCのdeath spiralで、live setが本当にheap上限へ達したことを示します。
+host側のMemAvailable最小値は83.23 GiB、swapは3.318→3.306 GiBでdeltaは負であり、
+host資源の枯渇ではなくcontainer cgroup上限単独が原因です。
+
+この結果は**production baselineに関する有効なnegative evidenceとして保持**します。
+通るまでallocationを上げて「E0成功」に置き換えることはしていません。
+[sanitized failure evidence](evidence/issue45/e0_oom_failure_20260911_160616.json)に
+`allocation_regime = production_baseline_16gib`として記録しています。
+
+完了した7 taskから、GenomicsDBImportのpeak RSSは1.27–1.55 GiBでinterval長にほぼ依存せず、
+16 GiB割当は十分余裕があると分かりました。GenotypeGVCFsのpeak RSSはinterval長とともに増加します
+（51検体で概ね0.28 GiB/Mb）。ただしこれは**51検体・本reference・本GATK version・本ploidy・
+本HaplotypeCaller条件での観測**であり、sample数方向のscalingを測ったものではなく、327検体へ
+線形外挿しません。さらに最長2 contigの読み値自体が検証対象の上限で切られているため下限値です。
+
+`genomicsdb_batch_size=50`の実batchingは、開始した全7 intervalで
+`Importing batch 1 with 50 samples` / `Done importing batch 1/2` /
+`Importing batch 2 with 1 samples` / `Done importing batch 2/2` /
+`Import of all batches to GenomicsDB completed!`として確認済みです。
+51検体を入力しただけでなく、GATK側で2 batchとして実処理されました。
+
+## 2026-09-12: 真のpeak RSS calibrationと共通ceilingの決定
+
+上限で切られた読み値から比較用ceilingを決めないため、本repositoryの既存methodology
+（`nextflow.config`のIssue #30/#33: 対象processを単独で十分大きなceilingで再測定する）に従い、
+最長contigのGenotypeGVCFsを単独・96 GiB / heap 80 GiBで再測定しました。保持した失敗evidenceを
+変更しないよう、GenomicsDB workspaceはコピーして使用しています。
+
+| 指標 | 16 GiB試行（上限で切断） | calibration（真値） |
+| --- | --- | --- |
+| 結果 | exit 247 / OOMKilled | exit 0 / 完了 |
+| peak RSS | 15.98 GiB（上限の99.9%） | **17.91 GiB** |
+| wall time | 84.2分で88%地点 | 49.0分で完走 |
+| major page faults | 10,565,494 | 80 |
+| host swap | — | 0.00 GiB |
+
+真の必要量17.91 GiBは16 GiB上限を超えており、OOMは測定上の人工物ではなく実際の資源不足です。
+major page faultsの10,565,494対80と、84.2分で88%対49.0分で完走という2つの独立した読み値が、
+progress meterに現れたGC death spiralを裏付けます。
+
+したがって共通ceilingは**GenotypeGVCFs 32 GiB / 派生heap 26 GiB**（native reserve 6 GiB、
+実測真値の1.79倍）とし、**E0〜E4の全experimentへ同一に適用**します。
+allocation差が比較対象ペアの交絡要因にならないようにするためです。
+Java heapはcontainer上限からnative reserveを引いて導出します。GenomicsDBのTileDB bufferと
+JVMのmetaspace/stack/code cacheはheap外に存在するため、heapを独立した数値として書くと
+上限と一致してしまう今回のbug classが再発します。GenomicsDBImportは実測1.55 GiBに対して
+16 GiBのままで変更しません。
+
+[calibration evidence](evidence/issue45/genotype_memory_calibration_20260912.json)に記録しています。
+このcalibrationはE0〜E4の比較experimentではなく、16 GiB baseline failureとも比較用measurementとも
+別に報告します。公開evidenceの`allocation_regime`は、比較ペアを交絡し得る値の一様性を明示的に検査します。
+
+科学的parameter、threshold、ploidy、reference、interval semanticsはいずれも変更していません。
+E0/E1のper-contig planも同一のままです。変更したのは資源割当のみです。
