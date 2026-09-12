@@ -11,6 +11,7 @@ import threading
 import time
 from pathlib import Path
 
+import execute_experiments
 from execute_experiments import execute_suite
 from run_generation import inspect, memory, serving, snapshot
 from stage_generation import sha256
@@ -66,8 +67,11 @@ class ResourceGuard:
     def monitor_host(self):
         bad = 0
         try:
-            with (self.root / "host.tsv").open("x") as handle:
-                handle.write("timestamp\tmem_available_bytes\tswap_bytes\tstorage_free_bytes\n")
+            path = self.root / "host.tsv"
+            new_file = not path.exists()
+            with path.open("a") as handle:
+                if new_file:
+                    handle.write("timestamp\tmem_available_bytes\tswap_bytes\tstorage_free_bytes\n")
                 while not self.monitor_done.is_set():
                     available, swap = memory()
                     free = shutil.disk_usage(self.root).free
@@ -92,6 +96,8 @@ class ResourceGuard:
             self.stop_owned()
 
     def __enter__(self):
+        if self.expected_trial_id is None:
+            return self.enter_without_pausing_any_workload()
         before = inspect("freetoken-qwen38-flash-next-trial")
         if len(self.expected_trial_id) < 12 or not before["Id"].startswith(self.expected_trial_id):
             raise ValueError("Inventoried local trial identity changed")
@@ -140,6 +146,32 @@ class ResourceGuard:
             self.restore()
             raise
 
+    def enter_without_pausing_any_workload(self):
+        """Start measuring without stopping anything, when the host already has headroom."""
+        self.before = None
+        available, swap = memory()
+        self.record = {
+            "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "paused_workloads": [],
+            "reason": "Host already had the required headroom; no workload was stopped",
+            "before_mem_available_bytes": available,
+            "before_swap_bytes": swap,
+            "storage_before_bytes": shutil.disk_usage(self.root).free,
+            "after_stop_mem_available_bytes": available,
+            "benchmark_swap_start_bytes": swap,
+            "restored": True,
+        }
+        self.save()
+        try:
+            if available < 110 * 1024**3 or shutil.disk_usage(self.root).free < 2_000_000_000_000:
+                raise ValueError("Benchmark launch headroom gate failed")
+            self.monitor = threading.Thread(target=self.monitor_host, daemon=True)
+            self.monitor.start()
+            return self
+        except BaseException:
+            self.restore()
+            raise
+
     def restore(self):
         self.monitor_done.set()
         if self.monitor is not None:
@@ -172,7 +204,7 @@ class ResourceGuard:
         finally:
             self.record["finished_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             self.save()
-        if not self.record["restored"]:
+        if self.stopped_trial and not self.record["restored"]:
             raise RuntimeError("Local trial restoration failed; explicit follow-up required")
 
     def __exit__(self, exc_type, error, traceback):
@@ -188,7 +220,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--validated-cohort", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--expected-trial-id", required=True)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--expected-trial-id")
+    group.add_argument(
+        "--no-trial-pause",
+        action="store_true",
+        help="Measure without stopping any workload, when the host already has RAM headroom",
+    )
     args = parser.parse_args()
     validated = json.loads(args.validated_cohort.read_text())
     evidence = validated["evidence"]
@@ -201,26 +239,37 @@ def main():
             "51-sample independent lineage validation is required before pausing any workload"
         )
     root = args.output_dir.resolve()
-    root.mkdir(parents=True, exist_ok=False)
+    root.mkdir(parents=True, exist_ok=True)
     helper = Path(__file__).resolve().parent
-    (root / "execution_lineage.json").write_text(
-        json.dumps(
-            {
-                "validated_cohort_sha256": sha256(args.validated_cohort),
-                "helper_sha256": {path.name: sha256(path) for path in sorted(helper.glob("*.py"))},
-                "production_sha": evidence["production_sha"],
-                "maximum_concurrent_tasks": 3,
-                "batch_size": 50,
-                "window_size_bp": 20_000_000,
-                "small_scaffold_max_bp": 1_000_000,
-                "benchmark_ready": True,
-                "lineage_verified": True,
-            },
-            indent=2,
-        )
-        + "\n"
+    lineage = json.dumps(
+        {
+            "validated_cohort_sha256": sha256(args.validated_cohort),
+            "helper_sha256": {path.name: sha256(path) for path in sorted(helper.glob("*.py"))},
+            "production_sha": evidence["production_sha"],
+            "maximum_concurrent_tasks": execute_experiments.MAXIMUM_CONCURRENT_TASKS,
+            "genomicsdb_memory_gib": execute_experiments.GENOMICSDB_MEMORY_GIB,
+            "genotype_memory_gib": execute_experiments.GENOTYPE_MEMORY_GIB,
+            "genotype_native_reserve_gib": execute_experiments.GENOTYPE_NATIVE_RESERVE_GIB,
+            "batch_size": 50,
+            "window_size_bp": 20_000_000,
+            "small_scaffold_max_bp": 1_000_000,
+            "benchmark_ready": True,
+            "lineage_verified": True,
+        },
+        indent=2,
     )
-    guard = ResourceGuard(root, args.expected_trial_id)
+    lineage_path = root / "execution_lineage.json"
+    if lineage_path.exists():
+        # Resuming: the cohort, helper code and resource policy must be unchanged,
+        # or the completed experiments in this directory are no longer comparable.
+        if lineage_path.read_text() != lineage + "\n":
+            raise ValueError(
+                "Cohort, helper checksums or resource policy changed since this run started; "
+                "use a new output directory"
+            )
+    else:
+        lineage_path.write_text(lineage + "\n")
+    guard = ResourceGuard(root, None if args.no_trial_pause else args.expected_trial_id)
 
     def interrupted(signum, _frame):
         guard.stop.set()

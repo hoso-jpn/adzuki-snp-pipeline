@@ -4,10 +4,20 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from threading import Event
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "benchmarks/issue45"))
-from benchmark_tools import batches_from_log, compare_callsets  # noqa: E402
-from execute_experiments import validate_tiling  # noqa: E402
+import execute_experiments  # noqa: E402
+from benchmark_tools import (  # noqa: E402
+    ToolRunner,
+    batches_from_log,
+    compare_callsets,
+)
+from execute_experiments import (  # noqa: E402
+    COMPLETED,
+    completed_experiment,
+    validate_tiling,
+)
 
 
 class BenchmarkExecutionTests(unittest.TestCase):
@@ -70,6 +80,73 @@ class BenchmarkExecutionTests(unittest.TestCase):
             invalid = json.loads(json.dumps(valid).replace(original, replacement))
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 validate_tiling(invalid, contigs)
+
+
+class ResumeContractTests(unittest.TestCase):
+    """A multi-hour suite must reuse finished work without ever overwriting failure evidence."""
+
+    def test_completed_experiment_is_reused_and_unfinished_evidence_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertIsNone(completed_experiment(root, "E0"))
+
+            done = root / "E1"
+            done.mkdir()
+            payload = {"status": COMPLETED, "integrity": {"variant_count": 7}}
+            (done / "experiment_result.private.json").write_text(json.dumps(payload))
+            self.assertEqual(payload, completed_experiment(root, "E1"))
+
+            failed = root / "E2a"
+            failed.mkdir()
+            (failed / "experiment_result.private.json").write_text(
+                json.dumps({"status": "FAILED", "error_type": "RuntimeError"})
+            )
+            with self.assertRaisesRegex(ValueError, "retained FAILED evidence"):
+                completed_experiment(root, "E2a")
+
+            (root / "E2b").mkdir()
+            with self.assertRaisesRegex(ValueError, "without a result"):
+                completed_experiment(root, "E2b")
+
+
+class ResourcePolicyTests(unittest.TestCase):
+    """Issue #45: a 15 GiB heap inside a 16 GiB container OOM-killed the first real E0."""
+
+    def runner(self, memory_limit=None):
+        return ToolRunner(
+            Path("/bench"), Path("/input"), Path("/reference"), Event(), memory_limit=memory_limit
+        )
+
+    def test_every_java_heap_stays_below_its_own_container_limit(self):
+        runner = self.runner()
+        for memory, reserve in (
+            (
+                execute_experiments.GENOTYPE_MEMORY_GIB,
+                execute_experiments.GENOTYPE_NATIVE_RESERVE_GIB,
+            ),
+            (execute_experiments.GATHER_MEMORY_GIB, execute_experiments.GATHER_NATIVE_RESERVE_GIB),
+            (
+                execute_experiments.REBLOCK_MEMORY_GIB,
+                execute_experiments.REBLOCK_NATIVE_RESERVE_GIB,
+            ),
+        ):
+            with self.subTest(memory=memory):
+                self.assertLess(runner.java_heap_gib(memory, reserve), memory)
+
+    def test_a_capped_synthetic_allocation_also_shrinks_the_heap_it_contains(self):
+        capped = self.runner(memory_limit=4)
+        self.assertEqual(4, capped.effective_memory_gib(execute_experiments.GENOTYPE_MEMORY_GIB))
+        heap = capped.java_heap_gib(
+            execute_experiments.GENOTYPE_MEMORY_GIB, execute_experiments.GENOTYPE_NATIVE_RESERVE_GIB
+        )
+        self.assertGreaterEqual(heap, 1)
+        self.assertLessEqual(heap, 4)
+
+    def test_concurrent_tasks_fit_host_memory_at_the_declared_tiers(self):
+        peak = (
+            execute_experiments.MAXIMUM_CONCURRENT_TASKS * execute_experiments.GENOTYPE_MEMORY_GIB
+        )
+        self.assertLessEqual(peak, 110, "the launch gate requires 110 GiB available at start")
 
 
 if __name__ == "__main__":

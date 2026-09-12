@@ -307,13 +307,31 @@ def joint_integrity(path, expected_samples, contigs):
 
 
 class ToolRunner:
-    def __init__(self, root, input_dir, reference_dir, stop_event, cpu_limit=None):
+    def __init__(
+        self, root, input_dir, reference_dir, stop_event, cpu_limit=None, memory_limit=None
+    ):
         self.root = root.resolve()
         self.input_dir = input_dir.resolve()
         self.reference_dir = reference_dir.resolve()
         self.stop_event = stop_event
         self.cpu_limit = cpu_limit
+        self.memory_limit = memory_limit
         self.helper = Path(__file__).resolve().parent
+
+    def effective_memory_gib(self, memory_gib):
+        """Honour a synthetic-test cap without altering any scientific CLI argument."""
+        return min(memory_gib, self.memory_limit) if self.memory_limit is not None else memory_gib
+
+    def java_heap_gib(self, memory_gib, native_reserve_gib):
+        """Size a JVM heap strictly below the container limit it has to live inside.
+
+        Issue #45: a 15 GiB heap inside a 16 GiB container OOM-killed
+        GenotypeGVCFs, because GenomicsDB's TileDB buffers, the JVM's own
+        metaspace, thread stacks and code cache all live outside the heap.
+        Deriving the heap from the effective limit keeps that reserve present
+        at every allocation, including a capped synthetic one.
+        """
+        return max(1, self.effective_memory_gib(memory_gib) - native_reserve_gib)
 
     def run(self, directory, process, arguments, cpus=8, memory_gib=16):
         if self.stop_event.is_set():
@@ -327,6 +345,7 @@ class ToolRunner:
         container = re.sub(r"[^a-z0-9_.-]", "-", container)
         relative = directory.relative_to(self.root)
         effective_cpus = min(cpus, self.cpu_limit) if self.cpu_limit is not None else cpus
+        effective_memory = self.effective_memory_gib(memory_gib)
         command = [
             "docker",
             "run",
@@ -339,9 +358,9 @@ class ToolRunner:
             "--cpus",
             str(effective_cpus),
             "--memory",
-            f"{memory_gib}g",
+            f"{effective_memory}g",
             "--memory-swap",
-            f"{memory_gib}g",
+            f"{effective_memory}g",
             "--user",
             f"{os.getuid()}:{os.getgid()}",
             "-v",

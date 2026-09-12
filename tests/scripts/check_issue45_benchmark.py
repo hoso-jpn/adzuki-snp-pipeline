@@ -39,13 +39,19 @@ def main():
                 raise ValueError("Expected one synthetic BAM/index identity")
             shutil.copyfile(candidates.pop(), inputs / (sid + suffix))
     stop = threading.Event()
-    # Hosted CI has fewer CPUs than the 32-thread benchmark machine. Docker
-    # rejects quotas exceeding its host CPU count before starting the tool.
-    # Cap only synthetic test quotas; preserve every scientific CLI argument.
+    # Hosted CI has fewer CPUs and far less RAM than the 32-thread benchmark
+    # machine. Docker rejects CPU quotas exceeding its host CPU count before
+    # starting the tool, and the real suite's GenotypeGVCFs tier is larger than
+    # a hosted runner has. Cap only synthetic test quotas; preserve every
+    # scientific CLI argument. Capping memory also shrinks the derived Java
+    # heaps, so no JVM is asked to reserve more than the runner can offer.
     available_cpus = min(
         4, int(subprocess.check_output(["docker", "info", "--format", "{{.NCPU}}"], text=True))
     )
-    producer = ToolRunner(root, inputs, reference, stop, cpu_limit=available_cpus)
+    synthetic_memory_gib = 4
+    producer = ToolRunner(
+        root, inputs, reference, stop, cpu_limit=available_cpus, memory_limit=synthetic_memory_gib
+    )
 
     def generate(sid):
         producer.run(
@@ -103,7 +109,9 @@ def main():
     ]
     for groups in (baseline, split, grouped):
         validate_tiling(groups, contigs)
-    runner = ToolRunner(root, gvcfs, reference, stop, cpu_limit=available_cpus)
+    runner = ToolRunner(
+        root, gvcfs, reference, stop, cpu_limit=available_cpus, memory_limit=synthetic_memory_gib
+    )
     results = {}
     # The two equally sized synthetic contigs cannot represent both long
     # chromosomes and small scaffolds. Test splitting and grouping separately

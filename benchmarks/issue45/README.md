@@ -103,18 +103,50 @@ python3 benchmarks/issue45/validate_generated_cohort.py \
   --output-dir "$NEW_VALIDATION_DIRECTORY"
 python3 benchmarks/issue45/run_benchmarks.py \
   --validated-cohort "$NEW_VALIDATION_DIRECTORY/validated_cohort.private.json" \
-  --output-dir "$NEW_BENCHMARK_DIRECTORY" \
-  --expected-trial-id "$INVENTORIED_TRIAL_ID"
+  --output-dir "$BENCHMARK_DIRECTORY" \
+  --no-trial-pause
 ```
 
-The benchmark controller independently pauses/restores the authorized trial and
-requires 110 GiB available RAM and 2.0 TB free storage before execution. Runtime
-host guards match generation. Three interval tasks run concurrently, each with
-8 CPU / 16 GiB allocation; GenomicsDB has a 13,107 MiB heap, GenotypeGVCFs 15 GiB.
-Gather uses 4 CPU / 8 GiB, and Reblock 4 CPU / 16 GiB. Docker memory+swap limits
-equal the memory allocation for these targeted tasks. This fixed comparison
-policy differs from unconstrained host scheduling and is recorded explicitly.
-No cache dropping, host tuning, or production resource change is performed.
+The benchmark controller requires 110 GiB available RAM and 2.0 TB free storage
+before execution. Runtime host guards match generation. It pauses and restores the
+authorized trial only when `--expected-trial-id` is given; the pause exists purely
+to free RAM, so `--no-trial-pause` measures without touching any user workload once
+the host already has that headroom. That mode still enforces the same launch gate
+and runtime host monitor, and it records that nothing was stopped.
+
+Three interval tasks run concurrently with 8 CPU each. GenomicsDBImport gets
+16 GiB with a 13,107 MiB heap; its measured 51-sample peak was 1.55 GiB, so that
+allocation is already ample and stays unchanged. GenotypeGVCFs has its own,
+larger tier because the first real E0 was OOM-killed there (see below). Gather
+uses 4 CPU / 8 GiB, and Reblock 4 CPU / 16 GiB. Docker memory+swap limits equal
+the memory allocation for these targeted tasks. This fixed comparison policy
+differs from unconstrained host scheduling and is recorded explicitly. No cache
+dropping, host tuning, or production resource change is performed.
+
+The first real E0 attempt OOM-killed GenotypeGVCFs on the longest contig
+(65.4 Mb) at 51 samples: exit 247, `OOMKilled=true`, peak RSS 15.98 GiB against
+its own 16 GiB ceiling, after the progress meter collapsed from about 1.2M to 3
+records per minute. A collapse of that shape is a GC death spiral, so the live
+set genuinely approached the 15 GiB heap rather than the container merely
+clipping native allocations. This repository's standing methodology
+(`nextflow.config`, Issues #30/#33) treats a reading at its own cgroup ceiling as
+untrue, so GenotypeGVCFs was re-measured alone at a deliberately generous
+ceiling, and the resulting tier is applied identically to every experiment.
+Raising one allocation is a resource change only: no scientific parameter,
+threshold, ploidy, reference or interval semantic differs, and the per-contig
+E0/E1 plans are still the same plans. The completed E0 tasks also show
+GenotypeGVCFs peak RSS growing roughly linearly with interval length at fixed
+sample count, which is measured input to the interval-strategy decision rather
+than an assumption carried into it.
+
+A suite that stops part-way keeps its finished experiments. Re-running the same
+command against the same output directory reuses every experiment whose result is
+already `COMPLETED_AWAITING_COMPARATIVE_REVIEW`, and refuses to start when an
+experiment directory holds retained failure evidence or no result at all, so a
+new run directory is required to re-attempt one. A resumed run re-verifies the
+validated cohort checksum, every helper checksum, the resource policy and the
+interval plan, and stops if any of them changed since the directory was
+started.
 Task wall-time sums and complete experiment elapsed time are distinct metrics;
 the latter also includes index/integrity verification and scheduling overhead.
 

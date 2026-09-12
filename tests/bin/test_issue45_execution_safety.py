@@ -125,6 +125,24 @@ class GenerationRestorationTests(unittest.TestCase):
             self.assertFalse((directory / "resource-preparation.private.json").exists())
 
 
+class LineageRecordTests(unittest.TestCase):
+    def test_recorded_resource_policy_names_only_real_module_constants(self):
+        import ast
+
+        source = (HELPERS / "run_benchmarks.py").read_text()
+        referenced = {
+            node.attr
+            for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "execute_experiments"
+        }
+        self.assertTrue(referenced)
+        for name in sorted(referenced):
+            with self.subTest(name=name):
+                self.assertTrue(hasattr(benchmark_runner.execute_experiments, name))
+
+
 class MeasurementTests(unittest.TestCase):
     def test_failed_command_records_exit_code_and_refuses_existing_measurement(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -178,6 +196,45 @@ class BenchmarkRestorationTests(unittest.TestCase):
                 self.assertTrue(json.loads(record_text)["restored"])
                 self.assertEqual(["docker", "start", before["Id"]], calls[-1])
                 self.assertNotIn("do-not-record-this", record_text)
+
+    def test_no_trial_pause_measures_without_stopping_any_user_workload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with (
+                patch.object(benchmark_runner, "memory", return_value=(120 * 1024**3, 0)),
+                patch.object(benchmark_runner, "inspect") as examine,
+                patch.object(benchmark_runner.subprocess, "check_output", return_value=""),
+                patch.object(benchmark_runner.subprocess, "run") as execute,
+                patch.object(benchmark_runner.threading, "Thread"),
+                patch.object(
+                    benchmark_runner.shutil, "disk_usage", return_value=Mock(free=4_000_000_000_000)
+                ),
+            ):
+                with benchmark_runner.ResourceGuard(root, None):
+                    pass
+            examine.assert_not_called()
+            self.assertNotIn(
+                "stop", [call[1] for call in execute.call_args_list if len(call[1]) > 1]
+            )
+            record = json.loads((root / "resource-preparation.private.json").read_text())
+            self.assertEqual([], record["paused_workloads"])
+            self.assertNotIn("stop_command", record)
+
+    def test_no_trial_pause_still_enforces_the_launch_headroom_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with (
+                patch.object(benchmark_runner, "memory", return_value=(3 * 1024**3, 0)),
+                patch.object(benchmark_runner.subprocess, "check_output", return_value=""),
+                patch.object(benchmark_runner.subprocess, "run"),
+                patch.object(benchmark_runner.threading, "Thread"),
+                patch.object(
+                    benchmark_runner.shutil, "disk_usage", return_value=Mock(free=4_000_000_000_000)
+                ),
+            ):
+                with self.assertRaisesRegex(ValueError, "headroom gate"):
+                    with benchmark_runner.ResourceGuard(root, None):
+                        self.fail("Must not enter")
 
     def test_active_request_prevents_any_trial_stop(self):
         with tempfile.TemporaryDirectory() as tmp:

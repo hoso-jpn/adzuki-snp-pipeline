@@ -7,6 +7,7 @@ must own the resource guard and service restoration for the entire call.
 import concurrent.futures
 import csv
 import datetime
+import io
 import json
 import sys
 import time
@@ -29,6 +30,35 @@ from prepare_joint_genotyping_benchmark import (  # noqa: E402
     build_interval_plan_rows,
     read_reference_fai,
 )
+
+# Resource policy, fixed identically for every experiment so that only the
+# declared one-factor change differs between a pair being compared.
+#
+# Issue #45 first real run: GenotypeGVCFs was OOM-killed (exit 247,
+# OOMKilled=true) on the largest contig at 51 samples with a 15 GiB Java heap
+# inside a 16 GiB container, after its progress meter collapsed from ~1.2M to
+# ~3 records/minute -- a GC death spiral, so the live set genuinely approached
+# the heap ceiling rather than the container merely clipping native overhead.
+# Per this repository's standing methodology (nextflow.config, Issues #30/#33)
+# a reading at its own cgroup ceiling is not a true peak, so GenotypeGVCFs was
+# re-measured alone at a deliberately generous ceiling and given its own tier
+# below. GenomicsDBImport keeps 16 GiB: its measured peak was 1.67 GiB, so that
+# allocation is already ample and is left unchanged. This is a resource
+# allocation change only -- no scientific parameter, threshold, ploidy,
+# reference or interval semantics is affected.
+MAXIMUM_CONCURRENT_TASKS = 3
+GENOMICSDB_MEMORY_GIB = 16
+GENOMICSDB_JAVA_HEAP_MIB = 13107
+GENOTYPE_MEMORY_GIB = 32
+# GenomicsDB's native TileDB buffers, plus JVM metaspace/stacks/code cache, all
+# sit outside the Java heap, so the heap is derived this far below the container
+# limit rather than being written as its own independent number.
+GENOTYPE_NATIVE_RESERVE_GIB = 6
+GATHER_MEMORY_GIB = 8
+GATHER_NATIVE_RESERVE_GIB = 1
+REBLOCK_MEMORY_GIB = 16
+REBLOCK_NATIVE_RESERVE_GIB = 3
+COMPLETED = "COMPLETED_AWAITING_COMPARATIVE_REVIEW"
 
 EXPERIMENTS = (
     ("E0", None, "baseline_per_contig", False, False, False),
@@ -64,7 +94,7 @@ def validate_tiling(groups, contigs):
         raise ValueError("Interval plan does not cover the complete reference")
 
 
-def parallel_map(function, values, workers=3):
+def parallel_map(function, values, workers=MAXIMUM_CONCURRENT_TASKS):
     # Keep only three intervals/samples active. A failed future prevents queued
     # tasks from starting; active tasks retain their own measurements.
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
@@ -90,6 +120,25 @@ def process_summary(records):
     }
 
 
+def completed_experiment(root, experiment):
+    """Reuse an already-completed experiment, but never overwrite retained failure evidence."""
+    directory = root / experiment
+    record = directory / "experiment_result.private.json"
+    if not directory.exists():
+        return None
+    if not record.exists():
+        raise ValueError(
+            f"{experiment} directory exists without a result; retain it and use a new run"
+        )
+    result = json.loads(record.read_text())
+    if result.get("status") != COMPLETED:
+        raise ValueError(
+            f"{experiment} holds retained {result.get('status')} evidence; "
+            "diagnose it and start a new run directory rather than overwriting it"
+        )
+    return result
+
+
 def run_experiment(
     runner, directory, configuration, groups, samples, reference_name, contigs, batch_size=50
 ):
@@ -102,11 +151,14 @@ def run_experiment(
         "interval_count": len(groups),
         "intervals": groups,
         "gatk_container": GATK,
-        "maximum_concurrent_tasks": 3,
+        "maximum_concurrent_tasks": MAXIMUM_CONCURRENT_TASKS,
         "genomicsdb_cpus": 8,
-        "genomicsdb_memory_bytes": 16 * 1024**3,
-        "genomicsdb_java_heap_mib": 13107,
-        "genotype_java_heap_gib": 15,
+        "genomicsdb_memory_bytes": GENOMICSDB_MEMORY_GIB * 1024**3,
+        "genomicsdb_java_heap_mib": GENOMICSDB_JAVA_HEAP_MIB,
+        "genotype_memory_bytes": runner.effective_memory_gib(GENOTYPE_MEMORY_GIB) * 1024**3,
+        "genotype_java_heap_gib": runner.java_heap_gib(
+            GENOTYPE_MEMORY_GIB, GENOTYPE_NATIVE_RESERVE_GIB
+        ),
         "sample_ploidy": 2,
         "reader_threads_requested": 8,
         "only_output_calls_starting_in_intervals": True,
@@ -137,7 +189,7 @@ def run_experiment(
                     [
                         "gatk",
                         "--java-options",
-                        "-Xmx15g",
+                        f"-Xmx{runner.java_heap_gib(REBLOCK_MEMORY_GIB, REBLOCK_NATIVE_RESERVE_GIB)}g",
                         "ReblockGVCF",
                         "--reference",
                         "/reference/" + reference_name,
@@ -159,6 +211,7 @@ def run_experiment(
                         "true",
                     ],
                     cpus=4,
+                    memory_gib=REBLOCK_MEMORY_GIB,
                 )
                 return {
                     "sample": sid,
@@ -222,7 +275,7 @@ def run_experiment(
                 [
                     "gatk",
                     "--java-options",
-                    "-Xmx13107m",
+                    f"-Xmx{GENOMICSDB_JAVA_HEAP_MIB}m",
                     "GenomicsDBImport",
                     *inputs,
                     "--genomicsdb-workspace-path",
@@ -248,7 +301,7 @@ def run_experiment(
                 [
                     "gatk",
                     "--java-options",
-                    "-Xmx15g",
+                    f"-Xmx{runner.java_heap_gib(GENOTYPE_MEMORY_GIB, GENOTYPE_NATIVE_RESERVE_GIB)}g",
                     "GenotypeGVCFs",
                     "--reference",
                     "/reference/" + reference_name,
@@ -264,6 +317,7 @@ def run_experiment(
                     "--create-output-variant-index",
                     "true",
                 ],
+                memory_gib=GENOTYPE_MEMORY_GIB,
             )
             return {
                 "group": group,
@@ -294,14 +348,14 @@ def run_experiment(
             [
                 "gatk",
                 "--java-options",
-                "-Xmx7g",
+                f"-Xmx{runner.java_heap_gib(GATHER_MEMORY_GIB, GATHER_NATIVE_RESERVE_GIB)}g",
                 "GatherVcfs",
                 *arguments,
                 "--OUTPUT",
                 "cohort.raw.vcf.gz",
             ],
             cpus=4,
-            memory_gib=8,
+            memory_gib=GATHER_MEMORY_GIB,
         )
         result["gather_index"] = runner.run(
             gathered_dir,
@@ -309,13 +363,13 @@ def run_experiment(
             [
                 "gatk",
                 "--java-options",
-                "-Xmx7g",
+                f"-Xmx{runner.java_heap_gib(GATHER_MEMORY_GIB, GATHER_NATIVE_RESERVE_GIB)}g",
                 "IndexFeatureFile",
                 "--input",
                 "cohort.raw.vcf.gz",
             ],
             cpus=4,
-            memory_gib=8,
+            memory_gib=GATHER_MEMORY_GIB,
         )
         result["integrity"] = joint_integrity(
             gathered_dir / "cohort.raw.vcf.gz", [row["sample"] for row in samples], contigs
@@ -326,7 +380,7 @@ def run_experiment(
             key: sum(row["workspace"][key] for row in result["tasks"])
             for key in ("bytes", "file_count")
         }
-        result["status"] = "COMPLETED_AWAITING_COMPARATIVE_REVIEW"
+        result["status"] = COMPLETED
     except BaseException as error:
         result.update(status="FAILED", error_type=type(error).__name__, error_private=str(error))
         raise
@@ -365,10 +419,17 @@ def execute_suite(root, validated, stop_event):
     ordered = read_reference_fai(Path(reference["fai"]))
     contigs = [(row.name, row.length) for row in ordered]
     rows = build_interval_plan_rows(ordered, 20_000_000, 1_000_000)
-    with (root / "interval_plan.tsv").open("x", newline="") as handle:
-        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerow(INTERVAL_PLAN_HEADER)
-        writer.writerows(rows)
+    plan_path = root / "interval_plan.tsv"
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter="\t", lineterminator="\n")
+    writer.writerow(INTERVAL_PLAN_HEADER)
+    writer.writerows(rows)
+    if plan_path.exists():
+        # A resumed run must reproduce the identical plan the earlier experiments used.
+        if plan_path.read_text() != buffer.getvalue():
+            raise ValueError("Interval plan changed since this run directory was started")
+    else:
+        plan_path.write_text(buffer.getvalue())
     plans = {}
     for row in rows:
         plans.setdefault(row[0], []).append(
@@ -383,6 +444,10 @@ def execute_suite(root, validated, stop_event):
     runner = ToolRunner(root, input_dir, Path(reference["fasta"]).parent, stop_event)
     results = {}
     for experiment, compare_to, plan, sample_map, reblock, consolidate in EXPERIMENTS:
+        earlier = completed_experiment(root, experiment)
+        if earlier is not None:
+            results[experiment] = earlier
+            continue
         if stop_event.is_set():
             raise RuntimeError("Resource guard stopped the suite")
         configuration = {
