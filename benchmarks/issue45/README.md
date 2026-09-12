@@ -183,6 +183,21 @@ margin, every other record field agrees, and membership of the frozen main's
 QD<2 filter is unchanged. All other differences remain unexplained until review;
 neither QD nor any other annotation is silently discarded from evidence.
 
+`summarize_evidence.py` turns a finished private run into the sanitized JSON
+committed under `docs/evidence/issue45`. It selects, renames and aggregates what
+the run already recorded and re-derives no measurement, so a disagreement with
+the private record is a bug in the summarizer. Host directory layout, absolute
+paths and usernames are never published; sample identities are public accessions
+and stay as they are. An experiment that failed is reported with its status and
+error type and without invented results.
+
+```bash
+python3 benchmarks/issue45/summarize_evidence.py \
+  --run-dir "$BENCHMARK_DIRECTORY" \
+  --validated-cohort "$NEW_VALIDATION_DIRECTORY/validated_cohort.private.json" \
+  --output docs/evidence/issue45/benchmark_results.json
+```
+
 Each task retains command, log, allocation, exit/OOM state and measurements.
 Only finished, explicitly named benchmark containers are removed; bind-mounted
 data and logs remain. Tool failures retain their experiment evidence. E3 failure
