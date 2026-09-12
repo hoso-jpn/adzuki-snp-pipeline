@@ -17,6 +17,21 @@ from execute_experiments import execute_suite
 from run_generation import inspect, memory, serving, snapshot
 from stage_generation import sha256
 
+# Helpers whose content can change a measurement, and which a resumed run must
+# therefore find unchanged. Reporting-only tools are deliberately excluded: a
+# post-hoc summarizer edit must never block resuming a multi-day campaign, and
+# recording it would make the lineage claim more than it means.
+EXECUTING_HELPERS = (
+    "benchmark_tools.py",
+    "execute_experiments.py",
+    "measure_process.py",
+    "run_benchmarks.py",
+    "run_generation.py",
+    "stage_generation.py",
+    "validate_generated_cohort.py",
+)
+REPORTING_ONLY_HELPERS = ("summarize_evidence.py",)
+
 LAUNCH_MEMORY_GATE_BYTES = 110 * 1024**3
 LAUNCH_STORAGE_GATE_BYTES = 2_000_000_000_000
 RUNTIME_STORAGE_FLOOR_BYTES = 1_200_000_000_000
@@ -279,7 +294,7 @@ def main():
     lineage = json.dumps(
         {
             "validated_cohort_sha256": sha256(args.validated_cohort),
-            "helper_sha256": {path.name: sha256(path) for path in sorted(helper.glob("*.py"))},
+            "helper_sha256": {name: sha256(helper / name) for name in EXECUTING_HELPERS},
             "production_sha": evidence["production_sha"],
             "maximum_concurrent_tasks": execute_experiments.MAXIMUM_CONCURRENT_TASKS,
             "genomicsdb_memory_gib": execute_experiments.GENOMICSDB_MEMORY_GIB,

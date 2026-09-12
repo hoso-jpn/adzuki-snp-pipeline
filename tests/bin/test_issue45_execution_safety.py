@@ -168,6 +168,38 @@ class LaunchHeadroomTests(unittest.TestCase):
                 guard.check_launch_headroom(3 * 1024**3)
 
 
+class ExecutingHelperTests(unittest.TestCase):
+    """The lineage must cover every helper that can change a measurement, and nothing else."""
+
+    def test_every_helper_is_classified_as_executing_or_reporting_only(self):
+        present = {path.name for path in HELPERS.glob("*.py")}
+        classified = set(benchmark_runner.EXECUTING_HELPERS) | set(
+            benchmark_runner.REPORTING_ONLY_HELPERS
+        )
+        self.assertEqual(
+            set(),
+            present - classified,
+            "a new helper must be declared as executing or reporting-only, so the lineage "
+            "either covers it or documents why it does not",
+        )
+        self.assertEqual(set(), classified - present)
+        self.assertEqual(
+            set(),
+            set(benchmark_runner.EXECUTING_HELPERS) & set(benchmark_runner.REPORTING_ONLY_HELPERS),
+        )
+
+    def test_modules_the_controller_imports_are_all_recorded_as_executing(self):
+        imported = {
+            Path(module.__file__).name
+            for module in sys.modules.values()
+            if getattr(module, "__file__", None)
+            and Path(module.__file__).parent == HELPERS
+            and Path(module.__file__).name not in set(benchmark_runner.REPORTING_ONLY_HELPERS)
+        }
+        self.assertTrue(imported)
+        self.assertEqual(set(), imported - set(benchmark_runner.EXECUTING_HELPERS))
+
+
 class LineageRecordTests(unittest.TestCase):
     def test_recorded_resource_policy_names_only_real_module_constants(self):
         import ast

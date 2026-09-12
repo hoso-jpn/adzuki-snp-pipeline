@@ -164,9 +164,13 @@ command against the same output directory reuses every experiment whose result i
 already `COMPLETED_AWAITING_COMPARATIVE_REVIEW`, and refuses to start when an
 experiment directory holds retained failure evidence or no result at all, so a
 new run directory is required to re-attempt one. A resumed run re-verifies the
-validated cohort checksum, every helper checksum, the resource policy and the
-interval plan, and stops if any of them changed since the directory was
-started.
+validated cohort checksum, the resource policy, the interval plan and the
+checksum of every helper that can change a measurement, and stops if any of them
+changed since the directory was started. Reporting-only tools are deliberately
+outside that set: editing the post-hoc summarizer must never block resuming a
+multi-day campaign, and recording it would make the lineage claim more than it
+means. A test requires each helper to be declared as one or the other, so adding
+a file forces that decision rather than silently widening the contract.
 Task wall-time sums and complete experiment elapsed time are distinct metrics;
 the latter also includes index/integrity verification and scheduling overhead.
 
