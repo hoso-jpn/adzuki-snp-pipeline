@@ -236,3 +236,53 @@ JVMのmetaspace/stack/code cacheはheap外に存在するため、heapを独立�
 
 科学的parameter、threshold、ploidy、reference、interval semanticsはいずれも変更していません。
 E0/E1のper-contig planも同一のままです。変更したのは資源割当のみです。
+
+## 2026-09-13: E0 completed under the common ceiling
+
+共通ceiling（32 GiB / 派生heap 26 GiB）でE0を完走しました。
+
+| 指標 | 実測値 |
+| --- | --- |
+| status | COMPLETED |
+| interval数 | 36（chromosome 11 + scaffold 25） |
+| retry / OOM | 0 / 0 |
+| GenomicsDBImport peak RSS | 1.03–2.13 GiB（interval長にほぼ非依存） |
+| GenotypeGVCFs peak RSS | 最大17.55 GiB |
+| GatherVcfs | 3秒 / 0.34 GiB |
+| IndexFeatureFile | 36秒 |
+| workspace | 55.14 GB / 3,132 files |
+| output | 51 samples / 13,219,170 variants / 1,247,857,386 called alleles |
+| sample order / contig order / AC-AN accounting | すべてvalid |
+| elapsed（validation込み） | 4.17時間（task時間合計11.42時間、3並列） |
+| host MemAvailable最小 / swap delta | 88.4 GiB / 0.00 GiB |
+
+GenotypeGVCFsのpeak RSS 17.55 GiBは、単独96 GiBで測ったcalibrationの17.91 GiBと2%以内で一致します。
+これによりceilingが読み値を切っていないことと、calibrationが妥当だったことが相互に裏付けられ、
+同時に16 GiBでの失敗が実際の資源不足だったことも確認されます。
+
+`genomicsdb_batch_size=50`の実batchingは**全36 intervalで**`((1,50),(2,1))`の単一patternとなり、
+全intervalが`2/2`まで完了しました。serial reader fallbackは0件です。
+
+### interval長とpeak RSSの関係（unclipped実測に基づく修正）
+
+chromosome-scale 11 intervalすべてがceilingに触れていない実測値なので、これを用いて回帰しました。
+
+```
+peak_rss_GiB = 3.172 + 0.2192 * interval_Mb     (R^2 = 0.9332, max residual 0.88 GiB)
+```
+
+関係は比例ではなく**affine**です。約3.2 GiBのinterval長に依存しない固定成分があるため、
+peak/長さの単純比はintervalが長くなるほど0.3373→0.2683 GiB/Mbと低下します。
+原点を通る単一slopeを使うと短いintervalを過小評価します（20 Mbで約5.6 GiB対本fitの約7.6 GiB）。
+16 GiB runで得た約0.28 GiB/Mbは、最長2 contigの読み値が検証対象の上限で切られた比であり、
+sizingやprojectionには使用せず、当該失敗runが示した値としてのみ保持します。
+
+20 Mb windowでの予測値は**observedではなくassumption**です。E0には27.7 Mb未満の
+chromosome-scale intervalが存在せず、20 Mb地点は内挿にすぎません。これはE2aが同一cohort・
+同一ceilingで実測するため、仮定ではなく測定値に置き換わります。
+
+両係数は51検体でのみfitしたものであり、sample数方向のscalingは測定していません。
+327検体へ外挿していません。
+
+- [E0以降のsanitized metrics](evidence/issue45/benchmark_results.json)
+- [memory modelとscope](evidence/issue45/genotype_memory_model_51_samples.json)

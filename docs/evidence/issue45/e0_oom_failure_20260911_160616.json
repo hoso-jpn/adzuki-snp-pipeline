@@ -177,6 +177,7 @@
     "relationship": "GenotypeGVCFs peak RSS grew with interval length across the completed per-contig tasks at fixed sample count",
     "approximate_slope_gib_per_mb": 0.28,
     "validity": "an observation at 51 samples under this reference, GATK version, ploidy and HaplotypeCaller condition only",
-    "explicitly_not_claimed": "no linear extrapolation to 327 samples is asserted from it; sample-count scaling was not measured here, and the two longest contigs' readings were themselves capped by the 16 GiB ceiling"
+    "explicitly_not_claimed": "no linear extrapolation to 327 samples is asserted from it; sample-count scaling was not measured here, and the two longest contigs' readings were themselves capped by the 16 GiB ceiling",
+    "superseded_for_projection_by": "docs/evidence/issue45/genotype_memory_model_51_samples.json, which fits the same relationship on unclipped readings from the common-ceiling run. The 0.28 GiB/Mb figure here is a ratio over readings two of which were clipped by the 16 GiB ceiling under test, so it is retained as what this failed run showed, not used for sizing or projection."
   }
 }
