@@ -12,6 +12,20 @@ import json
 from pathlib import Path
 
 EXPERIMENT_ORDER = ("E0", "E1", "E2a", "E2b", "E3", "E4")
+# The 16 GiB production-baseline E0 failure is retained as its own negative
+# evidence and is never superseded by a run at a larger ceiling. This run is the
+# separate, uniform-allocation comparison regime.
+BASELINE_FAILURE_EVIDENCE = "docs/evidence/issue45/e0_oom_failure_20260911_160616.json"
+CONFOUND_KEYS = (
+    "genotype_memory_gib",
+    "genomicsdb_memory_gib",
+    "genotype_java_heap_gib",
+    "genomicsdb_cpus",
+    "maximum_concurrent_tasks",
+    "batch_size",
+    "sample_count",
+    "only_output_calls_starting_in_intervals",
+)
 COMPARISON_KEYS = (
     "sample_order",
     "ordered_contigs",
@@ -128,6 +142,38 @@ def experiment_block(experiment, result):
     return block
 
 
+def allocation_regime(experiments):
+    """Record whether every experiment ran under one identical resource policy.
+
+    A performance comparison between two experiments is only about the declared
+    one-factor change if nothing else differed, so the values that could
+    otherwise confound it are collected here and checked for uniformity rather
+    than left implicit in each experiment's own block.
+    """
+    observed = {}
+    for key in CONFOUND_KEYS:
+        observed[key] = sorted(
+            {block[key] for block in experiments.values() if key in block},
+            key=repr,
+        )
+    varying = {key: values for key, values in observed.items() if len(values) > 1}
+    return {
+        "label": "common_ceiling_comparison",
+        "uniform_across_experiments": not varying,
+        "values": {
+            key: values[0] if len(values) == 1 else values for key, values in observed.items()
+        },
+        "varying_keys": varying,
+        "production_baseline_failure_is_recorded_separately": BASELINE_FAILURE_EVIDENCE,
+        "note": (
+            "Every experiment here shares one GenotypeGVCFs ceiling so allocation is not a "
+            "confound between compared pairs. The 16 GiB production-baseline E0 failure is a "
+            "distinct measurement under a different allocation and is retained on its own, not "
+            "replaced by this run."
+        ),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
@@ -181,6 +227,7 @@ def main():
             "swap_delta_gib": gib(swap_values[-1] - swap_values[0]) if swap_values else None,
             "storage_free_min_bytes": min(storage_values) if storage_values else None,
         },
+        "allocation_regime": allocation_regime(experiments),
         "experiments": experiments,
     }
     args.output.write_text(json.dumps(evidence, indent=2, sort_keys=False) + "\n")

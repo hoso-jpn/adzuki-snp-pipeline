@@ -209,6 +209,46 @@ class EvidenceSummaryTests(unittest.TestCase):
             )
         )
 
+    def test_one_shared_allocation_is_recorded_as_uniform_and_not_a_confound(self):
+        evidence = json.loads(self.summarize({"E0": COMPLETED, "E1": COMPLETED}).read_text())
+        regime = evidence["allocation_regime"]
+        self.assertTrue(regime["uniform_across_experiments"])
+        self.assertEqual({}, regime["varying_keys"])
+        self.assertEqual(32.0, regime["values"]["genotype_memory_gib"])
+        self.assertEqual(50, regime["values"]["batch_size"])
+        self.assertIn(
+            "e0_oom_failure", regime["production_baseline_failure_is_recorded_separately"]
+        )
+
+    def test_a_differing_allocation_between_experiments_is_reported_as_varying(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "run"
+        root.mkdir()
+        cohort = self.build(root, {"E0": COMPLETED, "E1": COMPLETED})
+        record = root / "E1/experiment_result.private.json"
+        payload = json.loads(record.read_text())
+        payload["configuration"]["genotype_memory_bytes"] = 16 * 1024**3
+        record.write_text(json.dumps(payload))
+        output = Path(tmp.name) / "evidence.json"
+        with unittest.mock.patch.object(
+            sys,
+            "argv",
+            [
+                "summarize_evidence.py",
+                "--run-dir",
+                str(root),
+                "--validated-cohort",
+                str(cohort),
+                "--output",
+                str(output),
+            ],
+        ):
+            summarize_evidence.main()
+        regime = json.loads(output.read_text())["allocation_regime"]
+        self.assertFalse(regime["uniform_across_experiments"])
+        self.assertEqual([16.0, 32.0], regime["varying_keys"]["genotype_memory_gib"])
+
     def test_a_failed_experiment_is_reported_without_inventing_results(self):
         evidence = json.loads(self.summarize({"E0": "FAILED"}).read_text())
         failed = evidence["experiments"]["E0"]

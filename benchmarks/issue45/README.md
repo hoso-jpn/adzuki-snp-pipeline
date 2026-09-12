@@ -123,6 +123,14 @@ the memory allocation for these targeted tasks. This fixed comparison policy
 differs from unconstrained host scheduling and is recorded explicitly. No cache
 dropping, host tuning, or production resource change is performed.
 
+Every experiment shares one GenotypeGVCFs ceiling, so an allocation difference
+is never a confound between a compared pair. The published evidence records that
+uniformity explicitly and names the values that could otherwise confound it. The
+16 GiB production-baseline E0 failure below is a distinct measurement under a
+different allocation: it is retained as negative evidence about the current
+production resource contract, and the common-ceiling comparison run does not
+replace it. That experiment was not retried upward until it passed.
+
 The first real E0 attempt OOM-killed GenotypeGVCFs on the longest contig
 (65.4 Mb) at 51 samples: exit 247, `OOMKilled=true`, peak RSS 15.98 GiB against
 its own 16 GiB ceiling, after the progress meter collapsed from about 1.2M to 3
@@ -135,9 +143,21 @@ ceiling, and the resulting tier is applied identically to every experiment.
 Raising one allocation is a resource change only: no scientific parameter,
 threshold, ploidy, reference or interval semantic differs, and the per-contig
 E0/E1 plans are still the same plans. The completed E0 tasks also show
-GenotypeGVCFs peak RSS growing roughly linearly with interval length at fixed
-sample count, which is measured input to the interval-strategy decision rather
-than an assumption carried into it.
+GenotypeGVCFs peak RSS growing with interval length at fixed sample count, which
+is measured input to the interval-strategy decision rather than an assumption
+carried into it. That relationship is an observation at 51 samples under this
+reference, GATK version, ploidy and HaplotypeCaller condition, and the two
+longest contigs' own readings were capped by the ceiling being tested; it is not
+evidence of how memory scales with sample count, and nothing here extrapolates
+it linearly to 327 samples.
+
+The campaign is tens of hours long, so the controller is launched detached:
+`setsid` puts it in its own session and process group, so closing the operator's
+SSH connection delivers no SIGHUP to it, and `nohup` with a `/dev/null` stdin
+means it never blocks on or dies with a terminal. Its own SIGTERM/SIGINT
+handlers still stop the suite deliberately and stop the containers it owns. A
+recorded controller PID makes a second concurrent launch into the same run
+directory refuse rather than interleave.
 
 A suite that stops part-way keeps its finished experiments. Re-running the same
 command against the same output directory reuses every experiment whose result is
