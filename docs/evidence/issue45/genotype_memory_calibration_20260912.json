@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "purpose": "Measure the true unconstrained GenotypeGVCFs peak RSS at 51 samples on the worst-case contig, so the common comparison ceiling is chosen from a real figure rather than from a reading clipped by the limit under test.",
+  "methodology_precedent": "nextflow.config Issues #30/#33: run the process alone at a deliberately generous ceiling, because a reading at its own cgroup limit is not a true peak.",
+  "allocation_regime": {
+    "label": "calibration_generous_ceiling",
+    "note": "Not an experiment in the E0-E4 comparison. It informs the common ceiling and is reported separately from both the 16 GiB baseline failure and the comparison run."
+  },
+  "cohort_id": "issue45-51gvcf-20260910-200521",
+  "sample_count": 51,
+  "reference_accession": "GCF_016808095.1",
+  "gatk_container": "broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb",
+  "input": {
+    "genomicsdb_workspace_source": "the successful GenomicsDBImport of the retained 16 GiB E0 attempt, interval_0001",
+    "workspace_callsets": 51,
+    "workspace_bytes": 8053063680,
+    "workspace_copied_before_use": true,
+    "copy_rationale": "the retained failure evidence must not be modified by a later measurement"
+  },
+  "configuration": {
+    "interval": "NC_068970.1",
+    "interval_bp": 65407200,
+    "note": "longest contig in the reference, the one the 16 GiB attempt was killed on",
+    "container_memory_gib": 96,
+    "java_heap_gib": 80,
+    "cpus": 8,
+    "concurrent_tasks": 1,
+    "sample_ploidy": 2,
+    "only_output_calls_starting_in_intervals": true
+  },
+  "result": {
+    "exit_code": 0,
+    "completed": true,
+    "wall_minutes": 49.0,
+    "peak_rss_gib": 17.91,
+    "user_cpu_seconds": 2868,
+    "system_cpu_seconds": 86,
+    "major_page_faults": 80,
+    "output_bytes": 628151862,
+    "output_index_present": true
+  },
+  "host_during_run": {
+    "mem_available_min_gib": 99.8,
+    "swap_peak_gib": 0.0,
+    "interpretation": "measured with no host memory pressure and no swap, so the figure reflects the tool rather than contention"
+  },
+  "comparison_with_the_capped_reading": {
+    "capped_attempt_peak_rss_gib": 15.98,
+    "capped_attempt_allocation_gib": 16,
+    "capped_attempt_exit_code": 247,
+    "capped_attempt_oom_killed": true,
+    "capped_attempt_wall_minutes": 84.2,
+    "capped_attempt_progress_fraction": 0.885,
+    "capped_attempt_major_page_faults": 10565495,
+    "true_peak_rss_gib": 17.91,
+    "conclusion": "The true requirement exceeds the 16 GiB ceiling, so the kill was a genuine resource shortfall and not an artefact of measurement. The capped attempt's 10,565,495 major page faults against this run's 80, and 84 minutes to reach 88% against 49 minutes to completion, independently corroborate the garbage-collection death spiral seen in its progress meter."
+  },
+  "chosen_common_ceiling": {
+    "genotype_memory_gib": 32,
+    "genotype_java_heap_gib": 26,
+    "native_reserve_gib": 6,
+    "headroom_over_true_peak": 1.79,
+    "applies_to": ["E0", "E1", "E2a", "E2b", "E3", "E4"],
+    "rationale": "One identical ceiling for every experiment, sized from the measured true peak with real headroom, so that no compared pair differs by allocation and no reading is clipped by its own limit. The Java heap is derived from the container limit minus an explicit native reserve, because GenomicsDB's TileDB buffers and JVM metaspace/stacks/code cache live outside the heap.",
+    "concurrency_note": "three concurrent interval tasks hold 96 GiB of limits on a 123 GiB host, with measured actual usage near 18 GiB each"
+  },
+  "scope_and_limits": {
+    "measured_at_sample_count": 51,
+    "measured_intervals": 1,
+    "explicitly_not_claimed": "This single worst-case interval does not establish how peak RSS scales with sample count, and is not extrapolated linearly to 327 samples. It bounds one interval at one cohort size under this reference, GATK version, ploidy and HaplotypeCaller condition.",
+    "wall_time_caveat": "49 minutes is a single alone-on-the-host reading; the comparison run schedules three tasks concurrently and its wall times are not comparable to this one."
+  }
+}

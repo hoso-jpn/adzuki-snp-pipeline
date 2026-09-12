@@ -1,0 +1,85 @@
+// Staged outside both checkouts. @PRODUCTION@ is replaced with the clean,
+// frozen production checkout; this wrapper has its own separately recorded hash.
+include { samplesheetToList } from 'plugin/nf-schema'
+include { FASTP } from '@PRODUCTION@/modules/local/fastp'
+include { BWA_MEM2_INDEX } from '@PRODUCTION@/modules/local/bwa_mem2_index'
+include { VALIDATE_REFERENCE_CONTIGS } from '@PRODUCTION@/modules/local/validate_reference_contigs'
+include { BWA_MEM2_MEM_SORT } from '@PRODUCTION@/modules/local/bwa_mem2_mem_sort'
+include { SAMTOOLS_MERGE } from '@PRODUCTION@/modules/local/samtools_merge'
+include { GATK_MARKDUPLICATES } from '@PRODUCTION@/modules/local/gatk_markduplicates'
+include { SAMTOOLS_INDEX } from '@PRODUCTION@/modules/local/samtools_index'
+include { SAMTOOLS_QC } from '@PRODUCTION@/modules/local/samtools_qc'
+include { GATK_HAPLOTYPECALLER } from '@PRODUCTION@/modules/local/gatk_haplotypecaller'
+
+workflow {
+    if (!(params.reference_id instanceof CharSequence) || !params.reference_id.toString().trim()) {
+        error('reference_id is required as a nonempty string for the reference validation barrier')
+    }
+    def checkout = file('@PRODUCTION@').toString()
+    def head = ['git', '-C', checkout, 'rev-parse', 'HEAD'].execute()
+    head.waitFor()
+    if (head.exitValue() != 0 || head.text.trim() != params.production_sha) {
+        error('Production checkout differs from the frozen SHA')
+    }
+    def status = ['git', '-C', checkout, 'status', '--porcelain'].execute()
+    status.waitFor()
+    if (status.exitValue() != 0 || !status.text.trim().isEmpty()) {
+        error('Production checkout must be clean')
+    }
+    sample_rows = samplesheetToList(params.input, '@PRODUCTION@/assets/schema_input.json')
+    def reused = sample_rows.collectMany { row -> [row[1], row[2]] }
+        .countBy { path -> path }.any { _path, count -> count > 1 }
+    if (reused) {
+        error('FASTQ paths must not be reused within or across read groups')
+    }
+    def expected = new groovy.json.JsonSlurper().parse(file(params.cohort_manifest).toFile())
+    if (expected.reference_id != params.reference_id) {
+        error('reference_id must match the frozen cohort manifest')
+    }
+    def observed = sample_rows.collect { row -> row[0].id }.unique().sort()
+    if (observed != expected.samples.collect { row -> row.run_accession }.sort()) {
+        error('Samplesheet must contain every frozen biological sample exactly once')
+    }
+    if (expected.production_sha != params.production_sha ||
+        expected.sample_ploidy.toString() != params.sample_ploidy.toString() ||
+        expected.optical_duplicate_pixel_distance.toString() != params.optical_duplicate_pixel_distance.toString()) {
+        error('Generation parameters differ from the frozen cohort manifest')
+    }
+    if (expected.samples.collect { row -> row.biosample }.unique().size() != observed.size()) {
+        error('BioSamples must be unique')
+    }
+    samples_ch = channel.fromList(sample_rows)
+    def group_counts = sample_rows.collect { row -> row[0].id }.countBy { id -> id }
+    def reference_meta = [id: params.reference_id]
+    reference_ch = channel.value(tuple(reference_meta, file(params.reference_fasta, checkIfExists: true)))
+    reference_fai_ch = channel.value(tuple(reference_meta, file(params.reference_fai, checkIfExists: true)))
+    reference_dict_ch = channel.value(tuple(reference_meta, file(params.reference_dict, checkIfExists: true)))
+
+    VALIDATE_REFERENCE_CONTIGS(reference_fai_ch, reference_dict_ch)
+    reference_gate_ch = VALIDATE_REFERENCE_CONTIGS.out.fai.map { meta, _fai -> meta.id }.first()
+    FASTP(samples_ch)
+    validated_reads_ch = FASTP.out.reads.combine(reference_gate_ch)
+        .map { meta, read1, read2, _gate -> tuple(meta, read1, read2) }
+    BWA_MEM2_INDEX(reference_ch)
+    BWA_MEM2_MEM_SORT(validated_reads_ch, reference_ch, BWA_MEM2_INDEX.out.indexes)
+    sample_bams_ch = BWA_MEM2_MEM_SORT.out.bam
+        .map { meta, bam -> tuple(groupKey(meta.id, group_counts[meta.id]), bam) }
+        .groupTuple()
+        .map { key, bams -> tuple([id: key.target], bams.sort { bam -> bam.name }) }
+    SAMTOOLS_MERGE(sample_bams_ch)
+    GATK_MARKDUPLICATES(SAMTOOLS_MERGE.out.bam)
+    SAMTOOLS_INDEX(GATK_MARKDUPLICATES.out.bam)
+    SAMTOOLS_QC(SAMTOOLS_INDEX.out.bam)
+    GATK_HAPLOTYPECALLER(
+        SAMTOOLS_INDEX.out.bam,
+        reference_ch,
+        VALIDATE_REFERENCE_CONTIGS.out.fai,
+        VALIDATE_REFERENCE_CONTIGS.out.dict,
+    )
+    GATK_HAPLOTYPECALLER.out.gvcf.toList().map { rows ->
+        if (rows.collect { row -> row[0].id }.sort() != observed) {
+            error('Generation did not emit exactly the frozen sample set')
+        }
+        return "GENERATED_GVCF_COUNT=${rows.size()}"
+    }.view()
+}

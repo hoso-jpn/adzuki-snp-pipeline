@@ -280,6 +280,14 @@ Versioned research releasesは[GitHub Releases](https://github.com/hoso-jpn/adzu
 - `docs/real_cohort_scale_validation_10sample_manifest.json`
 - `docs/real_cohort_scale_validation_20sample_manifest.json`
 
+### 50+ sample Joint Genotyping — Issue #45
+
+327検体full E2Eの前段として、51検体以上の同一lineage gVCFだけを使い、sample-name-map、
+interval split/group、ReblockGVCFs、consolidateを一要因ずつ比較するtargeted benchmark手順を
+固定しています。real benchmarkの実測値と採否判断は未記録で、production設定は変更していません。
+
+- [`docs/joint_genotyping_50plus_benchmark.md`](docs/joint_genotyping_50plus_benchmark.md)
+
 ### Streaming classifier — Issue #35
 
 `CLASSIFY_NORMALIZED_VARIANTS`の全件materializationをlocus-local streamingへ変更しました。formal 10/20-sample targeted replayではclassifier Python peak RSSが約20.8 / 20.9 MiB、host swap delta 0となり、旧実装の28.47 / 53.36 GiBから構造的に改善しました。
