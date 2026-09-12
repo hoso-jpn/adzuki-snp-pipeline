@@ -74,6 +74,22 @@ def task_block(task):
     }
 
 
+def merged_result(run_dir, experiment, suite):
+    """Combine the per-experiment record with the comparison written after it.
+
+    `run_experiment` writes its own result before the suite compares it to its
+    baseline, so `comparison` and `record_difference_audit` exist only in the
+    suite-level record. Reading the per-experiment file alone would silently
+    publish an experiment with no comparison at all.
+    """
+    result = json.loads((run_dir / experiment / "experiment_result.private.json").read_text())
+    later = suite.get(experiment, {})
+    for key in ("comparison", "record_difference_audit"):
+        if key in later:
+            result[key] = later[key]
+    return result
+
+
 def experiment_block(experiment, result):
     config = result["configuration"]
     block = {
@@ -192,11 +208,21 @@ def main():
     swap_values = [int(row[2]) for row in host]
     storage_values = [int(row[3]) for row in host]
 
+    suite_record = args.run_dir / "suite_results.private.json"
+    suite = json.loads(suite_record.read_text()) if suite_record.exists() else {}
     experiments = {}
+    awaiting_comparison = []
     for experiment in EXPERIMENT_ORDER:
-        record = args.run_dir / experiment / "experiment_result.private.json"
-        if record.exists():
-            experiments[experiment] = experiment_block(experiment, json.loads(record.read_text()))
+        if not (args.run_dir / experiment / "experiment_result.private.json").exists():
+            continue
+        result = merged_result(args.run_dir, experiment, suite)
+        experiments[experiment] = experiment_block(experiment, result)
+        if (
+            result.get("configuration", {}).get("compare_to")
+            and result.get("status") == "COMPLETED_AWAITING_COMPARATIVE_REVIEW"
+            and "comparison" not in result
+        ):
+            awaiting_comparison.append(experiment)
 
     evidence = {
         "schema_version": 1,
@@ -228,10 +254,17 @@ def main():
             "storage_free_min_bytes": min(storage_values) if storage_values else None,
         },
         "allocation_regime": allocation_regime(experiments),
+        "experiments_without_a_recorded_comparison": awaiting_comparison,
         "experiments": experiments,
     }
     args.output.write_text(json.dumps(evidence, indent=2, sort_keys=False) + "\n")
     print(f"wrote {args.output} for {len(experiments)} experiments")
+    if awaiting_comparison:
+        print(
+            "note: no comparison recorded yet for "
+            + ", ".join(awaiting_comparison)
+            + "; the suite writes it after the experiment's own result"
+        )
 
 
 if __name__ == "__main__":

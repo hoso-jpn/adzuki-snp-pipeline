@@ -99,14 +99,23 @@ def experiment_result(experiment, compare_to, status=COMPLETED):
         "workspace": {"bytes": 5000, "file_count": 7},
         "integrity": integrity,
     }
-    if compare_to:
-        result["comparison"] = dict.fromkeys(summarize_evidence.COMPARISON_KEYS, True)
-        result["record_difference_audit"] = {"identical_records": 1234}
     return result
 
 
+def suite_entry(compare_to):
+    """What the suite writes after an experiment, separately from its own result."""
+    return (
+        {
+            "comparison": dict.fromkeys(summarize_evidence.COMPARISON_KEYS, True),
+            "record_difference_audit": {"identical_records": 1234},
+        }
+        if compare_to
+        else {}
+    )
+
+
 class EvidenceSummaryTests(unittest.TestCase):
-    def build(self, root, statuses):
+    def build(self, root, statuses, skip_suite_record=False):
         (root / "execution_lineage.json").write_text(
             json.dumps({"production_sha": "9" * 40, "genotype_memory_gib": 32})
         )
@@ -116,13 +125,18 @@ class EvidenceSummaryTests(unittest.TestCase):
             f"t1\t{80 * 1024**3}\t{4 * 1024**3}\t{1 * 10**12}\n"
         )
         previous = None
+        suite = {}
         for experiment, status in statuses.items():
             directory = root / experiment
             directory.mkdir()
             (directory / "experiment_result.private.json").write_text(
                 json.dumps(experiment_result(experiment, previous, status))
             )
+            if not skip_suite_record:
+                suite[experiment] = suite_entry(previous)
             previous = experiment
+        if not skip_suite_record:
+            (root / "suite_results.private.json").write_text(json.dumps(suite))
         cohort = root / "cohort.json"
         cohort.write_text(
             json.dumps(
@@ -148,12 +162,12 @@ class EvidenceSummaryTests(unittest.TestCase):
         )
         return cohort
 
-    def summarize(self, statuses):
+    def summarize(self, statuses, skip_suite_record=False):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         root = Path(tmp.name) / "issue45-e0-e4-run"
         root.mkdir()
-        cohort = self.build(root, statuses)
+        cohort = self.build(root, statuses, skip_suite_record)
         output = Path(tmp.name) / "evidence.json"
         with unittest.mock.patch.object(
             sys,
@@ -248,6 +262,20 @@ class EvidenceSummaryTests(unittest.TestCase):
         regime = json.loads(output.read_text())["allocation_regime"]
         self.assertFalse(regime["uniform_across_experiments"])
         self.assertEqual([16.0, 32.0], regime["varying_keys"]["genotype_memory_gib"])
+
+    def test_comparison_is_taken_from_the_suite_record_not_the_experiment_file(self):
+        """The suite writes a comparison only after the experiment's own result."""
+        evidence = json.loads(self.summarize({"E0": COMPLETED, "E1": COMPLETED}).read_text())
+        self.assertIn("comparison_to_baseline", evidence["experiments"]["E1"])
+        self.assertIn("record_difference_audit", evidence["experiments"]["E1"])
+        self.assertEqual([], evidence["experiments_without_a_recorded_comparison"])
+
+    def test_an_experiment_whose_comparison_is_not_written_yet_is_flagged(self):
+        evidence = json.loads(
+            self.summarize({"E0": COMPLETED, "E1": COMPLETED}, skip_suite_record=True).read_text()
+        )
+        self.assertEqual(["E1"], evidence["experiments_without_a_recorded_comparison"])
+        self.assertNotIn("comparison_to_baseline", evidence["experiments"]["E1"])
 
     def test_a_failed_experiment_is_reported_without_inventing_results(self):
         evidence = json.loads(self.summarize({"E0": "FAILED"}).read_text())
