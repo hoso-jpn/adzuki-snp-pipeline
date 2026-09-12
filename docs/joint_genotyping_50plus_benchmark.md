@@ -286,3 +286,68 @@ chromosome-scale intervalが存在せず、20 Mb地点は内挿にすぎませ�
 
 - [E0以降のsanitized metrics](evidence/issue45/benchmark_results.json)
 - [memory modelとscope](evidence/issue45/genotype_memory_model_51_samples.json)
+
+## 2026-09-13: E1 sample-name-map（ADOPT、条件付き）
+
+E0との差分を入力形式のみに限定して実行しました。gVCF 51件、per-contig plan、reference、
+batch size、ceiling、並列数はすべて同一です。
+
+### correctness
+
+| 指標 | 結果 |
+| --- | --- |
+| shared variants | 13,219,170 |
+| identical records | 13,219,170 |
+| different records | 0 |
+| left/right only variants | 0 / 0 |
+| record / GT / accounting / header SHA256 | すべて一致 |
+| sample order / contig order | 一致 |
+
+出力callsetは**byte-identical**です。入力形式は結果を一切変えませんでした。
+
+### performance
+
+| 指標 | E0 | E1 | 差 |
+| --- | --- | --- | --- |
+| import wall合計 | 5.33 h | 5.34 h | +0.17% |
+| genotype wall合計 | 6.09 h | 6.09 h | -0.06% |
+| elapsed（validation込み） | 4.17 h | 4.14 h | -0.63% |
+| workspace | 55.14 GB / 3,132 files | 同一 | 0 |
+| import peak RSS | 2.13 GiB | 1.76 GiB | — |
+
+51検体では**性能差は測定されません**。wall timeの差はrun間ノイズの範囲で、import peak RSSは
+いずれも16 GiB割当を大きく下回るため意味のある効果ではありません。
+
+### operational
+
+| 指標 | E0 | E1 |
+| --- | --- | --- |
+| argv要素数 | 148 | 50 |
+| command文字数 | 2,871 | 1,013 |
+| `--variant`引数 | 51 | 0 |
+
+**command長は採用理由になりません。** repeated-variant形式を327検体へ投影しても13,359文字で、
+本hostの`ARG_MAX` 2,097,152の約0.6%にすぎません。よく挙げられるこの理由は本件では成立しない
+ものとして明記します。
+
+### limitation: sample orderは検証できていない
+
+本cohortの51 run accessionは既にlexicographic順であり、repeated-variant順・map file順・
+出力sample順のすべてがsorted順と一致します。GATKはmap指定時にsample順をmapから導くため、
+**sorted順と入力順が一致する本cohortでは、両形式のordering差を検出できません**。
+51検体でbyte-identicalだったことは、sample名がsorted順でないcohortで両形式のorderingが
+一致する証拠にはなりません。327検体で採用する前に、production samplesheet順とsorted順の
+一致を確認するか、mapのsorted順を契約として受け入れた上で出力sample順を明示的に検証してください。
+
+### 判定
+
+**ADOPT（条件付き）**。根拠は性能ではなくdata integrityとauditabilityです。
+mapはsampleごとに明示的なindex pathを持ち、GATK自身のmap validationを有効化でき、
+どのgVCFがrunに入ったかを単一のchecksum可能なartifactとして記録します。
+これは51検体より327検体で価値が高くなります。測定可能なコストはなく、callsetも変えません。
+command長は根拠に含めません。採用は上記sample ordering確認を条件とします。
+
+性能上の利点は主張しません。truth setがなく、そもそもcallsetがbyte-identicalであるため、
+精度改善も主張しません。
+
+- [sample-name-map decision evidence](evidence/issue45/sample_name_map_decision.json)

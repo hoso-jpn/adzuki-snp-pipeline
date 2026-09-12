@@ -42,13 +42,13 @@
     "lineage_verified": true
   },
   "host_during_run": {
-    "monitor_samples": 3020,
-    "mem_available_min_gib": 88.4,
+    "monitor_samples": 6054,
+    "mem_available_min_gib": 88.262,
     "swap_start_gib": 0.0,
     "swap_peak_gib": 0.001,
     "swap_end_gib": 0.001,
     "swap_delta_gib": 0.001,
-    "storage_free_min_bytes": 2323553705984
+    "storage_free_min_bytes": 2257712529408
   },
   "allocation_regime": {
     "label": "common_ceiling_comparison",
@@ -67,6 +67,7 @@
     "production_baseline_failure_is_recorded_separately": "docs/evidence/issue45/e0_oom_failure_20260911_160616.json",
     "note": "Every experiment here shares one GenotypeGVCFs ceiling so allocation is not a confound between compared pairs. The 16 GiB production-baseline E0 failure is a distinct measurement under a different allocation and is retained on its own, not replaced by this run."
   },
+  "experiments_without_a_recorded_comparison": [],
   "experiments": {
     "E0": {
       "experiment_id": "E0",
@@ -1383,6 +1384,1345 @@
           "reader_initialization_fell_back_to_serial": false
         }
       ]
+    },
+    "E1": {
+      "experiment_id": "E1",
+      "compare_to": "E0",
+      "status": "COMPLETED_AWAITING_COMPARATIVE_REVIEW",
+      "plan": "baseline_per_contig",
+      "sample_count": 51,
+      "batch_size": 50,
+      "interval_count": 36,
+      "sample_name_map": true,
+      "reblock": false,
+      "consolidate": false,
+      "genomicsdb_cpus": 8,
+      "genomicsdb_memory_gib": 16.0,
+      "genotype_memory_gib": 32.0,
+      "genotype_java_heap_gib": 26,
+      "maximum_concurrent_tasks": 3,
+      "only_output_calls_starting_in_intervals": true,
+      "wall_seconds_including_validation": 14913.7,
+      "import_summary": {
+        "task_count": 36,
+        "wall_seconds_sum": 19231.3,
+        "peak_rss_gib_max": 1.764,
+        "user_cpu_seconds_sum": 19090.2,
+        "system_cpu_seconds_sum": 361.4,
+        "retry_count": 0
+      },
+      "genotype_summary": {
+        "task_count": 36,
+        "wall_seconds_sum": 21920.4,
+        "peak_rss_gib_max": 17.557,
+        "user_cpu_seconds_sum": 21494.0,
+        "system_cpu_seconds_sum": 656.4,
+        "retry_count": 0
+      },
+      "gather_wall_seconds": 2.8,
+      "gather_peak_rss_gib": 0.338,
+      "gather_index_wall_seconds": 35.8,
+      "gather_index_peak_rss_gib": 0.712,
+      "workspace_bytes": 55135613442,
+      "workspace_file_count": 3132,
+      "output_sample_count": 51,
+      "output_sample_order_sha256": "5165b2beda6dd44e51fb12dd29c3774d5c4d20901c05defb4bf3fc275b039ab7",
+      "output_variant_count": 13219170,
+      "output_called_alleles": 1247857386,
+      "output_record_sha256": "36424ec5ed7a989569779174fcb774a54af38d4a31aae8a070cdf6a9cfa68b39",
+      "output_variant_gt_sha256": "534a97827fd8ea850f8d55f69e7e3473cc4fb5bd4610234e903f081057b4c3f8",
+      "output_accounting_sha256": "9f3dd31cbe6fa89688836377baf603a26a2a163e2b63497383243eac0867747e",
+      "output_shared_header_sha256": "bfc6ff9f62ba232d5f78bb1e68c27cd9bc3ea3bde4e6a84aab4796b77ac5f99d",
+      "output_per_contig_variant_counts": {
+        "NC_068970.1": 1728274,
+        "NC_068971.1": 1421279,
+        "NC_068972.1": 1143535,
+        "NC_068973.1": 1099962,
+        "NC_068974.1": 1332434,
+        "NC_068975.1": 1180578,
+        "NC_068976.1": 1170122,
+        "NC_068977.1": 1234785,
+        "NC_068978.1": 1181881,
+        "NC_068979.1": 938812,
+        "NC_068980.1": 783453,
+        "NW_026294835.1": 61,
+        "NW_026294836.1": 205,
+        "NW_026294837.1": 6,
+        "NW_026294838.1": 343,
+        "NW_026294839.1": 32,
+        "NW_026294840.1": 33,
+        "NW_026294841.1": 590,
+        "NW_026294842.1": 73,
+        "NW_026294843.1": 33,
+        "NW_026294844.1": 60,
+        "NW_026294845.1": 125,
+        "NW_026294846.1": 12,
+        "NW_026294847.1": 267,
+        "NW_026294848.1": 19,
+        "NW_026294849.1": 78,
+        "NW_026294850.1": 74,
+        "NW_026294851.1": 311,
+        "NW_026294852.1": 366,
+        "NW_026294853.1": 43,
+        "NW_026294854.1": 1,
+        "NW_026294855.1": 0,
+        "NW_026294856.1": 0,
+        "NW_026294857.1": 0,
+        "NC_021092.1": 1162,
+        "NC_021091.1": 161
+      },
+      "sample_order_valid": true,
+      "contig_order_valid": true,
+      "allele_accounting_valid": true,
+      "tasks": [
+        {
+          "interval_id": "interval_0001",
+          "interval_count": 1,
+          "total_bp": 65407200,
+          "import_wall_seconds": 2778.7,
+          "import_peak_rss_gib": 1.69,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 3166.6,
+          "genotype_peak_rss_gib": 17.557,
+          "genotype_attempt": 1,
+          "workspace_bytes": 8035480546,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0002",
+          "interval_count": 1,
+          "total_bp": 52846339,
+          "import_wall_seconds": 2208.8,
+          "import_peak_rss_gib": 1.764,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 2544.5,
+          "genotype_peak_rss_gib": 14.749,
+          "genotype_attempt": 1,
+          "workspace_bytes": 6434201901,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0003",
+          "interval_count": 1,
+          "total_bp": 42681439,
+          "import_wall_seconds": 1840.8,
+          "import_peak_rss_gib": 1.759,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 2048.7,
+          "genotype_peak_rss_gib": 11.81,
+          "genotype_attempt": 1,
+          "workspace_bytes": 5228744256,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0004",
+          "interval_count": 1,
+          "total_bp": 42641100,
+          "import_wall_seconds": 1839.7,
+          "import_peak_rss_gib": 1.565,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 2029.2,
+          "genotype_peak_rss_gib": 11.768,
+          "genotype_attempt": 1,
+          "workspace_bytes": 5278372358,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0005",
+          "interval_count": 1,
+          "total_bp": 41033850,
+          "import_wall_seconds": 1785.3,
+          "import_peak_rss_gib": 1.475,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 2068.5,
+          "genotype_peak_rss_gib": 13.027,
+          "genotype_attempt": 1,
+          "workspace_bytes": 5139088598,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0006",
+          "interval_count": 1,
+          "total_bp": 38121061,
+          "import_wall_seconds": 1690.7,
+          "import_peak_rss_gib": 1.66,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1903.5,
+          "genotype_peak_rss_gib": 11.784,
+          "genotype_attempt": 1,
+          "workspace_bytes": 4842613735,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0007",
+          "interval_count": 1,
+          "total_bp": 37163307,
+          "import_wall_seconds": 1635.0,
+          "import_peak_rss_gib": 1.393,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1818.2,
+          "genotype_peak_rss_gib": 11.226,
+          "genotype_attempt": 1,
+          "workspace_bytes": 4632100503,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0008",
+          "interval_count": 1,
+          "total_bp": 36286043,
+          "import_wall_seconds": 1501.0,
+          "import_peak_rss_gib": 1.575,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1818.0,
+          "genotype_peak_rss_gib": 11.993,
+          "genotype_attempt": 1,
+          "workspace_bytes": 4353440569,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0009",
+          "interval_count": 1,
+          "total_bp": 32215300,
+          "import_wall_seconds": 1361.3,
+          "import_peak_rss_gib": 1.572,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1657.4,
+          "genotype_peak_rss_gib": 10.745,
+          "genotype_attempt": 1,
+          "workspace_bytes": 3891948330,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0010",
+          "interval_count": 1,
+          "total_bp": 31493818,
+          "import_wall_seconds": 1378.0,
+          "import_peak_rss_gib": 1.388,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1525.7,
+          "genotype_peak_rss_gib": 9.886,
+          "genotype_attempt": 1,
+          "workspace_bytes": 3896795328,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0011",
+          "interval_count": 1,
+          "total_bp": 27654650,
+          "import_wall_seconds": 1171.2,
+          "import_peak_rss_gib": 1.345,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1300.5,
+          "genotype_peak_rss_gib": 8.445,
+          "genotype_attempt": 1,
+          "workspace_bytes": 3389128883,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0012",
+          "interval_count": 1,
+          "total_bp": 18100,
+          "import_wall_seconds": 1.6,
+          "import_peak_rss_gib": 0.998,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.7,
+          "genotype_peak_rss_gib": 0.863,
+          "genotype_attempt": 1,
+          "workspace_bytes": 471190,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0013",
+          "interval_count": 1,
+          "total_bp": 1969,
+          "import_wall_seconds": 1.7,
+          "import_peak_rss_gib": 1.021,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.7,
+          "genotype_peak_rss_gib": 0.808,
+          "genotype_attempt": 1,
+          "workspace_bytes": 586268,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0014",
+          "interval_count": 1,
+          "total_bp": 1369,
+          "import_wall_seconds": 1.4,
+          "import_peak_rss_gib": 0.942,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.2,
+          "genotype_peak_rss_gib": 0.803,
+          "genotype_attempt": 1,
+          "workspace_bytes": 143647,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0015",
+          "interval_count": 1,
+          "total_bp": 6644,
+          "import_wall_seconds": 1.9,
+          "import_peak_rss_gib": 0.971,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.8,
+          "genotype_peak_rss_gib": 0.886,
+          "genotype_attempt": 1,
+          "workspace_bytes": 1114621,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0016",
+          "interval_count": 1,
+          "total_bp": 1210,
+          "import_wall_seconds": 1.4,
+          "import_peak_rss_gib": 1.015,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.3,
+          "genotype_peak_rss_gib": 0.802,
+          "genotype_attempt": 1,
+          "workspace_bytes": 175033,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0017",
+          "interval_count": 1,
+          "total_bp": 6000,
+          "import_wall_seconds": 1.5,
+          "import_peak_rss_gib": 0.955,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.4,
+          "genotype_peak_rss_gib": 0.804,
+          "genotype_attempt": 1,
+          "workspace_bytes": 199287,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0018",
+          "interval_count": 1,
+          "total_bp": 50000,
+          "import_wall_seconds": 2.5,
+          "import_peak_rss_gib": 1.31,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 2.7,
+          "genotype_peak_rss_gib": 1.052,
+          "genotype_attempt": 1,
+          "workspace_bytes": 2785154,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0019",
+          "interval_count": 1,
+          "total_bp": 3631,
+          "import_wall_seconds": 1.5,
+          "import_peak_rss_gib": 1.019,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.5,
+          "genotype_peak_rss_gib": 0.808,
+          "genotype_attempt": 1,
+          "workspace_bytes": 337092,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0020",
+          "interval_count": 1,
+          "total_bp": 5356,
+          "import_wall_seconds": 1.6,
+          "import_peak_rss_gib": 0.909,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.4,
+          "genotype_peak_rss_gib": 0.803,
+          "genotype_attempt": 1,
+          "workspace_bytes": 369114,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0021",
+          "interval_count": 1,
+          "total_bp": 9288,
+          "import_wall_seconds": 1.6,
+          "import_peak_rss_gib": 1.008,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.4,
+          "genotype_peak_rss_gib": 0.808,
+          "genotype_attempt": 1,
+          "workspace_bytes": 209892,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0022",
+          "interval_count": 1,
+          "total_bp": 89314,
+          "import_wall_seconds": 1.6,
+          "import_peak_rss_gib": 1.006,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.6,
+          "genotype_peak_rss_gib": 0.869,
+          "genotype_attempt": 1,
+          "workspace_bytes": 440845,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0023",
+          "interval_count": 1,
+          "total_bp": 33361,
+          "import_wall_seconds": 1.4,
+          "import_peak_rss_gib": 0.965,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.3,
+          "genotype_peak_rss_gib": 0.808,
+          "genotype_attempt": 1,
+          "workspace_bytes": 138551,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0024",
+          "interval_count": 1,
+          "total_bp": 2353,
+          "import_wall_seconds": 1.7,
+          "import_peak_rss_gib": 0.968,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.8,
+          "genotype_peak_rss_gib": 0.818,
+          "genotype_attempt": 1,
+          "workspace_bytes": 659066,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0025",
+          "interval_count": 1,
+          "total_bp": 12110,
+          "import_wall_seconds": 1.5,
+          "import_peak_rss_gib": 0.942,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.5,
+          "genotype_peak_rss_gib": 0.812,
+          "genotype_attempt": 1,
+          "workspace_bytes": 252225,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0026",
+          "interval_count": 1,
+          "total_bp": 1000,
+          "import_wall_seconds": 1.6,
+          "import_peak_rss_gib": 1.019,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.5,
+          "genotype_peak_rss_gib": 0.798,
+          "genotype_attempt": 1,
+          "workspace_bytes": 309037,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0027",
+          "interval_count": 1,
+          "total_bp": 1031,
+          "import_wall_seconds": 1.4,
+          "import_peak_rss_gib": 1.051,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.4,
+          "genotype_peak_rss_gib": 0.808,
+          "genotype_attempt": 1,
+          "workspace_bytes": 297177,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0028",
+          "interval_count": 1,
+          "total_bp": 3790,
+          "import_wall_seconds": 1.8,
+          "import_peak_rss_gib": 1.018,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.9,
+          "genotype_peak_rss_gib": 0.87,
+          "genotype_attempt": 1,
+          "workspace_bytes": 940577,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0029",
+          "interval_count": 1,
+          "total_bp": 2890,
+          "import_wall_seconds": 1.9,
+          "import_peak_rss_gib": 1.119,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 2.1,
+          "genotype_peak_rss_gib": 0.843,
+          "genotype_attempt": 1,
+          "workspace_bytes": 969719,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0030",
+          "interval_count": 1,
+          "total_bp": 7573,
+          "import_wall_seconds": 1.6,
+          "import_peak_rss_gib": 1.064,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.4,
+          "genotype_peak_rss_gib": 0.809,
+          "genotype_attempt": 1,
+          "workspace_bytes": 275143,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0031",
+          "interval_count": 1,
+          "total_bp": 1679,
+          "import_wall_seconds": 1.4,
+          "import_peak_rss_gib": 0.97,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.1,
+          "genotype_peak_rss_gib": 0.799,
+          "genotype_attempt": 1,
+          "workspace_bytes": 35155,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0032",
+          "interval_count": 1,
+          "total_bp": 1404,
+          "import_wall_seconds": 1.4,
+          "import_peak_rss_gib": 0.936,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.0,
+          "genotype_peak_rss_gib": 0.793,
+          "genotype_attempt": 1,
+          "workspace_bytes": 33547,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0033",
+          "interval_count": 1,
+          "total_bp": 1165,
+          "import_wall_seconds": 1.4,
+          "import_peak_rss_gib": 0.87,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.0,
+          "genotype_peak_rss_gib": 0.797,
+          "genotype_attempt": 1,
+          "workspace_bytes": 33547,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0034",
+          "interval_count": 1,
+          "total_bp": 1149,
+          "import_wall_seconds": 1.3,
+          "import_peak_rss_gib": 0.951,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.0,
+          "genotype_peak_rss_gib": 0.796,
+          "genotype_attempt": 1,
+          "workspace_bytes": 35530,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0035",
+          "interval_count": 1,
+          "total_bp": 404466,
+          "import_wall_seconds": 2.3,
+          "import_peak_rss_gib": 1.111,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 3.2,
+          "genotype_peak_rss_gib": 1.183,
+          "genotype_attempt": 1,
+          "workspace_bytes": 2158564,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        },
+        {
+          "interval_id": "interval_0036",
+          "interval_count": 1,
+          "total_bp": 151683,
+          "import_wall_seconds": 1.7,
+          "import_peak_rss_gib": 1.0,
+          "import_attempt": 1,
+          "genotype_wall_seconds": 1.8,
+          "genotype_peak_rss_gib": 0.875,
+          "genotype_attempt": 1,
+          "workspace_bytes": 728454,
+          "workspace_file_count": 87,
+          "batches_observed": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              1
+            ]
+          ],
+          "batches_completed": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "reader_initialization_fell_back_to_serial": false
+        }
+      ],
+      "comparison_to_baseline": {
+        "sample_order": true,
+        "ordered_contigs": true,
+        "variant_count": true,
+        "record_sha256": true,
+        "variant_gt_sha256": true,
+        "accounting_sha256": true,
+        "shared_header_sha256": true
+      },
+      "record_difference_audit": {
+        "shared_variants": 13219170,
+        "left_only_variants": 0,
+        "right_only_variants": 0,
+        "identical_records": 13219170,
+        "different_records": 0,
+        "qd_only_difference": 0,
+        "qd_only_high_qd_jitter_branch": 0,
+        "qd_jitter_current_filter_unchanged": 0,
+        "info_site_differences": {},
+        "format_sample_differences": {},
+        "column_site_differences": {},
+        "all_differences_explained_by_high_qd_jitter_with_unchanged_current_filter": true
+      }
     }
   }
 }
