@@ -6,6 +6,7 @@ import datetime
 import json
 import shutil
 import signal
+import stat
 import subprocess
 import threading
 import time
@@ -15,6 +16,29 @@ import execute_experiments
 from execute_experiments import execute_suite
 from run_generation import inspect, memory, serving, snapshot
 from stage_generation import sha256
+
+LAUNCH_MEMORY_GATE_BYTES = 110 * 1024**3
+LAUNCH_STORAGE_GATE_BYTES = 2_000_000_000_000
+RUNTIME_STORAGE_FLOOR_BYTES = 1_200_000_000_000
+
+
+def occupied(root):
+    """Bytes this run directory already holds, counting each file once.
+
+    Regular files only, identified by inode so a hard-linked gVCF is not
+    double counted, and never following a symlink out of the run directory.
+    """
+    seen, total = set(), 0
+    for path in root.rglob("*"):
+        try:
+            info = path.lstat()
+        except OSError:
+            continue
+        if not stat.S_ISREG(info.st_mode) or info.st_ino in seen:
+            continue
+        seen.add(info.st_ino)
+        total += info.st_size
+    return total
 
 
 class ResourceGuard:
@@ -85,7 +109,7 @@ class ResourceGuard:
                         or swap - self.record["benchmark_swap_start_bytes"] > 512 * 1024**2
                         else 0
                     )
-                    if bad >= 3 or free < 1_200_000_000_000:
+                    if bad >= 3 or free < RUNTIME_STORAGE_FLOOR_BYTES:
                         raise RuntimeError(
                             "Host available memory, swap delta, or storage guard failed"
                         )
@@ -137,14 +161,26 @@ class ResourceGuard:
                 after_stop_mem_available_bytes=available, benchmark_swap_start_bytes=swap
             )
             self.save()
-            if available < 110 * 1024**3 or shutil.disk_usage(self.root).free < 2_000_000_000_000:
-                raise ValueError("Benchmark launch headroom gate failed")
+            self.check_launch_headroom(available)
             self.monitor = threading.Thread(target=self.monitor_host, daemon=True)
             self.monitor.start()
             return self
         except BaseException:
             self.restore()
             raise
+
+    def check_launch_headroom(self, available):
+        """Gate the whole suite's headroom, crediting space this run already holds.
+
+        A resumed run has spent part of its budget on experiments that are
+        already finished, so comparing raw free space against the suite-wide
+        gate would refuse to continue exactly when continuing is cheapest.
+        """
+        free = shutil.disk_usage(self.root).free
+        budget = free + occupied(self.root)
+        self.record.update(storage_free_at_launch_bytes=free, storage_budget_bytes=budget)
+        if available < LAUNCH_MEMORY_GATE_BYTES or budget < LAUNCH_STORAGE_GATE_BYTES:
+            raise ValueError("Benchmark launch headroom gate failed")
 
     def enter_without_pausing_any_workload(self):
         """Start measuring without stopping anything, when the host already has headroom."""
@@ -163,8 +199,7 @@ class ResourceGuard:
         }
         self.save()
         try:
-            if available < 110 * 1024**3 or shutil.disk_usage(self.root).free < 2_000_000_000_000:
-                raise ValueError("Benchmark launch headroom gate failed")
+            self.check_launch_headroom(available)
             self.monitor = threading.Thread(target=self.monitor_host, daemon=True)
             self.monitor.start()
             return self

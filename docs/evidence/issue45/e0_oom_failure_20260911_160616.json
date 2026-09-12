@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "run_id": "issue45-e0-e4-20260911-160616",
+  "experiment_id": "E0",
+  "status": "FAILED",
+  "cohort_id": "issue45-51gvcf-20260910-200521",
+  "sample_count": 51,
+  "batch_size": 50,
+  "plan": "baseline_per_contig",
+  "interval_count": 36,
+  "production_sha": "3158ca50c2c13c31bdc80db302c7df4bbb5670bf",
+  "benchmark_helper_sha": "87631731a4d5b22f060da7641ea5ae8b82c5f0f6",
+  "gatk_container": "broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb",
+  "reference_accession": "GCF_016808095.1",
+  "failure": {
+    "process": "GenotypeGVCFs",
+    "interval_id": "interval_0001",
+    "interval": "NC_068970.1",
+    "interval_bp": 65407200,
+    "note": "longest contig in the reference",
+    "exit_code": 247,
+    "docker_exit_code": 247,
+    "container_oom_killed": true,
+    "attempt": 1,
+    "retry_count": 0,
+    "allocated_memory_bytes": 17179869184,
+    "allocated_memory_gib": 16,
+    "java_heap_gib": 15,
+    "peak_rss_bytes": 17155719168,
+    "peak_rss_gib": 15.98,
+    "peak_rss_fraction_of_allocation": 0.9986,
+    "wall_seconds": 5051.31,
+    "allocated_cpus": 8,
+    "major_page_faults": 10565495,
+    "progress_at_kill_bp": 57896103,
+    "progress_fraction_of_interval": 0.885,
+    "throughput_collapse": {
+      "records_per_minute_before": 1218671,
+      "records_per_minute_after": 3,
+      "interpretation": "garbage-collection death spiral: the live set genuinely approached the Java heap ceiling rather than the container clipping native allocations only"
+    }
+  },
+  "host_during_run": {
+    "monitor_samples": 2254,
+    "mem_available_min_gib": 83.23,
+    "mem_available_max_gib": 119.41,
+    "swap_start_gib": 3.318,
+    "swap_peak_gib": 3.318,
+    "swap_end_gib": 3.306,
+    "swap_delta_gib": -0.012,
+    "storage_free_start_tb": 2.441,
+    "storage_free_min_tb": 2.398,
+    "interpretation": "host memory and swap were never constrained; the kill was the per-container cgroup limit alone"
+  },
+  "batching_exercised": {
+    "verified": true,
+    "intervals_checked": 7,
+    "observed_batches_per_import": [[1, 50], [2, 1]],
+    "gatk_log_evidence": [
+      "Importing batch 1 with 50 samples",
+      "Done importing batch 1/2",
+      "Importing batch 2 with 1 samples",
+      "Done importing batch 2/2",
+      "Import of all batches to GenomicsDB completed!"
+    ],
+    "note": "51 samples against batch-size 50 produced a real two-batch import in every interval that started, so genomicsdb_batch_size was genuinely exercised rather than merely configured"
+  },
+  "completed_tasks": [
+    {"interval_id": "interval_0001", "interval_bp": 65407200, "import_wall_seconds": 2817, "import_peak_rss_gib": 1.55, "import_exit_code": 0, "genotype_wall_seconds": 5051, "genotype_peak_rss_gib": 15.98, "genotype_exit_code": 247, "genotype_oom_killed": true},
+    {"interval_id": "interval_0002", "interval_bp": 52846339, "import_wall_seconds": 2234, "import_peak_rss_gib": 1.52, "import_exit_code": 0, "genotype_wall_seconds": 2569, "genotype_peak_rss_gib": 14.66, "genotype_exit_code": 0, "genotype_oom_killed": false},
+    {"interval_id": "interval_0003", "interval_bp": 42681439, "import_wall_seconds": 1800, "import_peak_rss_gib": 1.46, "import_exit_code": 0, "genotype_wall_seconds": 2045, "genotype_peak_rss_gib": 11.74, "genotype_exit_code": 0, "genotype_oom_killed": false},
+    {"interval_id": "interval_0004", "interval_bp": 42641100, "import_wall_seconds": 1847, "import_peak_rss_gib": 1.48, "import_exit_code": 0, "genotype_wall_seconds": 2017, "genotype_peak_rss_gib": 11.82, "genotype_exit_code": 0, "genotype_oom_killed": false},
+    {"interval_id": "interval_0005", "interval_bp": 41033850, "import_wall_seconds": 1760, "import_peak_rss_gib": 1.41, "import_exit_code": 0, "genotype_wall_seconds": 2050, "genotype_peak_rss_gib": 12.98, "genotype_exit_code": 0, "genotype_oom_killed": false},
+    {"interval_id": "interval_0006", "interval_bp": 38121061, "import_wall_seconds": 1660, "import_peak_rss_gib": 1.27, "import_exit_code": 0, "genotype_wall_seconds": 1851, "genotype_peak_rss_gib": 11.83, "genotype_exit_code": 0, "genotype_oom_killed": false},
+    {"interval_id": "interval_0007", "interval_bp": 37163307, "import_wall_seconds": 1588, "import_peak_rss_gib": 1.28, "import_exit_code": 0, "genotype_wall_seconds": 1785, "genotype_peak_rss_gib": 11.29, "genotype_exit_code": 0, "genotype_oom_killed": false}
+  ],
+  "observations": {
+    "genomicsdb_import_peak_rss_is_flat": "1.27-1.55 GiB across 37-65 Mb intervals at 51 samples, so its 16 GiB allocation is ample and is not the constraint",
+    "genotype_peak_rss_scales_with_interval_length": "about 0.28 GiB per Mb at 51 samples across the completed tasks, which is why the longest contig is the one that failed",
+    "second_longest_contig_also_near_ceiling": "interval_0002 recorded 14.66 GiB against the same 16 GiB ceiling, so by this repository's standing methodology it is also not a trustworthy unconstrained reading"
+  },
+  "conclusion": "The per-contig baseline plan does not fit a 16 GiB GenotypeGVCFs allocation at 51 samples. The failure is a resource-contract finding, not a scientific one: no threshold, ploidy, reference or interval semantic was changed to obtain it, and the evidence is retained rather than retried into a pass.",
+  "follow_up": "GenotypeGVCFs re-measured alone at a generous ceiling to obtain a true unconstrained peak, then every experiment re-run under one identical, larger GenotypeGVCFs tier with the Java heap derived below its container limit.",
+  "retained_private_artifacts": "run directory, per-task logs, commands, allocations, container states and host monitor remain on the benchmark host outside Git"
+}

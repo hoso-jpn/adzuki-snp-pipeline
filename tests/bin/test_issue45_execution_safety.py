@@ -125,6 +125,49 @@ class GenerationRestorationTests(unittest.TestCase):
             self.assertFalse((directory / "resource-preparation.private.json").exists())
 
 
+class LaunchHeadroomTests(unittest.TestCase):
+    """A resumed suite must not be refused for space its own finished work occupies."""
+
+    def guard(self, root, free):
+        guard = benchmark_runner.ResourceGuard(root, None)
+        guard.record = {}
+        with patch.object(benchmark_runner.shutil, "disk_usage", return_value=Mock(free=free)):
+            guard.check_launch_headroom(benchmark_runner.LAUNCH_MEMORY_GATE_BYTES)
+        return guard.record
+
+    def test_space_already_written_by_this_run_counts_toward_the_suite_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "E0").mkdir()
+            (root / "E0/workspace.bin").write_bytes(b"x" * 4096)
+            free = benchmark_runner.LAUNCH_STORAGE_GATE_BYTES - 1024
+            with self.assertRaisesRegex(ValueError, "headroom gate"):
+                self.guard(root, free - 8192)
+            record = self.guard(root, free)
+            self.assertEqual(free, record["storage_free_at_launch_bytes"])
+            self.assertGreaterEqual(record["storage_budget_bytes"], free + 4096)
+
+    def test_hard_linked_files_are_counted_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original = root / "a.bin"
+            original.write_bytes(b"y" * 2048)
+            (root / "b.bin").hardlink_to(original)
+            self.assertEqual(2048, benchmark_runner.occupied(root))
+
+    def test_insufficient_memory_fails_the_gate_however_much_storage_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            guard = benchmark_runner.ResourceGuard(Path(tmp), None)
+            guard.record = {}
+            with (
+                patch.object(
+                    benchmark_runner.shutil, "disk_usage", return_value=Mock(free=9 * 10**12)
+                ),
+                self.assertRaisesRegex(ValueError, "headroom gate"),
+            ):
+                guard.check_launch_headroom(3 * 1024**3)
+
+
 class LineageRecordTests(unittest.TestCase):
     def test_recorded_resource_policy_names_only_real_module_constants(self):
         import ast
