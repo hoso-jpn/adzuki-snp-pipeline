@@ -120,8 +120,15 @@ def process_summary(records):
     }
 
 
+# The suite deliberately continues past a Reblock failure, because E4's
+# consolidate comparison is against E2b and does not depend on E3. A resumed run
+# has to reach the same conclusion from the retained record instead of treating
+# that already-accepted outcome as a reason to refuse to continue.
+CONTINUES_AFTER_FAILURE = ("E3",)
+
+
 def completed_experiment(root, experiment):
-    """Reuse an already-completed experiment, but never overwrite retained failure evidence."""
+    """Reuse an already-finished experiment, but never overwrite retained failure evidence."""
     directory = root / experiment
     record = directory / "experiment_result.private.json"
     if not directory.exists():
@@ -131,7 +138,7 @@ def completed_experiment(root, experiment):
             f"{experiment} directory exists without a result; retain it and use a new run"
         )
     result = json.loads(record.read_text())
-    if result.get("status") != COMPLETED:
+    if result.get("status") != COMPLETED and experiment not in CONTINUES_AFTER_FAILURE:
         raise ValueError(
             f"{experiment} holds retained {result.get('status')} evidence; "
             "diagnose it and start a new run directory rather than overwriting it"
@@ -469,7 +476,7 @@ def execute_suite(root, validated, stop_event):
                 contigs,
             )
         except Exception:
-            if experiment != "E3":
+            if experiment not in CONTINUES_AFTER_FAILURE:
                 raise
             # A real Reblock failure does not block the independent consolidate comparison.
             result = json.loads((root / experiment / "experiment_result.private.json").read_text())

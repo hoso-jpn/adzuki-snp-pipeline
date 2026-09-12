@@ -108,6 +108,18 @@ class ResumeContractTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "without a result"):
                 completed_experiment(root, "E2b")
 
+    def test_a_resumed_run_continues_past_the_same_failure_the_suite_accepts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for experiment in execute_experiments.CONTINUES_AFTER_FAILURE:
+                with self.subTest(experiment=experiment):
+                    directory = root / experiment
+                    directory.mkdir()
+                    payload = {"status": "FAILED", "error_type": "RuntimeError"}
+                    (directory / "experiment_result.private.json").write_text(json.dumps(payload))
+                    self.assertEqual(payload, completed_experiment(root, experiment))
+            self.assertIn("E3", execute_experiments.CONTINUES_AFTER_FAILURE)
+
 
 class ResourcePolicyTests(unittest.TestCase):
     """Issue #45: a 15 GiB heap inside a 16 GiB container OOM-killed the first real E0."""
