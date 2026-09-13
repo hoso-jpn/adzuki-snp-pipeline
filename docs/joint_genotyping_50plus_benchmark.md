@@ -351,3 +351,96 @@ command長は根拠に含めません。採用は上記sample ordering確認を�
 精度改善も主張しません。
 
 - [sample-name-map decision evidence](evidence/issue45/sample_name_map_decision.json)
+
+## 2026-09-13: E2a ADOPT / E2b REJECT（interval strategy確定）
+
+data-contract gateとarchitecture gateを分離して評価しました。
+data-contract gateの通過は「比較可能な候補への昇格」であり、採用ではありません。
+
+### E2a: 20 Mb chromosome window splitting → **ADOPT**
+
+data-contract gate（対E1）: **ADOPT_CANDIDATE**
+
+| 分類 | 件数 | 差分中の割合 |
+| --- | --- | --- |
+| directly explained（raw QD ≥ 35.01） | 3,251,539 | 99.957% |
+| reconstruction-limit consistent | 1,397 | 0.043% |
+| **unresolved** | **0** | **0.0%** |
+
+QD<2 FILTER membership flip 0件、非QD差分0件。variant set・genotype・AC/AN・QUAL・FILTER・
+FORMAT・全sample列・sample order・contig orderはすべて一致し、差分は`INFO/QD`のみです。
+1,397件は[35.000000, 35.009756]に収まり、explainedへは昇格させません。
+詳細は[E2a QD difference audit](evidence/issue45/e2a_qd_difference_audit.json)。
+
+architecture gate（対E1）:
+
+| 指標 | E1 | E2a | 差 |
+| --- | --- | --- | --- |
+| **GenotypeGVCFs peak RSS** | 17.56 GiB | **7.43 GiB** | **-57.7%** |
+| GenotypeGVCFs wall合計 | 6.09 h | 6.04 h | -0.8% |
+| GenomicsDBImport peak RSS | 1.76 GiB | 1.76 GiB | 0.0% |
+| workspace bytes | 55.14 GB | 55.12 GB | -0.0% |
+| workspace files | 3,132 | 4,611 | +47.2% |
+| elapsed | 4.14 h | 4.09 h | -1.4% |
+
+20 Mb window 20本の実測peak RSSは5.40–7.43 GiBでした。
+唯一ceilingに迫っていたprocessを57.7%削減し、wall timeもworkspace sizeも悪化させません。
+memory要件を「最長contigの性質」から「選んだwindow長の性質」へ移す点が本質です。
+代償はworkspace file数+47.2%とtask数+17であり、資源制約ではなくscheduling overheadです。
+
+### E2b: small-scaffold grouping → **REJECT**
+
+data-contract gate（対E2a）: **ADOPT_CANDIDATE**。差分975件はすべてhelper自身の
+保守的な`>= 35.01`分岐に収まり、unresolved 0、filter flip 0、非QD差分0です。
+**科学的な問題による却下ではありません。**
+
+architecture gate（対E2a）:
+
+| 指標 | E2a | E2b | 差 |
+| --- | --- | --- | --- |
+| **GenomicsDBImport peak RSS** | 1.76 GiB | **6.57 GiB** | **+272%** |
+| workspace files | 4,611 | 4,515 | **-2.1%** |
+| interval count | 53 | 29 | -45.3% |
+| GenotypeGVCFs peak RSS | 7.43 GiB | 7.35 GiB | -1.1% |
+| import wall合計 | 5.34 h | 5.28 h | -1.1% |
+| elapsed | 4.09 h | 4.07 h | -0.4% |
+
+grouped task単体（25 contig、合計818,535 bp）:
+
+| 指標 | E2a（25 task） | E2b（1 grouped task） |
+| --- | --- | --- |
+| import wall | 40.2 s | 13.3 s（-26.9 s） |
+| import peak RSS | 1.14 GiB | **6.57 GiB** |
+| workspace files | 2,175 | 2,079（-96） |
+| serial reader fallback | なし | **発生** |
+
+決定的な観測: grouped taskの6.57 GiBは**run全体のimport peak**となり、
+20 Mb window（最大1.76 GiB）を上回ります。しかもこのtaskが担当するのは合計818,535 bpで、
+20 Mb window 1本の1/24未満です。GenomicsDBImportのmemoryは総塩基数ではなく
+**同時に書き込む個別contig array数**に追随するため、25個の小scaffoldをまとめる方が
+1 chromosomeの20 Mbを取り込むより3.7倍のmemoryを要します。
+
+groupingの動機であったfile/task増加の抑制は実現しませんでした。
+file数は2.1%（4,611中96）、import wallは約19,000秒中26.9秒の削減にとどまる一方、
+run全体のimport peak RSSは272%増加し、grouped taskがimport側の律速になります。
+さらにGATKはこのtaskでserial reader initializationへfallbackし、要求した8 reader threadsを失います。
+96 fileの削減のために3.7倍のimport memoryとreader並列性を失い、grouping logicと
+順序制約の複雑性を恒常的に抱えるのは割に合いません。
+
+将来、small scaffoldが十分多くtask/file増加が実際の運用制約になる場合、
+またはGenomicsDBImportのper-array memory挙動が変わる場合は再評価します。
+
+### 確定したinterval strategy
+
+```
+ADOPT : 20 Mb chromosome window splitting + small scaffoldは個別task（E2a）
+REJECT: small-scaffold grouping（E2b）
+```
+
+本referenceでのinterval数は53です。E2bのbaselineはE2aなので、grouping却下によって
+window splittingの採用根拠は影響を受けません。
+
+20 Mbは実測前にprotocolで固定した値であり、結果を見て探索していません。最適値の主張はしません。
+いずれの数値も51検体・本reference・GATK 4.6.2.0での実測であり、327検体の挙動は示しません。
+
+- [interval strategy decision](evidence/issue45/interval_strategy_decision.json)
