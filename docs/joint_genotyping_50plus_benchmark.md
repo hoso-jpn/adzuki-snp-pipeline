@@ -1,8 +1,8 @@
 # 50+ sample Joint Genotyping targeted benchmark protocol
 
 Issue #45で、327-sample full FASTQ→GS E2Eへ進む前にJoint Genotypingだけを隔離して評価する
-ためのプロトコルです。入力検証・candidate plan・実行／監査helper・evidence schemaを用意しました。
-現時点では50+ sample実測値や最終採否判断は記録していません。
+ためのプロトコルと、その実測結果・判定の記録です。51検体でのE0〜E4実測、各手法の採否、
+sample数scaling補助測定、327検体resource envelopeとGateは末尾の日付別節に記録します。
 
 ## 前提
 
@@ -303,7 +303,9 @@ batch size、ceiling、並列数はすべて同一です。
 | record / GT / accounting / header SHA256 | すべて一致 |
 | sample order / contig order | 一致 |
 
-出力callsetは**byte-identical**です。入力形式は結果を一切変えませんでした。
+出力callsetは全recordで一致します（record / GT / accounting / shared header checksumが一致）。
+gathered fileのbyte列は、各runの引数と日時を記録する`##GATKCommandLine` header行の分だけ異なり得るため、
+一致の判定はfile bytesではなくrecord単位のchecksumで行います。入力形式は結果を一切変えませんでした。
 
 ### performance
 
@@ -335,7 +337,7 @@ batch size、ceiling、並列数はすべて同一です。
 本cohortの51 run accessionは既にlexicographic順であり、repeated-variant順・map file順・
 出力sample順のすべてがsorted順と一致します。GATKはmap指定時にsample順をmapから導くため、
 **sorted順と入力順が一致する本cohortでは、両形式のordering差を検出できません**。
-51検体でbyte-identicalだったことは、sample名がsorted順でないcohortで両形式のorderingが
+51検体でrecordが一致したことは、sample名がsorted順でないcohortで両形式のorderingが
 一致する証拠にはなりません。327検体で採用する前に、production samplesheet順とsorted順の
 一致を確認するか、mapのsorted順を契約として受け入れた上で出力sample順を明示的に検証してください。
 
@@ -347,7 +349,7 @@ mapはsampleごとに明示的なindex pathを持ち、GATK自身のmap validati
 これは51検体より327検体で価値が高くなります。測定可能なコストはなく、callsetも変えません。
 command長は根拠に含めません。採用は上記sample ordering確認を条件とします。
 
-性能上の利点は主張しません。truth setがなく、そもそもcallsetがbyte-identicalであるため、
+性能上の利点は主張しません。truth setがなく、そもそもcallsetのrecordが一致しているため、
 精度改善も主張しません。
 
 ### 条件の解消（327検体のsample order確認）
@@ -464,3 +466,106 @@ window splittingの採用根拠は影響を受けません。
 いずれの数値も51検体・本reference・GATK 4.6.2.0での実測であり、327検体の挙動は示しません。
 
 - [interval strategy decision](evidence/issue45/interval_strategy_decision.json)
+
+## 2026-09-13: E3 ReblockGVCF → **REJECT**（既存判定の記録）
+
+判定は`3251645`で確定済みです。本節は既存evidenceを要約するだけで、E3の再実行や判定の再審はしていません。
+
+E3は29 interval taskとReblockをすべて完了しましたが、gathered callsetのoutput validationで停止しました。
+51 sample列が丸ごと`.`で出力され、`joint_integrity`がdiploid検査で拒否したためです。
+validatorはfail-closedに正しく動作しました。当時のメッセージはploidy errorとだけ表示していましたが、
+これは`0a8f9a0`で、全列欠損、ploidyを持たない`.`、allele数不一致を区別して報告するよう改善しました。
+いずれも従来どおり拒否します。
+
+| 区分 | 件数 |
+| --- | --- |
+| representational change（phasing collapse、no-callの全列欠損表記） | 4,073,660 |
+| hom-ref call → missing | 86,612,301 |
+| called non-reference genotype → missing | 19,566 |
+| variant set change（E2bのみ 46,135 / E3のみ 130,776） | 176,911 |
+| AN changed records | 12,831,569 |
+| AC changed records | 28,037 |
+| FILTER changes | 0 |
+
+判定理由: **the storage-saving trade-off is incompatible with this repository's current exact
+scientific/data-contract requirement**。ReblockGVCFが誤っているという判断ではありません。GQ bands 20/100の
+設計どおり参照信頼度の解像度を捨てた結果です。gVCFサイズ76.9%削減（48.03 GB → 11.11 GB）と
+好ましい資源傾向は記録しますが、判定には含めていません。
+
+- [ReblockGVCF decision evidence](evidence/issue45/reblock_decision.json)
+
+## 2026-09-14: E4 consolidate → **REJECT**
+
+E2bとの差分は`--consolidate true`だけです。plan、sample-name-map、batch size、入力、reference、
+GATK image、allocation、並列数は同一です。
+
+### data-contract gate: ADOPT_CANDIDATE
+
+| 指標 | 結果 |
+| --- | --- |
+| shared / identical records | 13,219,170 / 13,219,170 |
+| different records / E2bのみ / E4のみ | 0 / 0 / 0 |
+| record / GT / accounting / shared header checksum | すべて一致 |
+| sample order / contig order | 一致 |
+
+partitionが変わらないため、E2a/E2bで見られたQD jitterすら生じません。E2b・E4のgathered fileは
+byte列が異なりますが、header diffとrecord本体hash（両者`1d367557…`）により、差は
+`##GATKCommandLine` 2行（`--consolidate`値、map path、日時）だけであることを確認しました。
+
+### architecture gate: REJECT
+
+同一taskで比較できる28本のchromosome window（E2a・E2b・E4で同一task）での比較です。
+
+| 指標 | E2b | E4 | 差 |
+| --- | --- | --- | --- |
+| **GenomicsDBImport wall合計** | 18,997 s | 27,278 s | **+43.6%** |
+| import wall差（task別） | — | — | 中央値+43.6%（300 s超の全taskで+40.7〜46.4%） |
+| GenomicsDBImport peak RSS | 1.73 GiB | 2.43 GiB | 16 GiB割当内 |
+| GenotypeGVCFs wall合計 | 21,691 s | 21,320 s | -1.7%（task別 -3.4〜+0.1%） |
+| GenotypeGVCFs peak RSS | 7.35 GiB | 7.31 GiB | -0.5% |
+| workspace bytes | 55.10 GB | 55.35 GB | +0.45% |
+| workspace files | 2,436 | 1,316 | -1,120（windowあたり87 → 47） |
+| experiment elapsed（全29 task、validation込み） | 4.07 h | 4.84 h | **+19.1%** |
+
+retry 0、OOM 0。E4実行中のhostはMemAvailable最小99.98 GiB、swapは0.75 MiBで変化なし、
+storage空き最小2.03 TBでした。
+
+コストの所在は明確です。`NC_068975.1:1-20000000`では、batch 1（15分12秒）とbatch 2の1検体取込み（約20秒）が
+両runで同じでした。E4はその後`Consolidating GenomicsDB array`を記録し、batch 2完了まで6分55秒を
+要しています。import overheadはすべて、読込み後に配列を1 fragmentへ書き直す工程に由来します。
+
+判定: consolidationの代償は実測でimport wall +43.6%、elapsed +19.1%です。見返りはGenotypeGVCFs wall -1.7%、
+ceilingが懸念されるprocessへのmemory改善なし、window側のfile数-1,120にとどまります。本構成でfile数は
+scheduling overheadであり、制約として観測されていません。**採用しません。** productionのmoduleは
+flagを渡しておらず、GATK既定のconsolidate=falseのままです。callsetはどちらでも変わらないため、
+これは純粋な資源判断です。
+
+pinned GATK 4.6.2.0のdocは「100 batchを超える場合にconsolidateを使う」とし、効果は
+「top Java layerのoverheadで目立たない可能性がある」としています
+（[GenomicsDBArgumentCollection](https://github.com/broadinstitute/gatk/blob/4.6.2.0/src/main/java/org/broadinstitute/hellbender/tools/genomicsdb/GenomicsDBArgumentCollection.java)）。
+
+**限界**: 51検体では配列あたり2 fragmentしか測っていません。327検体では`ceil(327/50)=7` fragmentになりますが、
+これは算術上の帰結で実測ではありません。7 fragmentでの読込み側の利得と、327検体規模での書き直しコストは
+未測定であり、327 projectionではassumptionとして扱います。7はpinned guidanceの100 batchより大幅に少なく、
+実測にもdocにもconsolidateを支持する材料はありません。E2bのgrouped task（25 scaffold）では
+file 2,079 → 1,079、import peak 6.57 → 5.39 GiBでしたが、groupingはREJECT済みで採用planへ
+転用できないため、判定に含めていません。
+
+再評価の条件: 配列あたりのbatch数がguidanceへ近づく場合（incremental importや大幅に小さいbatch size等）、
+または327検体でfragment数に起因するGenotypeGVCFs読込み問題が観測された場合です。
+
+- [consolidate decision evidence](evidence/issue45/consolidate_decision.json)
+- [E0〜E4 sanitized metrics（全6 experiment）](evidence/issue45/benchmark_results.json)
+- [suite evidence freeze manifest](evidence/issue45/suite_freeze.json)
+
+### 確定したJoint Genotyping architecture（51検体実測）
+
+| 要素 | 判定 |
+| --- | --- |
+| `--sample-name-map` | ADOPT（E1、sample order条件は327検体で解消済み） |
+| 20 Mb chromosome window splitting | ADOPT（E2a） |
+| small-scaffold grouping | REJECT（E2b） |
+| ReblockGVCF | REJECT（E3） |
+| `--consolidate` | REJECT（E4） |
+| `genomicsdb_batch_size` | 50のまま（全36 / 53 / 29 intervalで50 + 1のbatchingを実測） |
+| GenotypeGVCFs allocation | 16 GiBでは不足（E0 OOM）。20 Mb windowでの実測最大は7.43 GiB（E2a） |
