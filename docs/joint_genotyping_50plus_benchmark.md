@@ -569,3 +569,142 @@ file 2,079 → 1,079、import peak 6.57 → 5.39 GiBでしたが、groupingはRE
 | `--consolidate` | REJECT（E4） |
 | `genomicsdb_batch_size` | 50のまま（全36 / 53 / 29 intervalで50 + 1のbatchingを実測） |
 | GenotypeGVCFs allocation | 16 GiBでは不足（E0 OOM）。20 Mb windowでの実測最大は7.43 GiB（E2a） |
+
+## 2026-09-14: sample数scaling補助測定（13 / 26 / 51）
+
+E0〜E4はすべて51検体での測定で、sample数方向の情報を持ちません。そこで補助測定を行いました。
+これはどのone-factor判定の入力でもありません。
+
+| 固定条件 | 値 |
+| --- | --- |
+| interval | `NC_068975.1:1-20000000`（suite E2b/E4の`interval_0017`と同一） |
+| subset | validated manifest順の決定的prefix、13 ⊂ 26 ⊂ 51（nesting検証済み） |
+| reference / GATK / allocation | suiteと同一（`execute_experiments.py`はsuite lineageとbyte一致） |
+| 並列 | 各level単独、suite controller終了後に実行（51検体も単独で再測定） |
+| helper | `0a8f9a0` |
+
+### observed
+
+| samples | variants | genotype cells | GenotypeGVCFs RSS / wall | GenomicsDBImport RSS / wall | workspace | batches |
+| --- | --- | --- | --- | --- | --- | --- |
+| 13 | 181,326 | 2.36 M | 1.27 GiB / 249 s | 1.08 GiB / 275 s | 0.80 GB / 47 files | 1 |
+| 26 | 273,562 | 7.11 M | 2.11 GiB / 453 s | 0.80 GiB / 527 s | 1.55 GB / 47 files | 1 |
+| 51 | 792,503 | 40.42 M | 7.46 GiB / 1,009 s | 1.31 GiB / 901 s | 2.71 GB / 87 files | 2 |
+
+全levelでretry 0、sample order・contig order・AC/AN accountingはvalid、swap増加は最大0.25 MiBでした。
+51検体を単独で再測定した出力は、suite E2bの同じintervalとrecord本体SHA256が一致しました。
+resource値は単独実行のほうがwallで3.5〜5.0%速く、peak RSSの差は5%以内です。suiteの3並列はこのintervalを実質的に歪めていません。
+
+### cohort構成との交絡
+
+26→51でsample数は1.96倍ですが、variant数は2.90倍、GenotypeGVCFs RSSは3.54倍、出力sizeは4.19倍に跳ねます。
+51検体の出力を解析した結果は次のとおりです。
+
+- manifest位置33〜50の7検体は、non-reference callが16万〜22万（他は4.3万〜8.4万）で、大半がhom-altでした。
+  referenceから大きく離れた系統です。公開metadataには事前にこれを識別できる属性がありません。
+- 792,503 siteのうち、最初のnon-reference carrierが1〜13番は213,235、14〜26番は87,400、27〜51番は491,868でした。
+
+**このprefix系列ではsample数と構成が同時に変わるため、Nだけにfitした指数はsample数の性質ではありません。**
+GenotypeGVCFs memoryをNだけで外挿することはしません。
+
+### empirical trend
+
+GenotypeGVCFs peak RSSは、genotype cell数（samples × 出力variants）に対して、独立な3つの推定値が一致しました。
+
+| 推定 | 傾き（GiB / 百万cell） |
+| --- | --- |
+| E0の11 chromosome（N=51固定、contig間でvariant数が変化） | 0.188（R² 0.951。同じ点をinterval長で回帰するとR² 0.933） |
+| scaling 13→26 | 0.177 |
+| scaling 26→51 | 0.161 |
+
+wall timeは構成の影響を受けにくい指標です。E0ではinterval長でR² 0.992、variant数でR² 0.870でした。
+Nに対しては、genotype wallの327/51比が6.46〜7.08、import wallが5.12〜6.00、workspace bytesが5.35〜6.08です（linear / power / 上側pair傾きの3形式）。
+import peak RSSにNとの傾向はありません（batch sizeで上限が決まる）。workspace fileは配列あたり`7 + 40 × batch数`でした。
+
+- [sample scaling evidence](evidence/issue45/sample_scaling_20260914.json)
+
+## 2026-09-14: 327検体resource envelope
+
+`benchmarks/issue45/project_resource_envelope.py`が、commit済みevidenceだけから
+[resource_envelope_327.json](evidence/issue45/resource_envelope_327.json)を再導出します。
+unit testはcommit済みJSONと再導出結果の一致を検査します。scriptは判定を行いません。
+
+### observed（51検体、本host）
+
+- 採用plan（E2a、53 task）: import wall合計19,216 s、genotype wall合計21,752 s、elapsed 4.09 h、workspace 55.12 GB / 4,611 files、gathered callset 4.86 GB
+- 入力gVCF: 48.03 GB（1検体0.40〜1.28 GB）。FASTQ: 選定51検体207.4 GB、全327 runの公開size合計1.55 TB
+- 上流生成（Joint Genotypingの範囲外、参考値）: 17.1 h、272.9 CPU-h、中間ファイル全保持で正味780.7 GB
+- host: 32 CPU / RAM 123.5 GiB / `/data` 3.94 TB（現在の空き2.03 TB）
+- production契約: GenotypeGVCFsは16 GB、retry時32 GB、per-contig、cleanup設定なし
+
+### assumptions
+
+| ID | 内容 |
+| --- | --- |
+| A1 | GenotypeGVCFs RSSは、最大観測task（88.1 M cells）を超えてもcell数に線形 |
+| A2 | 327検体でのvariant数（未測定）を4 scenarioで表す: S0 = site増加なし（下限）、S1 = Watterson a_nによる増加、S2 = 14〜26番のdiscovery rateで減衰せず増加、S3 = 27〜51番のrateで減衰せず増加（悲観側） |
+| A3 | 測定windowのvariant増加率がgenome全体に当てはまる（51検体時点で平均より高密度なので、memory側は保守的） |
+| A4 | 7 batchのimportは1〜2 batchの観測と同じ挙動 |
+| A5 | 同一host・同一I/O・3並列 |
+| A6 | 上流の生成量はFASTQ bytes比またはsample数比で増える |
+| A7 | 中間ファイルは51検体生成時と同様にすべて保持される |
+
+### projected range
+
+| 項目 | S0 | S1 | S2 | S3 |
+| --- | --- | --- | --- | --- |
+| window variants（51検体比） | ×1.00 | ×1.42 | ×3.34 | ×7.85 |
+| GenotypeGVCFs RSS / 20 Mb window | 42.6–48.6 GiB | 59.9–68.8 GiB | 140–163 GiB | 328–382 GiB |
+| productionのper-contig最長contig | 94–107 GiB | 132–151 GiB | 307–356 GiB | 717–835 GiB |
+| 最大観測cell数に収まるwindow長 | 6.8 Mb（72 task） | 4.8 Mb（96 task） | 2.0 Mb（224 task） | 0.87 Mb（523 task） |
+| callset（per-interval copy込み） | 45–62 GB | 60–88 GB | 122–208 GB | 246–489 GB |
+| full run保持storage | 6.90–7.82 TB | 6.91–7.85 TB | 6.98–7.97 TB | 7.10–8.25 TB |
+
+scenarioに依存しない項目:
+
+- Joint Genotyping task時間: import 27.3–32.0 h、genotype 39.0–42.8 h
+- elapsed: 3並列で23.8–26.9 h、2並列で35.7–40.3 h
+- workspace 295–353 GB、配列あたり287 files（E2a planで15,211 files）
+- 入力gVCF 308–360 GB
+- 上流生成: 保持storage 5.01–5.85 TB、1,750–2,046 CPU-h、同一allocationで110–128 h
+
+### uncertainty
+
+- 327検体でのvariant数は未測定です。S0〜S3は約8倍の幅があり、memoryとcallsetの幅の大部分を占めます。
+- A1は観測範囲外への外挿です。S0でも20 Mb windowには最大観測の約3倍のcell数が必要です。
+- peak RSSはheap 26 GiB下のresident setで、live setの実測ではありません（ただしE0のOOMは、ceiling付近でlive setが追随することを示しています）。
+- 51検体はaccession順の選定で、327検体からの無作為標本ではありません。divergent群が327検体中に占める割合は不明です。
+- 7 batchのimportは1〜2 batchからの外挿です。
+- wall timeの幅は1 windowと3つのtrend形式に基づきます。構成がgenotype時間を押し上げる可能性は、memoryほど大きくはありませんが残ります。
+
+## 2026-09-14: full 327-sample run Gate → **NO-GO**
+
+| 基準 | 結果 |
+| --- | --- |
+| GenotypeGVCFs memory | **FAIL**: S0（site増加なし）でも20 Mb windowが32 GiB tierを超え、launch gate内に最大2 task。productionのper-contigはretry時32 GBの約3倍 |
+| storage | **FAIL**: 中間ファイル全保持で6.9–8.25 TB。volume全体の3.94 TBを超える |
+| time | 非決定的: Joint Genotypingは3並列で約1日、上流を含めても日単位。ただし並列数はmemoryが許す場合に限る |
+| retry / swap | PASS（51検体でretry 0、OOM 0、swap増加は最大1 MiB） |
+| scientific / data contract | PASS（採用した変更はrecord一致、または説明済みのQD jitterのみ。callを変えたReblockGVCFは不採用） |
+| lineage | 51検体はPASS。327検体は全gVCFを単一SHAで生成する必要があり、未実施 |
+
+CONDITIONAL GOではなくNO-GOとする理由です。CONDITIONAL GOは、envelopeが収まり不確実性だけが残る場合に使います。
+今回は投影範囲の最も楽観的な端ですでにmemory tierとstorage volumeを満たさず、productionも採用architectureを実装していません。
+これはprotocolの「resource contractを満たせない」に該当します。
+cells modelの外挿（A1）がmemoryを過大に見積もっている可能性はあります。ただしS0で20 Mb windowが32 GiBに収まるには、1/4〜1/3の過大評価が必要です。
+またstorageのFAILはmemory modelに依存しません。
+
+本判定は、51検体で決めたarchitecture判定を再審するものではありません。327検体をgenotypeできないとも主張しません。
+「このpipelineとhostで、現行の契約のまま327検体runを開始すべきではない」という判定です。
+
+### 再評価の条件
+
+1. **R1**: productionが`--sample-name-map`とchromosome window splittingを採用する（small scaffoldは個別task、consolidateはoff）
+2. **R2**: window長を固定の20 Mbではなく、taskあたりのgenotype cell予算から決める。最大観測task（88.1 M cells）以内に収めるなら、S0で6.8 Mb以下、S1で4.8 Mb以下（72〜96 chromosome task）
+3. **R3**: GenotypeGVCFs allocationをその予算と既定のnative reserveから決め、並列数 × tierを110 GiBのlaunch gate内に収める
+4. **R4**: 6.9–8.25 TBの保持量に対応するretention/cleanup方針またはvolumeを用意し、生成中に1検体あたりの保持byteを実測で確認する
+5. **R5**: 327 gVCFを単一SHAで生成した後、1 windowでGenotypeGVCFsを単独・十分なceilingで測定し、A1/A2を実測で置き換える。あわせて7 batchのimport（A4）を確認してから、full Joint Genotypingを見積もる
+
+R1〜R4を満たしR5を実測した後、同じprotocol ruleで再評価します。自動的にGOにはなりません。
+
+- [327 gate decision](evidence/issue45/gate_327_decision.json)

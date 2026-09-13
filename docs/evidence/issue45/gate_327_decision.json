@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "decision_subject": "Starting a full 327-sample run on seedcore-01",
+  "decided_on": "2026-09-14",
+  "verdict": "NO-GO",
+  "inputs": [
+    "docs/evidence/issue45/benchmark_results.json",
+    "docs/evidence/issue45/sample_scaling_20260914.json",
+    "docs/evidence/issue45/resource_envelope_327.json",
+    "docs/evidence/issue45/host_and_generation_observed.json",
+    "docs/evidence/issue45/sample_name_map_decision.json",
+    "docs/evidence/issue45/interval_strategy_decision.json",
+    "docs/evidence/issue45/reblock_decision.json",
+    "docs/evidence/issue45/consolidate_decision.json"
+  ],
+  "protocol_rule": "GO only when the envelope extrapolated from measurement leaves storage and time headroom, retry and swap are acceptable, and sample, order and variant accounting show no regression; CONDITIONAL GO when uncertainty remains; NO-GO when the lineage or resource contract cannot be satisfied",
+  "criteria": {
+    "genotype_memory": {
+      "result": "FAIL",
+      "production_contract": "one task per contig at 16 GB, then 32 GB on one retry; the longest contig already needed 17.91 GiB at 51 samples, so its first attempt fails there today",
+      "production_projection_longest_contig_gib": {
+        "S0_no_new_sites": [94.2, 107.2],
+        "S1_neutral_harmonic": [131.9, 151.3]
+      },
+      "benchmarked_configuration_projection_20mb_window_gib": {
+        "S0_no_new_sites": [42.6, 48.6],
+        "S1_neutral_harmonic": [59.9, 68.8]
+      },
+      "tier_gib": 32,
+      "reading": "the floor scenario, which assumes 276 more samples add not a single variant site, already exceeds the 32 GiB tier for a 20 Mb window and allows at most two such tasks inside the 110 GiB launch gate; the production per-contig plan exceeds the retry allocation roughly threefold at the same floor"
+    },
+    "storage": {
+      "result": "FAIL",
+      "projected_full_run_retained_tb": [6.9, 8.25],
+      "composition": "FASTQ 1.55 TB (published sizes of all 327 runs) + generation with intermediates retained 5.01-5.85 TB + GenomicsDB workspace 0.29-0.35 TB + callsets with per-interval copies",
+      "data_volume_tb": {"total": 3.94, "free_now": 2.03},
+      "reading": "under the current retention contract, which has no cleanup, the run cannot fit on the volume even if it were empty; the Joint Genotyping part alone (workspace plus callsets) is small by comparison"
+    },
+    "time": {
+      "result": "NOT DECISIVE",
+      "joint_genotyping_task_hours": {"import": [27.3, 32.0], "genotype": [39.0, 42.8]},
+      "elapsed_hours": {"3_tasks": [23.8, 26.9], "2_tasks": [35.7, 40.3], "1_task": [71.5, 80.6]},
+      "upstream_generation_elapsed_hours_same_allocation": [110, 128],
+      "reading": "days, not weeks, at the observed per-sample rates; only acceptable once memory allows the concurrency the figure assumes"
+    },
+    "retry_and_swap": {
+      "result": "PASS at 51 samples",
+      "observed": "0 retries, 0 OOM under the common ceiling in every completed experiment and scaling level; swap delta at most 1 MiB across the suite"
+    },
+    "scientific_data_contract": {
+      "result": "PASS",
+      "observed": "every adopted change is record-identical (E1, E4) or differs only in explained QD jitter with no unresolved record and no filter flip (E2a, E2b); the one change that altered calls, ReblockGVCF, is rejected"
+    },
+    "lineage": {
+      "result": "PASS at 51, OPEN at 327",
+      "observed": "51 gVCFs from one production SHA, independently validated; 327 requires generating all 327 gVCFs under one SHA, which has not been done"
+    }
+  },
+  "why_not_conditional_go": "CONDITIONAL GO is for an envelope that fits with unresolved uncertainty. Here the most optimistic end of the projected range already breaks the GenotypeGVCFs tier and the storage volume, and the production pipeline has not implemented the adopted architecture. The resource contract cannot be satisfied as it stands, which is the protocol's NO-GO condition. The uncertainty is real but it does not decide the verdict. Variant count can only rise above the S0 floor, and the storage failure does not depend on the memory model at all. The one assumption that could lower memory is the cells-model extrapolation (A1), and it would have to overstate the S0 figure by a quarter to a third for a 20 Mb window to fit 32 GiB; that is possible, which is exactly why R5 measures it rather than assuming it.",
+  "what_this_does_not_say": [
+    "It does not reopen any architecture decision; they were made at 51 samples and stand.",
+    "It does not say 327 samples cannot be genotyped; it says this pipeline and this host, under their current contracts, should not start that run.",
+    "It does not claim the projected ranges are measurements; every assumption is listed in resource_envelope_327.json."
+  ],
+  "re_entry_conditions": {
+    "R1_architecture_in_production": "production adopts --sample-name-map and chromosome window splitting (E1, E2a), keeps small scaffolds as separate tasks and consolidate off",
+    "R2_window_from_a_cell_budget": "window length is derived from a genotype-cell budget per task rather than fixed at 20 Mb; keeping each task at or below the largest observed task (88.1 M cells) means at most 6.8 Mb under S0 and 4.8 Mb under S1, about 72-96 chromosome tasks",
+    "R3_genotype_tier": "the GenotypeGVCFs allocation is set from that budget with the calibrated native reserve, and concurrency times tier stays within the 110 GiB launch gate",
+    "R4_storage_contract": "a retention and cleanup policy, or a volume, that fits the projected 6.9-8.25 TB retained footprint, verified by measuring retained bytes per sample during generation",
+    "R5_measure_at_327": "after the 327 gVCFs exist under one SHA, an isolated GenotypeGVCFs calibration on one window at a generous ceiling replaces assumptions A1 and A2 with an observation, and confirms seven-batch import (A4), before the full joint genotyping run is sized",
+    "re_evaluation": "with R1-R4 in place and R5 measured, the gate is re-evaluated against the same protocol rule; it does not become GO by default"
+  },
+  "scope": {
+    "measured_sample_counts": [13, 26, 51],
+    "reference_accession": "GCF_016808095.1",
+    "gatk_version": "4.6.2.0",
+    "host": "seedcore-01"
+  }
+}
