@@ -31,11 +31,16 @@ class ClassificationTests(unittest.TestCase):
             qd.classify(record(qd_value="28.0"), record(qd_value="31.0"), 40.0),
         )
 
-    def test_inside_the_margin_but_above_gatk_threshold_is_reconstruction_consistent(self):
-        self.assertEqual(
-            ("reconstruction_margin_above_gatk_threshold", "reconstruction_limit_consistent"),
-            qd.classify(record(qd_value="28.0"), record(qd_value="31.0"), 35.004),
-        )
+    def test_inside_the_margin_but_at_or_above_gatk_threshold_is_reconstruction_consistent(self):
+        for raw in (35.0, 35.004, 35.0097):
+            with self.subTest(raw=raw):
+                self.assertEqual(
+                    (
+                        "reconstruction_margin_at_or_above_gatk_threshold",
+                        "reconstruction_limit_consistent",
+                    ),
+                    qd.classify(record(qd_value="28.0"), record(qd_value="31.0"), raw),
+                )
 
     def test_below_gatk_threshold_stays_unresolved_however_close(self):
         for raw in (34.999, 34.5, 30.0, 2.0):
@@ -46,9 +51,12 @@ class ClassificationTests(unittest.TestCase):
                 self.assertEqual("unresolved", rollup)
                 self.assertEqual("near_threshold_below_gatk_threshold", category)
 
-    def test_exactly_at_the_threshold_errs_toward_unresolved(self):
-        _, rollup = qd.classify(record(qd_value="28.0"), record(qd_value="31.0"), 35.0)
-        self.assertEqual("unresolved", rollup)
+    def test_the_threshold_comparison_matches_the_pinned_bytecode(self):
+        """QualByDepth.fixTooHighQD compiles to `dcmpg; ifge` against 35.0d."""
+        at = qd.classify(record(qd_value="28.0"), record(qd_value="31.0"), 35.0)
+        just_below = qd.classify(record(qd_value="28.0"), record(qd_value="31.0"), 34.9999)
+        self.assertEqual("reconstruction_limit_consistent", at[1])
+        self.assertEqual("unresolved", just_below[1])
 
     def test_an_output_matching_the_deterministic_value_is_not_excused(self):
         """If one side equals raw QD, jitter did not fire on both sides."""
@@ -82,7 +90,7 @@ class ClassificationTests(unittest.TestCase):
     def test_gatk_constants_match_the_pinned_implementation(self):
         self.assertEqual(35.0, qd.GATK_MAX_QD_BEFORE_FIXING)
         self.assertEqual(30.0, qd.GATK_IDEAL_HIGH_QD)
-        self.assertEqual(3.0, qd.GATK_HIGH_QD_SD)
+        self.assertEqual(3.0, qd.GATK_JITTER_SIGMA)
         self.assertGreater(qd.HELPER_MARGIN, qd.GATK_MAX_QD_BEFORE_FIXING)
 
 

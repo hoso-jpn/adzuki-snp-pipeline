@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "comparison": "E2a against E1",
+  "one_factor_changed": "interval plan only: 20 Mb chromosome windows with scaffolds individual, against E1's per-contig plan. Same 51 gVCFs, reference, batch size, ceilings and concurrency.",
+  "source_run": "issue45-e0-e4-20260913-0040",
+  "allocation_regime": "common_ceiling_comparison",
+  "gate_evaluated_in_code": "ADOPT_CANDIDATE",
+  "gate_definition": {
+    "REJECT": "any QD<2 FILTER membership flip, or any substantive difference in variants, genotypes, accounting or other fields",
+    "ADOPT_CANDIDATE": "scientific semantics unchanged and no residual difference left unresolved",
+    "DEFER": "scientific semantics unchanged but unresolved differences remain"
+  },
+  "scientific_semantics_unchanged": {
+    "variant_set_identical": true,
+    "left_only_variants": 0,
+    "right_only_variants": 0,
+    "variant_count_equal": true,
+    "genotypes_identical": true,
+    "variant_gt_sha256_equal": true,
+    "allele_accounting_identical": true,
+    "accounting_sha256_equal": true,
+    "filter_column_identical": true,
+    "qual_column_identical": true,
+    "format_column_identical": true,
+    "sample_columns_identical": true,
+    "sample_order_equal": true,
+    "ordered_contigs_equal": true,
+    "shared_header_sha256_equal": true,
+    "non_qd_field_differences": {},
+    "qd_lt2_filter_membership_flips": 0
+  },
+  "differences": {
+    "total_records_compared": 13219170,
+    "identical_records": 9966234,
+    "differing_records": 3252936,
+    "only_field_ever_differing": "INFO/QD",
+    "rollup": {
+      "directly_explained": {
+        "count": 3251539,
+        "percent_of_differing": 99.957054,
+        "basis": "reconstructed raw QD at or above the helper's 35.01 margin, so above GATK's jitter boundary with reconstruction error already absorbed"
+      },
+      "reconstruction_limit_consistent": {
+        "count": 1397,
+        "percent_of_differing": 0.042946,
+        "statement": "consistent with the pinned GATK >=35 jitter boundary and post-annotation reconstruction limits; no scientific-semantic difference observed",
+        "explicitly_not_claimed": "these are not promoted to directly explained. The deterministic comparison value is itself back-computed from the final VCF, so the reading is strong circumstantial evidence rather than proof."
+      },
+      "unresolved": {
+        "count": 0,
+        "percent_of_differing": 0.0
+      }
+    }
+  },
+  "mechanism": {
+    "gatk_jitter": "QualByDepth replaces a raw QD at or above MAX_QD_BEFORE_FIXING (35.0) with IDEAL_HIGH_QD (30.0) + Random.nextGaussian() * JITTER_SIGMA (3.0), and emits it through String.format(\"%.2f\"). Re-partitioning the genome changes that random stream.",
+    "threshold_operator_verified_from_bytecode": {
+      "source": "gatk-package-4.6.2.0-local.jar in the pinned image digest, disassembled with javap",
+      "finding": "QualByDepth.fixTooHighQD compiles to `dcmpg` against 35.0d followed by `ifge`, so the jitter branch is taken when raw QD is greater than OR EQUAL TO 35.0, and the original value is returned only when raw QD is strictly below 35.0",
+      "why_it_mattered": "the audit's first pass compared strictly greater than 35.0 and left 92 records unresolved, every one of them at a reconstructed raw QD of exactly 35.000000 and nowhere else. The comparison was corrected to match the pinned implementation, not to reach a gate outcome, and the strict-greater run is retained alongside this one."
+    },
+    "why_reconstruction_is_imperfect": "GenotypeGVCFsEngine passes likelihoods=null when annotating QD, so QualByDepth.getDepth() uses the genotype AD, or DP when AD is absent, which is exactly what the reconstruction recomputes. The discrepancy is not an unseen read-likelihood depth. It is that GenotypeGVCFs performs genotype cleanup after INFO annotation, migrating MIN_DP into DP and synthesising AD from DP where AD is absent, so the AD/DP finally serialized need not match the genotype state at the moment QD was annotated. Serialized QUAL precision adds further reconstruction error."
+  },
+  "reconstruction_band": {
+    "count": 1397,
+    "min_reconstructed_raw_qd": 35.0,
+    "max_reconstructed_raw_qd": 35.009756,
+    "gatk_threshold": 35.0,
+    "helper_margin": 35.01,
+    "all_at_or_above_gatk_threshold": true,
+    "distribution_across_band": {
+      "[35.000,35.002)": 277,
+      "[35.002,35.004)": 328,
+      "[35.004,35.006)": 298,
+      "[35.006,35.008)": 280,
+      "[35.008,35.010)": 214
+    },
+    "note": "every one of the 1,397 falls inside the narrow band between GATK's own threshold and the helper's margin, spread roughly evenly rather than clustered at a pathological value, and none lies outside it",
+    "contigs_represented": 11,
+    "filter_values_observed": {".|.": 1397}
+  },
+  "observed_filter_margin": {
+    "scope": "this 51-sample E1/E2a comparison only",
+    "differing_records_examined": 3252936,
+    "minimum_output_qd_observed": 15.26,
+    "qd_filter_threshold": 2.0,
+    "observed_margin": 13.26,
+    "statement": "Across the 3,252,936 differing records in this comparison, the minimum observed output QD was 15.26, an observed margin of 13.26 from the QD<2 filter boundary.",
+    "explicitly_not_claimed": "This is not a general claim that a jittered QD is always safe from the QD<2 boundary. A jittered value is a draw from a normal distribution and its tail is unbounded in principle; 15.26 is the measured minimum in this comparison, not a guarantee."
+  },
+  "per_record_trace": {
+    "fields": ["chrom", "pos", "ref", "alt", "E1_qd", "E2a_qd", "E1_filter", "E2a_filter", "reconstructed_raw_qd", "classification", "rollup", "qd_lt2_filter_flip"],
+    "retained_privately": "full per-record TSV for all band records, plus the retained strict-greater pass, held on the benchmark host outside Git",
+    "committed_here": "aggregate counts, band distribution and the bounded sample below"
+  },
+  "sample_rows": [
+    {"chrom": "NC_068970.1", "pos": 20023738, "ref": "T", "alt": "C", "E1_qd": 22.63, "E2a_qd": 29.27, "E1_filter": ".", "E2a_filter": ".", "reconstructed_raw_qd": 35.004667, "classification": "reconstruction_margin_at_or_above_gatk_threshold", "qd_lt2_filter_flip": false},
+    {"chrom": "NC_068970.1", "pos": 20044703, "ref": "T", "alt": "A", "E1_qd": 34.01, "E2a_qd": 33.69, "E1_filter": ".", "E2a_filter": ".", "reconstructed_raw_qd": 35.003529, "classification": "reconstruction_margin_at_or_above_gatk_threshold", "qd_lt2_filter_flip": false},
+    {"chrom": "NC_068970.1", "pos": 20234785, "ref": "C", "alt": "A", "E1_qd": 28.12, "E2a_qd": 25.90, "E1_filter": ".", "E2a_filter": ".", "reconstructed_raw_qd": 35.006, "classification": "reconstruction_margin_at_or_above_gatk_threshold", "qd_lt2_filter_flip": false}
+  ],
+  "decision_scope": {
+    "this_gate_decides": "the data contract only: E2a introduces no scientific-semantic difference against E1",
+    "this_gate_does_not_decide": "whether 20 Mb chromosome window splitting is adopted. Clearing this gate makes E2a eligible to be compared on resource and architecture grounds; the interval strategy is settled only after the E2a/E2b measurements.",
+    "truth_set": "none available; no accuracy improvement is claimed for either side"
+  }
+}

@@ -2,9 +2,10 @@
 """Classify every differing record between two Issue45 callsets against a fixed gate.
 
 GATK 4.6.2.0 QualByDepth replaces a raw QD at or above MAX_QD_BEFORE_FIXING
-(35.0) with IDEAL_HIGH_QD (30.0) + N(0,1)*HIGH_QD_SD (3.0). Re-partitioning the
-genome changes that random stream, so QD alone may differ between two runs whose
-every other field agrees.
+(35.0) with IDEAL_HIGH_QD (30.0) + nextGaussian() * JITTER_SIGMA (3.0).
+Re-partitioning the genome changes that random stream, so QD alone may differ
+between two runs whose every other field agrees. The inclusive comparison is
+taken from the pinned jar's own bytecode, not from documentation.
 
 Why reconstructing raw QD from the final VCF is imperfect: GenotypeGVCFsEngine
 passes likelihoods=null when it annotates QD, so the depth QualByDepth.getDepth()
@@ -40,9 +41,14 @@ import math
 import sys
 from collections import Counter
 
+# Verified against the pinned image's own bytecode rather than assumed. In
+# gatk-package-4.6.2.0-local.jar, QualByDepth.fixTooHighQD compiles to
+# `dcmpg; ifge` against 35.0d, so the jitter branch is taken when raw QD is
+# greater than OR EQUAL TO 35.0, and QD is emitted through String.format("%.2f").
+# The jitter is IDEAL_HIGH_QD + Random.nextGaussian() * JITTER_SIGMA.
 GATK_MAX_QD_BEFORE_FIXING = 35.0
 GATK_IDEAL_HIGH_QD = 30.0
-GATK_HIGH_QD_SD = 3.0
+GATK_JITTER_SIGMA = 3.0
 HELPER_MARGIN = 35.01
 JITTER_PLAUSIBLE_SIGMA = 5.0
 DETERMINISTIC_TOLERANCE = 0.011  # QD is printed to 2 decimals
@@ -71,7 +77,7 @@ def info_of(fields):
 
 
 def plausible_jitter(value):
-    return abs(value - GATK_IDEAL_HIGH_QD) <= JITTER_PLAUSIBLE_SIGMA * GATK_HIGH_QD_SD
+    return abs(value - GATK_IDEAL_HIGH_QD) <= JITTER_PLAUSIBLE_SIGMA * GATK_JITTER_SIGMA
 
 
 def classify(left, right, raw):
@@ -93,17 +99,17 @@ def classify(left, right, raw):
         abs(lq - raw) > DETERMINISTIC_TOLERANCE and abs(rq - raw) > DETERMINISTIC_TOLERANCE
     )
     if (
-        raw > GATK_MAX_QD_BEFORE_FIXING
+        raw >= GATK_MAX_QD_BEFORE_FIXING
         and jittered_both
         and plausible_jitter(lq)
         and plausible_jitter(rq)
     ):
-        # Above GATK's own threshold but inside the helper's reconstruction
-        # margin, with neither output equal to the deterministic value. Note the
-        # comparison is strictly greater while GATK fixes at or above 35.0: a
-        # record at exactly 35.0 falls through to unresolved, which errs toward
-        # reporting a difference rather than excusing one.
-        return "reconstruction_margin_above_gatk_threshold", "reconstruction_limit_consistent"
+        # At or above GATK's own threshold but inside the helper's reconstruction
+        # margin, with neither output equal to the deterministic value. The
+        # comparison mirrors the pinned bytecode's `ifge`: a reconstruction
+        # landing exactly on 35.0 is a jitter case for GATK, and treating it
+        # otherwise would report a difference GATK's own predicate explains.
+        return "reconstruction_margin_at_or_above_gatk_threshold", "reconstruction_limit_consistent"
     if jittered_both and plausible_jitter(lq) and plausible_jitter(rq):
         return "near_threshold_below_gatk_threshold", "unresolved"
     return "other_unresolved", "unresolved"
@@ -284,8 +290,8 @@ def main():
             "max_raw_qd": round(max(raw_band), 6) if raw_band else None,
             "gatk_threshold": GATK_MAX_QD_BEFORE_FIXING,
             "helper_margin": HELPER_MARGIN,
-            "all_above_gatk_threshold": (
-                bool(raw_band) and min(raw_band) > GATK_MAX_QD_BEFORE_FIXING
+            "all_at_or_above_gatk_threshold": (
+                bool(raw_band) and min(raw_band) >= GATK_MAX_QD_BEFORE_FIXING
             ),
         },
         "gate": gate,
