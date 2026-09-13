@@ -249,6 +249,7 @@
     "three points only, one 20 Mb interval, one reference, GATK 4.6.2.0",
     "subsets are a deterministic prefix, not a random sample, and the prefix is not compositionally homogeneous",
     "13 and 26 import as one batch and 51 as two; 327 would import as seven",
-    "peak RSS is the JVM process's resident set under a 26 GiB heap, not a measured live set"
+    "peak RSS is the JVM process's resident set under a 26 GiB heap, not a measured live set",
+    "the helper commit 0a8f9a0 had a slower joint_integrity (fixed in 186a7bf); only level_wall_seconds, which includes output validation, can reflect it, and no projection uses that field"
   ]
 }
