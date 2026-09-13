@@ -118,6 +118,9 @@ def build_envelope(results, scaling, observed, fastq_327_bytes):
     # E0: one task per contig at a fixed 51 samples; chromosomes only, never capped.
     e0 = experiments["E0"]
     e0_counts = e0["output_per_contig_variant_counts"]
+    # Counts are keyed in dictionary order and E0 runs one task per contig in that order.
+    if e0["plan"] != "baseline_per_contig" or len(e0_counts) != len(e0["tasks"]):
+        raise ValueError("E0 tasks do not pair one-to-one with contigs in dictionary order")
     chromosomes = [
         {
             "contig": contig,
