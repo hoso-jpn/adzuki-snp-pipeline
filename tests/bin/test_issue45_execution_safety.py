@@ -171,21 +171,21 @@ class LaunchHeadroomTests(unittest.TestCase):
 class ExecutingHelperTests(unittest.TestCase):
     """The lineage must cover every helper that can change a measurement, and nothing else."""
 
-    def test_every_helper_is_classified_as_executing_or_reporting_only(self):
+    def test_every_helper_is_classified_as_executing_or_outside_the_suite(self):
         present = {path.name for path in HELPERS.glob("*.py")}
         classified = set(benchmark_runner.EXECUTING_HELPERS) | set(
-            benchmark_runner.REPORTING_ONLY_HELPERS
+            benchmark_runner.NON_SUITE_HELPERS
         )
         self.assertEqual(
             set(),
             present - classified,
-            "a new helper must be declared as executing or reporting-only, so the lineage "
+            "a new helper must be declared as executing or outside the suite, so the lineage "
             "either covers it or documents why it does not",
         )
         self.assertEqual(set(), classified - present)
         self.assertEqual(
             set(),
-            set(benchmark_runner.EXECUTING_HELPERS) & set(benchmark_runner.REPORTING_ONLY_HELPERS),
+            set(benchmark_runner.EXECUTING_HELPERS) & set(benchmark_runner.NON_SUITE_HELPERS),
         )
 
     def test_modules_the_controller_imports_are_all_recorded_as_executing(self):
@@ -194,7 +194,7 @@ class ExecutingHelperTests(unittest.TestCase):
             for module in sys.modules.values()
             if getattr(module, "__file__", None)
             and Path(module.__file__).parent == HELPERS
-            and Path(module.__file__).name not in set(benchmark_runner.REPORTING_ONLY_HELPERS)
+            and Path(module.__file__).name not in set(benchmark_runner.NON_SUITE_HELPERS)
         }
         self.assertTrue(imported)
         self.assertEqual(set(), imported - set(benchmark_runner.EXECUTING_HELPERS))

@@ -17,10 +17,11 @@ from execute_experiments import execute_suite
 from run_generation import inspect, memory, serving, snapshot
 from stage_generation import sha256
 
-# Helpers whose content can change a measurement, and which a resumed run must
-# therefore find unchanged. Reporting-only tools are deliberately excluded: a
-# post-hoc summarizer edit must never block resuming a multi-day campaign, and
-# recording it would make the lineage claim more than it means.
+# Helpers whose content can change an E0-E4 measurement, and which a resumed run
+# must therefore find unchanged. Tools outside the suite are deliberately
+# excluded: a post-hoc summarizer edit, or an auxiliary measurement that feeds no
+# one-factor decision, must never block resuming a multi-day campaign, and
+# recording them would make the lineage claim more than it means.
 EXECUTING_HELPERS = (
     "benchmark_tools.py",
     "execute_experiments.py",
@@ -30,7 +31,11 @@ EXECUTING_HELPERS = (
     "stage_generation.py",
     "validate_generated_cohort.py",
 )
-REPORTING_ONLY_HELPERS = ("classify_qd_differences.py", "summarize_evidence.py")
+NON_SUITE_HELPERS = (
+    "classify_qd_differences.py",
+    "measure_sample_scaling.py",
+    "summarize_evidence.py",
+)
 
 LAUNCH_MEMORY_GATE_BYTES = 110 * 1024**3
 LAUNCH_STORAGE_GATE_BYTES = 2_000_000_000_000
