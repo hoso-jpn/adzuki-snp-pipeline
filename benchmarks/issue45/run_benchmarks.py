@@ -34,6 +34,7 @@ EXECUTING_HELPERS = (
 NON_SUITE_HELPERS = (
     "classify_qd_differences.py",
     "measure_sample_scaling.py",
+    "profile_callset_differences.py",
     "summarize_evidence.py",
 )
 
