@@ -211,6 +211,31 @@ def batches_from_log(text, sample_count, batch_size):
     }
 
 
+def genotype_shape_error(fields, name, sample, gt, alleles):
+    """Name why a sample's genotype is not diploid; built only once a record is rejected.
+
+    A bare '.' carries no ploidy at all, so it is reported separately from a
+    genotype with the wrong allele count rather than as a ploidy error.
+    """
+    site = f"{fields[0]}:{fields[1]} sample {name}"
+    if sample == ".":
+        return (
+            f"Joint sample column is fully missing ('.') at {site}; "
+            "a diploid no-call must be written './.'"
+        )
+    if gt is None:
+        return f"Joint sample column has no GT value at {site}"
+    if gt == ".":
+        return (
+            f"Joint genotype is a bare '.' with no ploidy at {site}; "
+            "a diploid no-call must be written './.'"
+        )
+    return (
+        f"Unexpected joint genotype ploidy at {site}: "
+        f"{len(alleles)} alleles in GT '{gt}', expected 2"
+    )
+
+
 def joint_integrity(path, expected_samples, contigs):
     rank = {name: (i, length) for i, (name, length) in enumerate(contigs)}
     definitions, actual_contigs = [], []
@@ -264,29 +289,11 @@ def joint_integrity(path, expected_samples, contigs):
             ac = [0] * len(alternatives)
             an, gts = 0, []
             for name, sample in zip(expected_samples, fields[9:]):
-                site = f"{fields[0]}:{fields[1]} sample {name}"
-                # A bare '.' carries no ploidy, so it is named separately from a
-                # genotype with the wrong allele count. Both are still rejected.
-                if sample == ".":
-                    raise ValueError(
-                        f"Joint sample column is fully missing ('.') at {site}; "
-                        "a diploid no-call must be written './.'"
-                    )
                 values = sample.split(":")
-                if gt_index >= len(values):
-                    raise ValueError(f"Joint sample column has no GT value at {site}")
-                gt = values[gt_index]
-                if gt == ".":
-                    raise ValueError(
-                        f"Joint genotype is a bare '.' with no ploidy at {site}; "
-                        "a diploid no-call must be written './.'"
-                    )
-                alleles = re.split(r"[/|]", gt)
+                gt = values[gt_index] if gt_index < len(values) else None
+                alleles = re.split(r"[/|]", gt) if gt else []
                 if len(alleles) != 2:
-                    raise ValueError(
-                        f"Unexpected joint genotype ploidy at {site}: "
-                        f"{len(alleles)} alleles in GT '{gt}', expected 2"
-                    )
+                    raise ValueError(genotype_shape_error(fields, name, sample, gt, alleles))
                 for allele in alleles:
                     if allele == ".":
                         continue
