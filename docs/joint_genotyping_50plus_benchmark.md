@@ -341,7 +341,7 @@ batch size、ceiling、並列数はすべて同一です。
 
 ### 判定
 
-**ADOPT（条件付き）**。根拠は性能ではなくdata integrityとauditabilityです。
+**ADOPT**（条件は下記のとおり解消済み）。根拠は性能ではなくdata integrityとauditabilityです。
 mapはsampleごとに明示的なindex pathを持ち、GATK自身のmap validationを有効化でき、
 どのgVCFがrunに入ったかを単一のchecksum可能なartifactとして記録します。
 これは51検体より327検体で価値が高くなります。測定可能なコストはなく、callsetも変えません。
@@ -349,6 +349,22 @@ command長は根拠に含めません。採用は上記sample ordering確認を�
 
 性能上の利点は主張しません。truth setがなく、そもそもcallsetがbyte-identicalであるため、
 精度改善も主張しません。
+
+### 条件の解消（327検体のsample order確認）
+
+`candidate_cohort.tsv`の全eligible setで確認しました。WGS / paired-endは327 run、
+327 unique run accession、327 unique BioSampleです。本pipelineはsample IDに
+**run accessionをそのまま**使用します。
+
+- 327 run accessionは既にlexicographic順
+- 全accessionが同一長（11文字）のためlexicographic順と数値順が一致（zero-padding問題なし）
+
+したがって327検体でもmapのsorted順はsamplesheet順と一致し、`--sample-name-map`採用によって
+output sample orderが変わることはありません。**条件は解消**です。
+
+ただしBioSample accessionはrun accession順とは**一致しません**。BioSampleで並べ替えると
+run順が変わります。将来sample IDをrun accession以外（BioSample等）へ変更する場合は、
+この性質を再確認する必要があります。
 
 - [sample-name-map decision evidence](evidence/issue45/sample_name_map_decision.json)
 
