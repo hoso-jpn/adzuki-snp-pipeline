@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "run_id": "issue45-scaling-20260914-0220",
+  "purpose": "auxiliary sample-count scaling measurement; not an input to any E0-E4 one-factor decision",
+  "cohort_id": "issue45-51gvcf-20260910-200521",
+  "production_sha": "3158ca50c2c13c31bdc80db302c7df4bbb5670bf",
+  "gatk_container": "broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb",
+  "reference_accession": "GCF_016808095.1",
+  "interval": "NC_068975.1:1-20000000",
+  "subset_sizes": [
+    13,
+    26,
+    51
+  ],
+  "subsets_are_nested": true,
+  "subset_selection": "deterministic prefix of the validated manifest's own sample order; no sample chosen for its result",
+  "fixed_across_levels": {
+    "genomicsdb_cpus": 8,
+    "genomicsdb_memory_gib": 16,
+    "genomicsdb_java_heap_mib": 13107,
+    "genotype_memory_gib": 32,
+    "genotype_java_heap_gib": 26,
+    "batch_size": 50,
+    "sample_ploidy": 2,
+    "only_output_calls_starting_in_intervals": true,
+    "concurrent_tasks": 1,
+    "reader_threads_requested": 8
+  },
+  "concurrency_note": "every level runs alone at concurrency 1, so wall times are comparable to each other but not to the E0-E4 suite, which ran three tasks at once",
+  "started_at": "2026-09-13T17:20:47.457604+00:00",
+  "finished_at": "2026-09-13T18:18:24.062777+00:00",
+  "nesting_verified": true,
+  "helper": {
+    "commit": "0a8f9a0bb0eeec5e69d40a90af6d8650cea5f9a7",
+    "measure_sample_scaling.py_sha256": "0f9d2452e72875afc466ec15a3ed73f3925dc41bc80e7bfd609c121943031e27",
+    "benchmark_tools.py_sha256": "249be044ed5b1102775759a6d0c0b1318a2c3b07693f316d5e6642ce5cca9be8",
+    "execute_experiments.py_sha256": "8629e05c7a97ce455f3655fcc7d182df8dda8166e31befac9a8388b313be23f2",
+    "note": "execute_experiments.py, which defines every allocation constant used here, is byte-identical to the file the E0-E4 suite recorded in its lineage; benchmark_tools.py differs from the suite's only in joint_integrity error wording"
+  },
+  "isolation": {
+    "ran_after_suite_controller_exited": true,
+    "other_benchmark_containers": 0,
+    "workload_stopped": false,
+    "launch_guard": "the launcher refuses to start while run_benchmarks.py or any issue45 benchmark container is running"
+  },
+  "levels": [
+    {
+      "sample_count": 13,
+      "batch_size": 50,
+      "batching_regime": "single_batch",
+      "batches_observed": [
+        [
+          1,
+          13
+        ]
+      ],
+      "batches_completed": [
+        [
+          1,
+          1
+        ]
+      ],
+      "reader_initialization_fell_back_to_serial": false,
+      "import_wall_seconds": 274.553959449986,
+      "import_peak_rss_bytes": 1159581696,
+      "import_exit_code": 0,
+      "import_attempt": 1,
+      "workspace_bytes": 797043805,
+      "workspace_file_count": 47,
+      "genotype_wall_seconds": 248.5923746789922,
+      "genotype_peak_rss_bytes": 1363210240,
+      "genotype_exit_code": 0,
+      "genotype_attempt": 1,
+      "output_sample_count": 13,
+      "output_sample_order_sha256": "d5d77261b686890838f8de968cdd5785f86da3844d082eba0c54a19c98683f65",
+      "output_variant_count": 181326,
+      "output_called_alleles": 4252236,
+      "output_accounting_sha256": "216d2e974606f833af3ea88bf2f6de64ee3a42e6881073146479136d20b63bb1",
+      "sample_order_valid": true,
+      "contig_order_valid": true,
+      "allele_accounting_valid": true,
+      "level_wall_seconds": 525.9729294000135,
+      "host_during_level": {
+        "monitor_samples": 106,
+        "mem_available_min_bytes": 124865720320,
+        "swap_start_bytes": 1048576,
+        "swap_peak_bytes": 1048576,
+        "swap_end_bytes": 1048576,
+        "swap_delta_bytes": 0
+      },
+      "output_vcf_bytes": 31376547
+    },
+    {
+      "sample_count": 26,
+      "batch_size": 50,
+      "batching_regime": "single_batch",
+      "batches_observed": [
+        [
+          1,
+          26
+        ]
+      ],
+      "batches_completed": [
+        [
+          1,
+          1
+        ]
+      ],
+      "reader_initialization_fell_back_to_serial": false,
+      "import_wall_seconds": 527.4776152259728,
+      "import_peak_rss_bytes": 861605888,
+      "import_exit_code": 0,
+      "import_attempt": 1,
+      "workspace_bytes": 1548786687,
+      "workspace_file_count": 47,
+      "genotype_wall_seconds": 453.16313102899585,
+      "genotype_peak_rss_bytes": 2262827008,
+      "genotype_exit_code": 0,
+      "genotype_attempt": 1,
+      "output_sample_count": 26,
+      "output_sample_order_sha256": "409dbba0bbc164a44b6135f7e6e9dbc6574484a4a2672d654018ff191b6595e5",
+      "output_variant_count": 273562,
+      "output_called_alleles": 12854902,
+      "output_accounting_sha256": "5ddce41f514a0d17c0a27638380dc0cc018ffb95016c8650bb3bc8f4231e9f43",
+      "sample_order_valid": true,
+      "contig_order_valid": true,
+      "allele_accounting_valid": true,
+      "level_wall_seconds": 987.4560041509976,
+      "host_during_level": {
+        "monitor_samples": 198,
+        "mem_available_min_bytes": 123968659456,
+        "swap_start_bytes": 1048576,
+        "swap_peak_bytes": 1310720,
+        "swap_end_bytes": 1310720,
+        "swap_delta_bytes": 262144
+      },
+      "output_vcf_bytes": 74297841
+    },
+    {
+      "sample_count": 51,
+      "batch_size": 50,
+      "batching_regime": "multi_batch",
+      "batches_observed": [
+        [
+          1,
+          50
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "batches_completed": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ]
+      ],
+      "reader_initialization_fell_back_to_serial": false,
+      "import_wall_seconds": 901.1571740450163,
+      "import_peak_rss_bytes": 1405378560,
+      "import_exit_code": 0,
+      "import_attempt": 1,
+      "workspace_bytes": 2705621852,
+      "workspace_file_count": 87,
+      "genotype_wall_seconds": 1009.1087567869981,
+      "genotype_peak_rss_bytes": 8013230080,
+      "genotype_exit_code": 0,
+      "genotype_attempt": 1,
+      "output_sample_count": 51,
+      "output_sample_order_sha256": "5165b2beda6dd44e51fb12dd29c3774d5c4d20901c05defb4bf3fc275b039ab7",
+      "output_variant_count": 792503,
+      "output_called_alleles": 74269228,
+      "output_accounting_sha256": "63c378053a343380507732bce4ce7bea0148cdd6a2d7e9dd396a80add463a812",
+      "sample_order_valid": true,
+      "contig_order_valid": true,
+      "allele_accounting_valid": true,
+      "level_wall_seconds": 1943.172111996013,
+      "host_during_level": {
+        "monitor_samples": 389,
+        "mem_available_min_bytes": 118190329856,
+        "swap_start_bytes": 1310720,
+        "swap_peak_bytes": 1310720,
+        "swap_end_bytes": 1310720,
+        "swap_delta_bytes": 0
+      },
+      "output_vcf_bytes": 311144108
+    }
+  ],
+  "cross_check_against_suite": {
+    "compared": "51-sample level joint.vcf.gz vs E2b interval_0017 joint.vcf.gz (same interval, same 51 samples, suite ran 3 tasks at once)",
+    "record_body_sha256_level_51": "1f2adcf823c77e508a23c305746ffa3a95f63f24a7ea45f59f08f58523e33b9e",
+    "record_body_sha256_e2b_interval_0017": "1f2adcf823c77e508a23c305746ffa3a95f63f24a7ea45f59f08f58523e33b9e",
+    "records_identical": true,
+    "resource_readings": {
+      "level_51_alone": {
+        "import_wall_seconds": 901.2,
+        "import_peak_rss_gib": 1.309,
+        "genotype_wall_seconds": 1009.1,
+        "genotype_peak_rss_gib": 7.463
+      },
+      "e2b_interval_0017_in_suite": {
+        "import_wall_seconds": 933.8,
+        "import_peak_rss_gib": 1.366,
+        "genotype_wall_seconds": 1061.8,
+        "genotype_peak_rss_gib": 7.349
+      }
+    },
+    "assessment": "the isolated re-measurement reproduces the suite's callset exactly; alone it ran 3.5-5.0% faster and within 5% on both peak RSS readings, so the suite's three-way concurrency did not materially distort this interval",
+    "resource_change_alone_vs_suite_percent": {
+      "import_wall_seconds": -3.5,
+      "import_peak_rss_gib": -4.2,
+      "genotype_wall_seconds": -5.0,
+      "genotype_peak_rss_gib": 1.6
+    }
+  },
+  "composition": {
+    "method": "one streaming pass over the 51-sample level's own joint.vcf.gz: per sample, called genotypes with any non-reference allele, heterozygous calls and no-calls; per site, the lowest manifest position among non-reference carriers",
+    "sites_by_first_non_reference_carrier": {
+      "positions_1_13": 213235,
+      "positions_14_26": 87400,
+      "positions_27_51": 491868
+    },
+    "sites_total": 792503,
+    "per_sample_non_reference_calls": {
+      "typical_range": "43,211-83,519",
+      "high_divergence_samples": {
+        "SRR29908888": 215509,
+        "SRR29909068": 160634,
+        "SRR29909070": 213379,
+        "SRR29909072": 177442,
+        "SRR29909073": 176546,
+        "SRR29909074": 216808,
+        "SRR29909423": 177680
+      },
+      "high_divergence_note": "these seven samples, all at manifest positions 33-50, carry 2-3x the typical non-reference calls, mostly homozygous-alternative, i.e. they are far more divergent from the Longxiaodou 4 reference than the rest; the public metadata has no attribute that identifies them in advance"
+    },
+    "consequence": "the 26->51 step adds seven divergent samples, so variant count (x2.90), GenotypeGVCFs RSS (x3.54) and output size (x4.19) jump far more than sample count (x1.96). Sample count and cohort composition are confounded along this series; a trend fitted over N alone attributes composition to N.",
+    "new_sites_per_added_sample": {
+      "positions_14_26": 6723,
+      "positions_27_51": 19675
+    }
+  },
+  "limits": [
+    "three points only, one 20 Mb interval, one reference, GATK 4.6.2.0",
+    "subsets are a deterministic prefix, not a random sample, and the prefix is not compositionally homogeneous",
+    "13 and 26 import as one batch and 51 as two; 327 would import as seven",
+    "peak RSS is the JVM process's resident set under a 26 GiB heap, not a measured live set"
+  ]
+}

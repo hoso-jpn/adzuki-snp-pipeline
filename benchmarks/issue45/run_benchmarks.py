@@ -35,6 +35,7 @@ NON_SUITE_HELPERS = (
     "classify_qd_differences.py",
     "measure_sample_scaling.py",
     "profile_callset_differences.py",
+    "project_resource_envelope.py",
     "summarize_evidence.py",
 )
 

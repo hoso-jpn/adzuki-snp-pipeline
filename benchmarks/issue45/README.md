@@ -228,3 +228,28 @@ data and logs remain. Tool failures retain their experiment evidence. E3 failure
 does not prevent the independent E4 comparison; failures in their common baseline
 stop the suite. Results always await comparative scientific review and do not
 automatically select thresholds, architecture decisions or the 327-sample gate.
+
+`measure_sample_scaling.py` is an auxiliary measurement outside the suite. It runs
+one fixed 20 Mb window at nested 13/26/51-sample prefixes of the validated manifest,
+each level alone, with the suite's own allocation constants. Launch it only after the
+suite controller has exited and no benchmark container remains. Its prefixes are
+deterministic, not random, and in this cohort they are not compositionally
+homogeneous: seven highly divergent samples enter between 26 and 51. A trend fitted
+over sample count alone would therefore attribute composition to sample count.
+
+`project_resource_envelope.py` derives the 327-sample envelope from committed evidence
+only and keeps observations, fitted trends, assumptions, projected ranges and
+uncertainty in separate sections. GenotypeGVCFs memory is modelled on genotype cells
+(samples times output variants), a relationship that E0's chromosomes test at a
+fixed sample count. The unmeasured 327-sample variant count is carried as explicit
+scenarios. A unit test re-derives the committed JSON, so the evidence cannot drift
+from its inputs. The script decides nothing; the gate is recorded separately.
+
+```bash
+python3 benchmarks/issue45/project_resource_envelope.py \
+  --benchmark-results docs/evidence/issue45/benchmark_results.json \
+  --sample-scaling docs/evidence/issue45/sample_scaling_20260914.json \
+  --observed docs/evidence/issue45/host_and_generation_observed.json \
+  --candidate-cohort docs/evidence/issue45/candidate_cohort.tsv \
+  --output docs/evidence/issue45/resource_envelope_327.json
+```
