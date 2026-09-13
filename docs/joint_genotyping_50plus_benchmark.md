@@ -392,6 +392,10 @@ memory要件を「最長contigの性質」から「選んだwindow長の性質�
 
 data-contract gate（対E2a）: **ADOPT_CANDIDATE**。差分975件はすべてhelper自身の
 保守的な`>= 35.01`分岐に収まり、unresolved 0、filter flip 0、非QD差分0です。
+E2aと同じgateで独立に再分類した結果も同一で、directly explained 975件（100%）、
+reconstruction-limit consistent 0件です。E2aと異なりreconstruction-limitの議論自体が不要でした。
+本比較975件での最小出力QDは20.29、QD<2境界からの実測marginは18.29です
+（本比較での実測値であり、jitterが常にQD=2から安全という一般論ではありません）。
 **科学的な問題による却下ではありません。**
 
 architecture gate（対E2a）:

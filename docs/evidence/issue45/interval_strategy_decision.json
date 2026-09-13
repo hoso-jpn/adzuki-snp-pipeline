@@ -8,7 +8,6 @@
     "architecture_gate": "does the change earn its resource and operational cost",
     "note": "clearing the data-contract gate makes a change eligible for comparison, never adopted by itself"
   },
-
   "E2a": {
     "change": "chromosome-scale contigs split into 20 Mb windows; small scaffolds remain individual tasks",
     "compare_to": "E1",
@@ -23,22 +22,38 @@
       "detail": "docs/evidence/issue45/e2a_qd_difference_audit.json"
     },
     "architecture_gate": {
-      "genotype_peak_rss_gib": {"E1": 17.56, "E2a": 7.43, "change_percent": -57.7},
+      "genotype_peak_rss_gib": {
+        "E1": 17.56,
+        "E2a": 7.43,
+        "change_percent": -57.7
+      },
       "genotype_wall_sum_percent": -0.8,
       "import_wall_sum_percent": -0.1,
-      "import_peak_rss_gib": {"E1": 1.76, "E2a": 1.76},
+      "import_peak_rss_gib": {
+        "E1": 1.76,
+        "E2a": 1.76
+      },
       "workspace_bytes_percent": -0.0,
-      "workspace_file_count": {"E1": 3132, "E2a": 4611, "change_percent": 47.2},
-      "interval_count": {"E1": 36, "E2a": 53},
+      "workspace_file_count": {
+        "E1": 3132,
+        "E2a": 4611,
+        "change_percent": 47.2
+      },
+      "interval_count": {
+        "E1": 36,
+        "E2a": 53
+      },
       "elapsed_percent": -1.4,
-      "measured_20mb_window_peak_rss_gib_range": [5.4, 7.43],
+      "measured_20mb_window_peak_rss_gib_range": [
+        5.4,
+        7.43
+      ],
       "windows_measured": 20
     },
     "decision": "ADOPT",
     "rationale": "A 57.7% reduction in the GenotypeGVCFs peak, the only process that was ever near a ceiling, at no measurable wall-time cost and no workspace-size cost. It converts the memory requirement from a property of the longest contig into a property of a chosen window length, which is the lever that makes a larger cohort tractable at all. The cost is 47% more workspace files and 17 more tasks, which is scheduling overhead rather than a resource constraint. The data contract is unchanged with nothing unresolved.",
     "cost_accepted": "workspace file count rises 47.2% (3,132 to 4,611); task count rises from 36 to 53"
   },
-
   "E2b": {
     "change": "bounded grouping of consecutive small scaffolds, on top of E2a's window splitting",
     "compare_to": "E2a",
@@ -50,25 +65,64 @@
       "unresolved": 0,
       "qd_lt2_filter_membership_flips": 0,
       "non_qd_field_differences": {},
-      "note": "every difference falls inside the comparison helper's own conservative >= 35.01 branch, so no reconstruction-limit reasoning is needed at all"
+      "note": "every difference falls inside the comparison helper's own conservative >= 35.01 branch, so no reconstruction-limit reasoning is needed at all. Independently re-classified by the same gate applied to E2a, reaching the same result.",
+      "independently_classified": true,
+      "classifier_rollup": {
+        "directly_explained": 975,
+        "reconstruction_limit_consistent": 0,
+        "unresolved": 0
+      },
+      "minimum_output_qd_observed": 20.29,
+      "observed_margin_to_qd_filter_threshold": 18.29,
+      "observed_margin_scope": "this 51-sample E2a/E2b comparison only, across its 975 differing records; not a general claim that a jittered QD is always safe from the QD<2 boundary",
+      "reconstruction_band_count": 0
     },
     "architecture_gate": {
       "the_single_grouped_task": {
         "contigs_grouped": 25,
         "total_bp": 818535,
-        "import_wall_seconds": {"E2a_25_separate_tasks": 40.2, "E2b_1_grouped_task": 13.3, "saved": 26.9},
-        "import_peak_rss_gib": {"E2a_max_of_25": 1.14, "E2b_grouped": 6.57},
-        "workspace_files": {"E2a_25_separate": 2175, "E2b_grouped": 2079, "saved": 96},
-        "workspace_bytes_gb": {"E2a": 0.014, "E2b": 0.013},
+        "import_wall_seconds": {
+          "E2a_25_separate_tasks": 40.2,
+          "E2b_1_grouped_task": 13.3,
+          "saved": 26.9
+        },
+        "import_peak_rss_gib": {
+          "E2a_max_of_25": 1.14,
+          "E2b_grouped": 6.57
+        },
+        "workspace_files": {
+          "E2a_25_separate": 2175,
+          "E2b_grouped": 2079,
+          "saved": 96
+        },
+        "workspace_bytes_gb": {
+          "E2a": 0.014,
+          "E2b": 0.013
+        },
         "reader_initialization_fell_back_to_serial": true
       },
       "run_wide": {
-        "import_peak_rss_gib": {"E2a": 1.76, "E2b": 6.57, "change_percent": 272.2},
-        "workspace_file_count": {"E2a": 4611, "E2b": 4515, "change_percent": -2.1},
-        "interval_count": {"E2a": 53, "E2b": 29, "change_percent": -45.3},
+        "import_peak_rss_gib": {
+          "E2a": 1.76,
+          "E2b": 6.57,
+          "change_percent": 272.2
+        },
+        "workspace_file_count": {
+          "E2a": 4611,
+          "E2b": 4515,
+          "change_percent": -2.1
+        },
+        "interval_count": {
+          "E2a": 53,
+          "E2b": 29,
+          "change_percent": -45.3
+        },
         "import_wall_sum_percent": -1.1,
         "genotype_wall_sum_percent": -0.2,
-        "genotype_peak_rss_gib": {"E2a": 7.43, "E2b": 7.35},
+        "genotype_peak_rss_gib": {
+          "E2a": 7.43,
+          "E2b": 7.35
+        },
         "elapsed_percent": -0.4
       },
       "decisive_observation": "The grouped task becomes the run-wide import memory maximum at 6.57 GiB, exceeding every 20 Mb chromosome window's 1.76 GiB, while covering 818,535 bp in total: less than one twenty-fourth of a single window. GenomicsDBImport's memory tracks the number of distinct contig arrays written concurrently rather than total base pairs, so grouping 25 tiny scaffolds costs 3.7 times the memory of importing 20 Mb of one chromosome."
@@ -78,14 +132,12 @@
     "not_the_reason": "This is not rejected for any scientific or data-contract problem; its callset is clean and fully explained.",
     "revisit_if": "a future reference has enough small scaffolds that per-scaffold task or file proliferation becomes a real operational constraint, or if GenomicsDBImport's per-array memory behaviour changes in a later GATK version"
   },
-
   "resulting_strategy": {
     "adopted": "20 Mb chromosome window splitting with small scaffolds as individual tasks (E2a)",
     "rejected": "bounded small-scaffold grouping (E2b)",
     "interval_count_at_this_reference": 53,
     "note": "E2b's baseline is E2a, so rejecting grouping leaves window splitting standing on its own measurements"
   },
-
   "scope_and_limits": {
     "sample_count": 51,
     "reference_accession": "GCF_016808095.1",
@@ -93,5 +145,12 @@
     "explicitly_not_claimed": "No measurement here establishes how either strategy behaves at 327 samples. The 20 Mb window peak of 7.43 GiB and the grouped-task peak of 6.57 GiB are both 51-sample figures under this reference.",
     "window_size": "20 Mb was fixed before measurement by the protocol and was not searched over after seeing results; no claim is made that it is optimal",
     "truth_set": "none available; no accuracy claim is made for any strategy"
+  },
+  "decision_status": {
+    "state": "FINAL",
+    "both_experiments_completed": true,
+    "both_data_contract_gates_evaluated": true,
+    "both_architecture_gates_evaluated": true,
+    "settled_at": "2026-09-13"
   }
 }
