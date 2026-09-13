@@ -12,6 +12,7 @@ from benchmark_tools import (  # noqa: E402
     ToolRunner,
     batches_from_log,
     compare_callsets,
+    joint_integrity,
 )
 from execute_experiments import (  # noqa: E402
     COMPLETED,
@@ -80,6 +81,48 @@ class BenchmarkExecutionTests(unittest.TestCase):
             invalid = json.loads(json.dumps(valid).replace(original, replacement))
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 validate_tiling(invalid, contigs)
+
+
+class JointIntegrityGenotypeTests(unittest.TestCase):
+    """E3 failed on sample columns written as a bare '.', reported only as a ploidy error."""
+
+    def integrity(self, first_sample, info="AC=1;AN=4", formats="GT:AD", second="0/1:3,3"):
+        header = (
+            "##fileformat=VCFv4.2\n##contig=<ID=chr1,length=100>\n"
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\n"
+        )
+        record = f"chr1\t5\t.\tA\tC\t50\t.\t{info}\t{formats}\t{first_sample}\t{second}\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "joint.vcf.gz"
+            path.write_bytes(gzip.compress((header + record).encode()))
+            Path(str(path) + ".tbi").write_bytes(b"index")
+            return joint_integrity(path, ["S1", "S2"], [("chr1", 100)])
+
+    def test_diploid_calls_and_diploid_no_calls_are_still_accepted(self):
+        self.assertEqual(4, self.integrity("0/0:6,0")["called_alleles"])
+        self.assertEqual(2, self.integrity("./.:0,0", info="AC=1;AN=2")["called_alleles"])
+
+    def test_fully_missing_column_is_named_and_still_rejected(self):
+        with self.assertRaisesRegex(ValueError, r"fully missing \('\.'\) at chr1:5 sample S1"):
+            self.integrity(".", info="AC=1;AN=2")
+
+    def test_bare_missing_genotype_is_named_and_still_rejected(self):
+        with self.assertRaisesRegex(ValueError, "bare '.' with no ploidy at chr1:5 sample S1"):
+            self.integrity(".:0,0", info="AC=1;AN=2")
+
+    def test_ploidy_mismatch_is_reported_as_ploidy_not_missingness(self):
+        for genotype, count in (("0", 1), ("0/0/1", 3)):
+            with (
+                self.subTest(genotype=genotype),
+                self.assertRaisesRegex(
+                    ValueError, f"ploidy at chr1:5 sample S1: {count} alleles in GT '{genotype}'"
+                ),
+            ):
+                self.integrity(f"{genotype}:6,0")
+
+    def test_sample_column_without_a_gt_value_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "no GT value at chr1:5 sample S1"):
+            self.integrity("6,0", formats="AD:GT", second="3,3:0/1")
 
 
 class ResumeContractTests(unittest.TestCase):

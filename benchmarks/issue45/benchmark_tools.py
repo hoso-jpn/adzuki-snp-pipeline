@@ -263,11 +263,30 @@ def joint_integrity(path, expected_samples, contigs):
             gt_index = formats.index("GT")
             ac = [0] * len(alternatives)
             an, gts = 0, []
-            for sample in fields[9:]:
-                gt = sample.split(":")[gt_index]
+            for name, sample in zip(expected_samples, fields[9:]):
+                site = f"{fields[0]}:{fields[1]} sample {name}"
+                # A bare '.' carries no ploidy, so it is named separately from a
+                # genotype with the wrong allele count. Both are still rejected.
+                if sample == ".":
+                    raise ValueError(
+                        f"Joint sample column is fully missing ('.') at {site}; "
+                        "a diploid no-call must be written './.'"
+                    )
+                values = sample.split(":")
+                if gt_index >= len(values):
+                    raise ValueError(f"Joint sample column has no GT value at {site}")
+                gt = values[gt_index]
+                if gt == ".":
+                    raise ValueError(
+                        f"Joint genotype is a bare '.' with no ploidy at {site}; "
+                        "a diploid no-call must be written './.'"
+                    )
                 alleles = re.split(r"[/|]", gt)
                 if len(alleles) != 2:
-                    raise ValueError("Unexpected joint genotype ploidy")
+                    raise ValueError(
+                        f"Unexpected joint genotype ploidy at {site}: "
+                        f"{len(alleles)} alleles in GT '{gt}', expected 2"
+                    )
                 for allele in alleles:
                     if allele == ".":
                         continue
