@@ -30,7 +30,7 @@ EXECUTING_HELPERS = (
     "stage_generation.py",
     "validate_generated_cohort.py",
 )
-REPORTING_ONLY_HELPERS = ("summarize_evidence.py",)
+REPORTING_ONLY_HELPERS = ("classify_qd_differences.py", "summarize_evidence.py")
 
 LAUNCH_MEMORY_GATE_BYTES = 110 * 1024**3
 LAUNCH_STORAGE_GATE_BYTES = 2_000_000_000_000
