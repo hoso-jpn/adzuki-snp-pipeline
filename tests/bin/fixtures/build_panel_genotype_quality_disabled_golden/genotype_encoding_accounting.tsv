@@ -1,0 +1,10 @@
+cohort_id	metric	value
+cohort	total_genotype_cells	32
+cohort	standard_hom_ref_calls	9
+cohort	standard_het_calls	13
+cohort	standard_hom_alt_calls	6
+cohort	missing_calls	2
+cohort	non_diploid_calls_treated_as_missing	1
+cohort	non_biallelic_index_calls_treated_as_missing	1
+cohort	total_treated_as_missing	4
+cohort	phased_genotype_count	5

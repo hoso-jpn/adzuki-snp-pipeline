@@ -1,0 +1,9 @@
+cohort_id	variant_index	variant_key	chrom	pos	ref	alt	qual	missing_genotype_count	missing_genotype_rate
+cohort	0	chrQ:100:A:G	chrQ	100	A	G	100.0	0	0.000000
+cohort	1	chrQ:200:C:T	chrQ	200	C	T	100.0	0	0.000000
+cohort	2	chrQ:300:G:A	chrQ	300	G	A	100.0	2	0.500000
+cohort	3	chrQ:400:T:C	chrQ	400	T	C	100.0	2	0.500000
+cohort	4	chrQ:500:A:T	chrQ	500	A	T	100.0	0	0.000000
+cohort	5	chrQ:600:C:G	chrQ	600	C	G	100.0	0	0.000000
+cohort	6	chrQ:700:G:T	chrQ	700	G	T	100.0	0	0.000000
+cohort	7	chrQ:800:T:A	chrQ	800	T	A	100.0	0	0.000000
