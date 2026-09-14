@@ -91,12 +91,18 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import json
 import os
+import struct
 import sys
 import zlib
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+# Issue #64: the one genotype quality evaluator the matrix, the masked VCF
+# and the verifier all share. See bin/gs_genotype_quality.py.
+import gs_genotype_quality as quality
 
 DOSAGE_BY_ALT_COUNT: dict[int, str] = {0: "-1", 1: "0", 2: "1"}
 MISSING_CELL_TOKEN = "nan"
@@ -140,6 +146,21 @@ VARIANT_METADATA_HEADER: tuple[str, ...] = (
     "missing_genotype_rate",
 )
 
+#: Issue #64: metadata headers when a genotype quality policy is enabled.
+#: The existing columns keep their names, positions and meaning -- a masked
+#: call is a `nan` cell, so it is part of `missing_genotype_count` -- and one
+#: column is appended that says how many of those cells the policy masked.
+#: With the policy disabled the historical headers above are written as-is.
+QUALITY_MASKED_COLUMN = "quality_masked_genotype_count"
+SAMPLE_METADATA_HEADER_WITH_QUALITY: tuple[str, ...] = (
+    *SAMPLE_METADATA_HEADER,
+    QUALITY_MASKED_COLUMN,
+)
+VARIANT_METADATA_HEADER_WITH_QUALITY: tuple[str, ...] = (
+    *VARIANT_METADATA_HEADER,
+    QUALITY_MASKED_COLUMN,
+)
+
 #: Accounting metric names, in the order the accounting TSV lists them.
 #: Shared by the streaming and reference implementations so the two can
 #: never disagree about the document's shape.
@@ -177,6 +198,11 @@ class GsPassRecord:
     alt: str
     qual: str
     sample_genotypes: tuple[str, ...]
+    #: Issue #64: the row's FORMAT and whole sample fields, so the reference
+    #: implementation can evaluate a genotype quality policy too. Defaults
+    #: keep every pre-existing construction of this record valid.
+    format_field: str = "GT"
+    sample_fields: tuple[str, ...] = ()
 
     @property
     def variant_key(self) -> str:
@@ -381,24 +407,99 @@ def _variant_metadata_row(
     ]
 
 
+@dataclass
+class _QualityCounts:
+    """Issue #64: every genotype quality count, in bounded space.
+
+    Fixed size for a given policy -- at most two fields, six statuses each,
+    and fifteen reason pairs -- plus nothing per variant. Shared by the
+    streaming and reference implementations so the accounting shape cannot
+    differ between them, while each still derives its counts on its own.
+    """
+
+    policy: quality.GenotypeQualityPolicy
+    evaluated: int = 0
+    passed: int = 0
+    kept_unevaluated: int = 0
+    masked: int = 0
+    masked_by_dosage: dict[str, int] = field(
+        default_factory=lambda: dict.fromkeys(("-1", "0", "1"), 0)
+    )
+    status_counts: list[dict[str, int]] = field(init=False)
+    reason_counts: dict[tuple[str, ...], int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.status_counts = [
+            dict.fromkeys(quality.FIELD_STATUSES, 0) for _ in self.policy.thresholds
+        ]
+
+    def record(self, dosage: str, verdict: quality.CallQuality) -> None:
+        self.evaluated += 1
+        for counts, status in zip(self.status_counts, verdict.statuses):
+            counts[status] += 1
+        if verdict.masked:
+            self.masked += 1
+            self.masked_by_dosage[dosage] += 1
+            self.reason_counts[verdict.reasons] = self.reason_counts.get(verdict.reasons, 0) + 1
+        elif verdict.unevaluated:
+            self.kept_unevaluated += 1
+        else:
+            self.passed += 1
+
+    def rows(self, cohort_id: str) -> list[list[str]]:
+        policy = self.policy
+        rows = [
+            [cohort_id, "genotype_quality_policy_hash", policy.policy_hash()],
+            [cohort_id, "quality_evaluated_calls", str(self.evaluated)],
+            [cohort_id, "quality_passed_calls", str(self.passed)],
+            [cohort_id, "quality_kept_unevaluated_calls", str(self.kept_unevaluated)],
+            [cohort_id, "quality_masked_calls", str(self.masked)],
+            [cohort_id, "quality_masked_hom_ref_calls", str(self.masked_by_dosage["-1"])],
+            [cohort_id, "quality_masked_het_calls", str(self.masked_by_dosage["0"])],
+            [cohort_id, "quality_masked_hom_alt_calls", str(self.masked_by_dosage["1"])],
+        ]
+        by_metric = {
+            quality.reason_metric(policy, reasons): count
+            for reasons, count in self.reason_counts.items()
+        }
+        for metric in quality.reason_metrics(policy):
+            rows.append([cohort_id, metric, str(by_metric.get(metric, 0))])
+        for (key, _), counts in zip(policy.thresholds, self.status_counts):
+            for status in quality.FIELD_STATUSES:
+                rows.append([cohort_id, quality.status_metric(key, status), str(counts[status])])
+        return rows
+
+
 def _accounting_rows_from_counts(
     cohort_id: str,
     total_genotype_cells: int,
     counts: dict[str, int],
     phased_genotype_count: int,
+    quality_counts: _QualityCounts | None = None,
 ) -> list[list[str]]:
-    """Lay out the accounting TSV rows in their contractual order."""
+    """Lay out the accounting TSV rows in their contractual order.
+
+    With a quality policy, the historical rows keep their names and order:
+    the three `standard_*_calls` rows count the calls that are still encoded
+    as a dosage, and `total_treated_as_missing` gains the masked calls, so
+    `total_genotype_cells = standard + total_treated_as_missing` holds in
+    both modes. The quality rows are appended after them.
+    """
     total_treated_as_missing = (
         counts["missing_calls"]
         + counts["non_diploid_calls_treated_as_missing"]
         + counts["non_biallelic_index_calls_treated_as_missing"]
     )
+    if quality_counts is not None:
+        total_treated_as_missing += quality_counts.masked
 
     rows = [[cohort_id, "total_genotype_cells", str(total_genotype_cells)]]
     for metric in _ACCOUNTING_METRIC_ORDER:
         rows.append([cohort_id, metric, str(counts[metric])])
     rows.append([cohort_id, "total_treated_as_missing", str(total_treated_as_missing)])
     rows.append([cohort_id, "phased_genotype_count", str(phased_genotype_count)])
+    if quality_counts is not None:
+        rows.extend(quality_counts.rows(cohort_id))
 
     return rows
 
@@ -449,7 +550,50 @@ def _summary_text_from_accounting(
         ),
     ]
 
+    if "genotype_quality_policy_hash" in accounting:
+        lines.extend(_quality_summary_lines(accounting))
+
     return "\n".join(lines) + "\n"
+
+
+def _quality_summary_lines(accounting: dict[str, str]) -> list[str]:
+    """Issue #64: the genotype quality section, present only when a policy ran."""
+    lines = [
+        "",
+        "Genotype quality policy (DP/GQ masking, separate from the site hard filter)",
+        f"Policy hash: {accounting['genotype_quality_policy_hash']}",
+        (
+            "Evaluated calls (diploid biallelic-index calls with no missing allele): "
+            f"{accounting['quality_evaluated_calls']}"
+        ),
+        f"  passed: {accounting['quality_passed_calls']}",
+        f"  kept, a field could not be evaluated: {accounting['quality_kept_unevaluated_calls']}",
+        f"  masked to nan: {accounting['quality_masked_calls']}",
+        (
+            f"    by original dosage: hom-ref {accounting['quality_masked_hom_ref_calls']}, "
+            f"het {accounting['quality_masked_het_calls']}, "
+            f"hom-alt {accounting['quality_masked_hom_alt_calls']}"
+        ),
+        "    by reason pair (each masked call in exactly one):",
+    ]
+    lines.extend(
+        f"      {metric.removeprefix('quality_masked_reason.')}: {value}"
+        for metric, value in accounting.items()
+        if metric.startswith("quality_masked_reason.")
+    )
+    lines.append("  per-field status (each evaluated call in exactly one, per field):")
+    lines.extend(
+        f"    {metric}: {value}"
+        for metric, value in accounting.items()
+        if metric.startswith(("dp_status.", "gq_status."))
+    )
+    lines.append(
+        "The standard hom-ref/het/hom-alt counts above are the calls still encoded "
+        "after masking, and 'Total cells treated as missing' includes the masked "
+        "calls. This is a sensitivity to the chosen thresholds, not a measure of "
+        "genotype accuracy: no truth set was used."
+    )
+    return lines
 
 
 # --------------------------------------------------------------------------
@@ -505,6 +649,8 @@ def parse_gs_pass_vcf(path: Path) -> GsPassVcf:
                     alt=alt,
                     qual=qual,
                     sample_genotypes=genotypes,
+                    format_field=fields[8],
+                    sample_fields=tuple(fields[FIXED_COLUMN_COUNT:]),
                 )
             )
 
@@ -514,34 +660,85 @@ def parse_gs_pass_vcf(path: Path) -> GsPassVcf:
     return GsPassVcf(sample_names=sample_names, records=tuple(records))
 
 
-def build_matrix_rows(vcf: GsPassVcf) -> list[list[str]]:
+@dataclass(frozen=True)
+class _ResolvedCell:
+    """Reference implementation only: one cell after any quality policy.
+
+    ``category`` is the genotype-shape category, or ``quality_masked`` for a
+    standard call the policy masked; ``original_dosage`` keeps what the call
+    would have encoded to, so masked calls can be accounted by dosage.
+    """
+
+    category: str
+    dosage: str
+    is_phased: bool
+    original_dosage: str
+    verdict: quality.CallQuality | None
+
+
+def _resolve_record_cells(
+    record: GsPassRecord, policy: quality.GenotypeQualityPolicy | None
+) -> list[_ResolvedCell]:
+    evaluator = (
+        quality.RowQualityEvaluator(policy, record.format_field) if policy is not None else None
+    )
+    cells: list[_ResolvedCell] = []
+    for position, gt in enumerate(record.sample_genotypes):
+        cell = classify_genotype(gt)
+        if evaluator is None or cell.category != "standard":
+            cells.append(
+                _ResolvedCell(cell.category, cell.dosage, cell.is_phased, cell.dosage, None)
+            )
+            continue
+        verdict = evaluator.evaluate(record.sample_fields[position].split(":"))
+        if verdict.masked:
+            cells.append(
+                _ResolvedCell(
+                    "quality_masked", MISSING_CELL_TOKEN, cell.is_phased, cell.dosage, verdict
+                )
+            )
+        else:
+            cells.append(
+                _ResolvedCell("standard", cell.dosage, cell.is_phased, cell.dosage, verdict)
+            )
+    return cells
+
+
+def build_matrix_rows(
+    vcf: GsPassVcf, quality_policy: quality.GenotypeQualityPolicy | None = None
+) -> list[list[str]]:
     """Build the genotype matrix's data rows: one row per variant."""
     rows: list[list[str]] = []
 
     for record in vcf.records:
-        cells = [classify_genotype(gt) for gt in record.sample_genotypes]
+        cells = _resolve_record_cells(record, quality_policy)
         rows.append([record.variant_key, *(cell.dosage for cell in cells)])
 
     return rows
 
 
-def build_sample_metadata_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[str]]:
+def build_sample_metadata_rows(
+    cohort_id: str, vcf: GsPassVcf, quality_policy: quality.GenotypeQualityPolicy | None = None
+) -> list[list[str]]:
     """Build the sample metadata rows: one row per sample, in header order."""
     total_variants = len(vcf.records)
     missing_counts = [0] * len(vcf.sample_names)
     non_standard_counts = [0] * len(vcf.sample_names)
+    masked_counts = [0] * len(vcf.sample_names)
 
     for record in vcf.records:
-        for sample_position, gt in enumerate(record.sample_genotypes):
-            cell = classify_genotype(gt)
-            if cell.category == "missing":
-                missing_counts[sample_position] += 1
-            elif cell.category != "standard":
-                missing_counts[sample_position] += 1
+        for sample_position, cell in enumerate(_resolve_record_cells(record, quality_policy)):
+            if cell.category == "standard":
+                continue
+            missing_counts[sample_position] += 1
+            if cell.category == "quality_masked":
+                masked_counts[sample_position] += 1
+            elif cell.category != "missing":
                 non_standard_counts[sample_position] += 1
 
-    return [
-        _sample_metadata_row(
+    rows = []
+    for sample_index, sample_id in enumerate(vcf.sample_names):
+        row = _sample_metadata_row(
             cohort_id,
             sample_index,
             sample_id,
@@ -549,37 +746,43 @@ def build_sample_metadata_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[str]
             non_standard_counts[sample_index],
             total_variants,
         )
-        for sample_index, sample_id in enumerate(vcf.sample_names)
-    ]
+        if quality_policy is not None:
+            row.append(str(masked_counts[sample_index]))
+        rows.append(row)
+    return rows
 
 
-def build_variant_metadata_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[str]]:
+def build_variant_metadata_rows(
+    cohort_id: str, vcf: GsPassVcf, quality_policy: quality.GenotypeQualityPolicy | None = None
+) -> list[list[str]]:
     """Build the variant metadata rows: one row per variant, in file order."""
     total_samples = len(vcf.sample_names)
     rows: list[list[str]] = []
 
     for variant_index, record in enumerate(vcf.records):
-        missing_count = sum(
-            1 for gt in record.sample_genotypes if classify_genotype(gt).category != "standard"
+        cells = _resolve_record_cells(record, quality_policy)
+        missing_count = sum(1 for cell in cells if cell.category != "standard")
+        row = _variant_metadata_row(
+            cohort_id,
+            variant_index,
+            record.chrom,
+            record.pos,
+            record.ref,
+            record.alt,
+            record.qual,
+            missing_count,
+            total_samples,
         )
-        rows.append(
-            _variant_metadata_row(
-                cohort_id,
-                variant_index,
-                record.chrom,
-                record.pos,
-                record.ref,
-                record.alt,
-                record.qual,
-                missing_count,
-                total_samples,
-            )
-        )
+        if quality_policy is not None:
+            row.append(str(sum(1 for cell in cells if cell.category == "quality_masked")))
+        rows.append(row)
 
     return rows
 
 
-def build_genotype_accounting_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[str]]:
+def build_genotype_accounting_rows(
+    cohort_id: str, vcf: GsPassVcf, quality_policy: quality.GenotypeQualityPolicy | None = None
+) -> list[list[str]]:
     """Build the cohort-wide genotype-encoding accounting rows.
 
     ``phased_genotype_count`` is reported separately from every other
@@ -589,28 +792,34 @@ def build_genotype_accounting_rows(cohort_id: str, vcf: GsPassVcf) -> list[list[
     that resolves to a real dosage is not missing.
     """
     counts = _new_accounting_counts()
+    quality_counts = _QualityCounts(quality_policy) if quality_policy is not None else None
 
     total_genotype_cells = 0
     phased_genotype_count = 0
     for record in vcf.records:
-        for gt in record.sample_genotypes:
+        for cell in _resolve_record_cells(record, quality_policy):
             total_genotype_cells += 1
-            cell = classify_genotype(gt)
             if cell.is_phased:
                 phased_genotype_count += 1
+            if cell.verdict is not None and quality_counts is not None:
+                quality_counts.record(cell.original_dosage, cell.verdict)
             if cell.category == "standard":
                 counts[_METRIC_BY_DOSAGE[cell.dosage]] += 1
-            else:
+            elif cell.category != "quality_masked":
                 counts[_METRIC_BY_NON_STANDARD_CATEGORY[cell.category]] += 1
 
     return _accounting_rows_from_counts(
-        cohort_id, total_genotype_cells, counts, phased_genotype_count
+        cohort_id, total_genotype_cells, counts, phased_genotype_count, quality_counts
     )
 
 
-def build_genotype_accounting_summary_text(cohort_id: str, vcf: GsPassVcf) -> str:
+def build_genotype_accounting_summary_text(
+    cohort_id: str, vcf: GsPassVcf, quality_policy: quality.GenotypeQualityPolicy | None = None
+) -> str:
     """Build the human-readable genotype-encoding accounting summary."""
-    accounting = {row[1]: row[2] for row in build_genotype_accounting_rows(cohort_id, vcf)}
+    accounting = {
+        row[1]: row[2] for row in build_genotype_accounting_rows(cohort_id, vcf, quality_policy)
+    }
 
     return _summary_text_from_accounting(
         cohort_id, accounting, len(vcf.records), len(vcf.sample_names)
@@ -721,6 +930,66 @@ class _StreamingGzipWriter:
         self.close()
 
 
+#: Issue #64: BGZF, the blocked gzip htslib reads and indexes. The quality-
+#: masked VCF is written here, by the same pass that writes the matrix, so a
+#: second tool never re-serializes it: bcftools only builds its index.
+_BGZF_MAX_BLOCK_INPUT_BYTES = 0xFF00
+_BGZF_COMPRESS_LEVEL = 6
+_BGZF_HEADER = b"\x1f\x8b\x08\x04\x00\x00\x00\x00\x00\xff\x06\x00BC\x02\x00"
+_BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
+
+
+class _StreamingBgzfWriter:
+    """Write BGZF incrementally: gzip members of at most 64 KiB, then the EOF block.
+
+    Each block is one gzip member carrying the `BC` extra subfield with the
+    block's own size, exactly as the SAM/BAM specification defines BGZF, so
+    the result is readable by any gzip reader and indexable by `bcftools
+    index`. Buffered input never exceeds one block, so memory does not grow
+    with the number of rows. Deterministic: no timestamp or file name is
+    written, so identical input reproduces identical bytes.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._handle = path.open("wb")
+        self._pending = bytearray()
+
+    def write(self, text: str) -> None:
+        self._pending += text.encode("utf-8")
+        while len(self._pending) >= _BGZF_MAX_BLOCK_INPUT_BYTES:
+            self._write_block(bytes(self._pending[:_BGZF_MAX_BLOCK_INPUT_BYTES]))
+            del self._pending[:_BGZF_MAX_BLOCK_INPUT_BYTES]
+
+    def _write_block(self, data: bytes) -> None:
+        compressor = zlib.compressobj(_BGZF_COMPRESS_LEVEL, zlib.DEFLATED, -15)
+        payload = compressor.compress(data) + compressor.flush()
+        if len(payload) + 26 > 0x10000:
+            # Incompressible input: a stored deflate block always fits.
+            compressor = zlib.compressobj(0, zlib.DEFLATED, -15)
+            payload = compressor.compress(data) + compressor.flush()
+        self._handle.write(_BGZF_HEADER)
+        self._handle.write(struct.pack("<H", len(payload) + 25))
+        self._handle.write(payload)
+        self._handle.write(struct.pack("<II", zlib.crc32(data) & 0xFFFFFFFF, len(data)))
+
+    def close(self) -> None:
+        try:
+            if self._pending:
+                self._write_block(bytes(self._pending))
+                self._pending.clear()
+            self._handle.write(_BGZF_EOF)
+            self._handle.flush()
+            os.fsync(self._handle.fileno())
+        finally:
+            self._handle.close()
+
+    def __enter__(self) -> _StreamingBgzfWriter:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
+
 @dataclass
 class _PanelTotals:
     """Everything the post-scan outputs need, in bounded space.
@@ -736,6 +1005,9 @@ class _PanelTotals:
     counts: dict[str, int]
     sample_missing_counts: list[int]
     sample_non_standard_counts: list[int]
+    #: Issue #64: present only when a genotype quality policy ran.
+    quality_counts: _QualityCounts | None = None
+    sample_masked_counts: list[int] | None = None
 
 
 def _write_tsv_header(handle, header: tuple[str, ...]) -> None:
@@ -744,6 +1016,45 @@ def _write_tsv_header(handle, header: tuple[str, ...]) -> None:
 
 def _write_tsv_row(handle, row: list[str]) -> None:
     handle.write("\t".join(row) + "\n")
+
+
+def _split_row_calls(
+    fields: list[str],
+    sample_names: tuple[str, ...],
+    path: Path,
+    line_number: int,
+) -> tuple[int, list[list[str]]]:
+    """Issue #64: like `_extract_row_genotypes`, but keep every sample's subfields.
+
+    The same shape checks and the same messages, so enabling a quality
+    policy never changes which inputs are accepted as well-formed.
+    """
+    expected = FIXED_COLUMN_COUNT + len(sample_names)
+    if len(fields) != expected:
+        raise MalformedVcfError(
+            f"{path}: line {line_number}: data row has {len(fields)} "
+            f"tab-separated fields, expected exactly {expected} "
+            f"({FIXED_COLUMN_COUNT} fixed columns plus {len(sample_names)} "
+            "sample columns declared by the #CHROM header)"
+        )
+
+    gt_index = _locate_gt_index(fields[8], path)
+    calls: list[list[str]] = []
+    for sample_position, sample_field in enumerate(fields[FIXED_COLUMN_COUNT:]):
+        subfields = sample_field.split(":")
+        if gt_index >= len(subfields):
+            raise MalformedVcfError(
+                f"{path}: line {line_number}: sample "
+                f"'{sample_names[sample_position]}' has {len(subfields)} "
+                f"FORMAT subfield(s), but FORMAT places GT at index {gt_index}"
+            )
+        calls.append(subfields)
+    return gt_index, calls
+
+
+_REQUIRED_INFO_DEFINITIONS: tuple[str, ...] = tuple(
+    f"##INFO=<ID={key}," for key in quality.RECOMPUTED_INFO_KEYS
+)
 
 
 def stream_gs_panel(
@@ -755,6 +1066,8 @@ def stream_gs_panel(
     variant_metadata_path: Path,
     genotype_accounting_path: Path,
     genotype_accounting_summary_path: Path,
+    quality_policy: quality.GenotypeQualityPolicy | None = None,
+    quality_masked_vcf_path: Path | None = None,
 ) -> _PanelTotals:
     """Build all five GS panel outputs in one bounded-memory pass.
 
@@ -767,7 +1080,28 @@ def stream_gs_panel(
     counters, and the cohort-wide accounting -- rather than being
     re-derived per output, as the reference implementation's five
     separate scans do.
+
+    Issue #64: with `quality_policy`, the same pass also evaluates each
+    standard call against the policy and writes the quality-masked VCF to
+    `quality_masked_vcf_path`. Without it, this is the historical loop,
+    unchanged, so a disabled policy cannot alter a single output byte.
     """
+    if (quality_policy is None) != (quality_masked_vcf_path is None):
+        raise ValueError("a quality policy and a quality-masked VCF path go together")
+    if quality_policy is not None:
+        assert quality_masked_vcf_path is not None
+        return _stream_gs_panel_with_quality(
+            gs_pass_vcf=gs_pass_vcf,
+            cohort_id=cohort_id,
+            matrix_path=matrix_path,
+            sample_metadata_path=sample_metadata_path,
+            variant_metadata_path=variant_metadata_path,
+            genotype_accounting_path=genotype_accounting_path,
+            genotype_accounting_summary_path=genotype_accounting_summary_path,
+            policy=quality_policy,
+            quality_masked_vcf_path=quality_masked_vcf_path,
+        )
+
     sample_names: tuple[str, ...] | None = None
     variant_count = 0
     total_genotype_cells = 0
@@ -872,6 +1206,208 @@ def stream_gs_panel(
     return totals
 
 
+def _stream_gs_panel_with_quality(
+    *,
+    gs_pass_vcf: Path,
+    cohort_id: str,
+    matrix_path: Path,
+    sample_metadata_path: Path,
+    variant_metadata_path: Path,
+    genotype_accounting_path: Path,
+    genotype_accounting_summary_path: Path,
+    policy: quality.GenotypeQualityPolicy,
+    quality_masked_vcf_path: Path,
+) -> _PanelTotals:
+    """Issue #64: the same single pass, with a genotype quality policy.
+
+    Kept as its own loop rather than as branches inside the historical one,
+    so the disabled path stays exactly the code whose outputs are already
+    published, and so nothing here costs the disabled path a per-cell test.
+
+    For each row: every call is classified once; a standard call is judged
+    once by the shared evaluator; a masked call becomes `nan` in the matrix
+    and a missing GT in the VCF, from that one verdict. A row with no
+    masked call is copied to the VCF verbatim. A row with any masked call
+    gets its GTs replaced and AC/AN/AF recomputed from the masked GTs, and
+    every other column and FORMAT subfield is kept as it was. Memory is
+    still the single row plus per-sample and fixed-size counters.
+    """
+    sample_names: tuple[str, ...] | None = None
+    variant_count = 0
+    total_genotype_cells = 0
+    phased_genotype_count = 0
+    counts = _new_accounting_counts()
+    quality_counts = _QualityCounts(policy)
+    sample_missing_counts: list[int] = []
+    sample_non_standard_counts: list[int] = []
+    sample_masked_counts: list[int] = []
+    declared_info: set[str] = set()
+    header_line = quality.mask_header_line(policy)
+
+    with ExitStack() as stack:
+        handle = stack.enter_context(gzip.open(gs_pass_vcf, "rt", encoding="utf-8"))
+        matrix = stack.enter_context(_StreamingGzipWriter(matrix_path))
+        masked_vcf = stack.enter_context(_StreamingBgzfWriter(quality_masked_vcf_path))
+        variant_metadata = stack.enter_context(variant_metadata_path.open("w", encoding="utf-8"))
+        _write_tsv_header(variant_metadata, VARIANT_METADATA_HEADER_WITH_QUALITY)
+
+        for line_number, line in enumerate(handle, start=1):
+            line = line.rstrip("\n")
+
+            if not line:
+                continue
+
+            if line.startswith("#CHROM"):
+                if sample_names is not None:
+                    raise MalformedVcfError(
+                        f"{gs_pass_vcf}: line {line_number}: a second #CHROM header line"
+                    )
+                sample_names = _parse_chrom_header(line.split("\t"), gs_pass_vcf)
+                missing = [
+                    definition
+                    for definition in _REQUIRED_INFO_DEFINITIONS
+                    if definition not in declared_info
+                ]
+                if missing:
+                    raise MalformedVcfError(
+                        f"{gs_pass_vcf}: the header does not define "
+                        + ", ".join(d.removeprefix("##INFO=<ID=").rstrip(",") for d in missing)
+                        + " as INFO; a genotype quality policy recomputes AC, AN and AF on "
+                        "rows with masked calls, so they must be declared"
+                    )
+                sample_missing_counts = [0] * len(sample_names)
+                sample_non_standard_counts = [0] * len(sample_names)
+                sample_masked_counts = [0] * len(sample_names)
+                matrix.write("\t".join(["variant_key", *sample_names]) + "\n")
+                masked_vcf.write(header_line + "\n")
+                masked_vcf.write(line + "\n")
+                continue
+
+            if line.startswith("#"):
+                if sample_names is not None:
+                    # The historical reader ignores a stray header line after
+                    # #CHROM; enabling a policy must not change which inputs
+                    # are accepted, and it must not write one into the body.
+                    continue
+                for definition in _REQUIRED_INFO_DEFINITIONS:
+                    if line.startswith(definition):
+                        declared_info.add(definition)
+                masked_vcf.write(line + "\n")
+                continue
+
+            if sample_names is None:
+                raise MalformedVcfError(f"{gs_pass_vcf}: data row seen before #CHROM header")
+
+            fields = line.split("\t")
+            gt_index, calls = _split_row_calls(fields, sample_names, gs_pass_vcf, line_number)
+            chrom, pos, _id, ref, alt, qual = fields[:6]
+            evaluator = quality.RowQualityEvaluator(policy, fields[8])
+
+            dosages: list[str] = []
+            row_missing_count = 0
+            row_masked_count = 0
+            for sample_position, subfields in enumerate(calls):
+                gt = subfields[gt_index]
+                cell = classify_genotype(gt)
+
+                total_genotype_cells += 1
+                if cell.is_phased:
+                    phased_genotype_count += 1
+
+                if cell.category != "standard":
+                    dosages.append(cell.dosage)
+                    counts[_METRIC_BY_NON_STANDARD_CATEGORY[cell.category]] += 1
+                    row_missing_count += 1
+                    sample_missing_counts[sample_position] += 1
+                    if cell.category != "missing":
+                        sample_non_standard_counts[sample_position] += 1
+                    continue
+
+                try:
+                    verdict = evaluator.evaluate(subfields)
+                except quality.GenotypeQualityPolicyError as error:
+                    raise quality.GenotypeQualityPolicyError(
+                        f"{gs_pass_vcf}: line {line_number}: {chrom}:{pos} sample "
+                        f"'{sample_names[sample_position]}': {error}"
+                    ) from error
+                quality_counts.record(cell.dosage, verdict)
+
+                if not verdict.masked:
+                    dosages.append(cell.dosage)
+                    counts[_METRIC_BY_DOSAGE[cell.dosage]] += 1
+                    continue
+
+                dosages.append(MISSING_CELL_TOKEN)
+                subfields[gt_index] = quality.masked_genotype(gt)
+                row_masked_count += 1
+                row_missing_count += 1
+                sample_missing_counts[sample_position] += 1
+                sample_masked_counts[sample_position] += 1
+
+            if row_masked_count:
+                ac, an = quality.allele_counts([subfields[gt_index] for subfields in calls])
+                try:
+                    info = quality.rewrite_allele_info(fields[7], ac, an)
+                except ValueError as error:
+                    raise MalformedVcfError(
+                        f"{gs_pass_vcf}: line {line_number}: {chrom}:{pos}: {error}"
+                    ) from error
+                masked_vcf.write(
+                    "\t".join(
+                        [
+                            *fields[:7],
+                            info,
+                            fields[8],
+                            *(":".join(subfields) for subfields in calls),
+                        ]
+                    )
+                    + "\n"
+                )
+            else:
+                masked_vcf.write(line + "\n")
+
+            matrix.write("\t".join([_variant_key(chrom, pos, ref, alt), *dosages]) + "\n")
+            row = _variant_metadata_row(
+                cohort_id,
+                variant_count,
+                chrom,
+                pos,
+                ref,
+                alt,
+                qual,
+                row_missing_count,
+                len(sample_names),
+            )
+            row.append(str(row_masked_count))
+            _write_tsv_row(variant_metadata, row)
+            variant_count += 1
+
+    if sample_names is None:
+        raise MalformedVcfError(f"{gs_pass_vcf}: no #CHROM header line found")
+
+    totals = _PanelTotals(
+        sample_names=sample_names,
+        variant_count=variant_count,
+        total_genotype_cells=total_genotype_cells,
+        phased_genotype_count=phased_genotype_count,
+        counts=counts,
+        sample_missing_counts=sample_missing_counts,
+        sample_non_standard_counts=sample_non_standard_counts,
+        quality_counts=quality_counts,
+        sample_masked_counts=sample_masked_counts,
+    )
+
+    _write_post_scan_outputs(
+        cohort_id=cohort_id,
+        totals=totals,
+        sample_metadata_path=sample_metadata_path,
+        genotype_accounting_path=genotype_accounting_path,
+        genotype_accounting_summary_path=genotype_accounting_summary_path,
+    )
+
+    return totals
+
+
 def _write_post_scan_outputs(
     *,
     cohort_id: str,
@@ -885,8 +1421,9 @@ def _write_post_scan_outputs(
     All three are `O(sample_count)` or fixed size, so materializing them
     is bounded regardless of how many variants were read.
     """
-    sample_rows = [
-        _sample_metadata_row(
+    sample_rows = []
+    for sample_index, sample_id in enumerate(totals.sample_names):
+        row = _sample_metadata_row(
             cohort_id,
             sample_index,
             sample_id,
@@ -894,15 +1431,22 @@ def _write_post_scan_outputs(
             totals.sample_non_standard_counts[sample_index],
             totals.variant_count,
         )
-        for sample_index, sample_id in enumerate(totals.sample_names)
-    ]
-    write_tsv(sample_metadata_path, SAMPLE_METADATA_HEADER, sample_rows)
+        if totals.sample_masked_counts is not None:
+            row.append(str(totals.sample_masked_counts[sample_index]))
+        sample_rows.append(row)
+    header = (
+        SAMPLE_METADATA_HEADER
+        if totals.quality_counts is None
+        else SAMPLE_METADATA_HEADER_WITH_QUALITY
+    )
+    write_tsv(sample_metadata_path, header, sample_rows)
 
     accounting_rows = _accounting_rows_from_counts(
         cohort_id,
         totals.total_genotype_cells,
         totals.counts,
         totals.phased_genotype_count,
+        totals.quality_counts,
     )
     write_tsv(genotype_accounting_path, GENOTYPE_ACCOUNTING_HEADER, accounting_rows)
 
@@ -911,6 +1455,14 @@ def _write_post_scan_outputs(
         _summary_text_from_accounting(
             cohort_id, accounting, totals.variant_count, len(totals.sample_names)
         ),
+        encoding="utf-8",
+    )
+
+
+def write_policy_document(path: Path, policy: quality.GenotypeQualityPolicy) -> None:
+    """Issue #64: the machine-readable policy, byte-deterministic for one policy."""
+    path.write_text(
+        json.dumps(policy.document(), indent=2, sort_keys=True, ensure_ascii=True) + "\n",
         encoding="utf-8",
     )
 
@@ -1033,7 +1585,90 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Output path for the human-readable genotype-encoding summary.",
     )
 
+    # Issue #64: an optional genotype quality policy. Off unless
+    # --genotype-quality-mask is given; no threshold has a default, and every
+    # other option below is refused when the mask is off rather than ignored.
+    group = parser.add_argument_group(
+        "genotype quality policy (Issue #64; off by default, no threshold is recommended)"
+    )
+    group.add_argument(
+        "--genotype-quality-mask",
+        action="store_true",
+        help="Enable genotype-level DP/GQ masking. Requires --genotype-min-dp and/or "
+        "--genotype-min-gq, --quality-masked-vcf-output and --genotype-quality-policy-output.",
+    )
+    group.add_argument(
+        "--genotype-min-dp",
+        type=int,
+        default=None,
+        help="Mask a call whose FORMAT/DP is below this value; the value itself passes.",
+    )
+    group.add_argument(
+        "--genotype-min-gq",
+        type=int,
+        default=None,
+        help="Mask a call whose FORMAT/GQ is below this value; the value itself passes.",
+    )
+    for option, what in (
+        ("missing-format-field", "a configured field is absent from the row's FORMAT"),
+        ("missing-value", "the sample's value is '.' or its subfields stop before it"),
+        ("malformed-value", "the value is not a non-negative decimal integer"),
+    ):
+        group.add_argument(
+            f"--genotype-{option}-policy",
+            choices=quality.POLICY_ACTIONS,
+            default=None,
+            help=f"What to do when {what}: reject (fail the build), unevaluated (keep "
+            "the call and count it), or mask. Defaults to reject when the mask is enabled.",
+        )
+    group.add_argument(
+        "--quality-masked-vcf-output",
+        type=Path,
+        default=None,
+        help="Output path for the BGZF quality-masked VCF.",
+    )
+    group.add_argument(
+        "--genotype-quality-policy-output",
+        type=Path,
+        default=None,
+        help="Output path for the machine-readable policy JSON.",
+    )
+
     return parser.parse_args(argv)
+
+
+def _quality_policy_from_args(args: argparse.Namespace) -> quality.GenotypeQualityPolicy | None:
+    """Resolve the CLI's quality options, refusing any silently ignored one."""
+    policy_options = {
+        "--genotype-min-dp": args.genotype_min_dp,
+        "--genotype-min-gq": args.genotype_min_gq,
+        "--genotype-missing-format-field-policy": args.genotype_missing_format_field_policy,
+        "--genotype-missing-value-policy": args.genotype_missing_value_policy,
+        "--genotype-malformed-value-policy": args.genotype_malformed_value_policy,
+        "--quality-masked-vcf-output": args.quality_masked_vcf_output,
+        "--genotype-quality-policy-output": args.genotype_quality_policy_output,
+    }
+    if not args.genotype_quality_mask:
+        given = [name for name, value in policy_options.items() if value is not None]
+        if given:
+            raise quality.InvalidPolicyError(
+                f"{', '.join(given)} given without --genotype-quality-mask; the mask is off, "
+                "so these would be silently ignored"
+            )
+        return None
+
+    if args.quality_masked_vcf_output is None or args.genotype_quality_policy_output is None:
+        raise quality.InvalidPolicyError(
+            "--genotype-quality-mask needs --quality-masked-vcf-output and "
+            "--genotype-quality-policy-output"
+        )
+    return quality.GenotypeQualityPolicy(
+        min_dp=args.genotype_min_dp,
+        min_gq=args.genotype_min_gq,
+        missing_format_field=args.genotype_missing_format_field_policy or quality.REJECT,
+        missing_value=args.genotype_missing_value_policy or quality.REJECT,
+        malformed_value=args.genotype_malformed_value_policy or quality.REJECT,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1059,6 +1694,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    try:
+        quality_policy = _quality_policy_from_args(args)
+    except quality.InvalidPolicyError as error:
+        print(f"build_gs_panel.py: error: {error}", file=sys.stderr)
+        return 1
+
     # Order matters only in that it is the order the outputs are
     # published in; every one of them is fully built before any is moved.
     final_paths = [
@@ -1068,6 +1709,10 @@ def main(argv: list[str] | None = None) -> int:
         args.genotype_accounting_output,
         args.genotype_accounting_summary_output,
     ]
+    if quality_policy is not None:
+        # Published with the panel, or not at all: a masked VCF next to an
+        # unmasked matrix from an earlier run would be two lineages at once.
+        final_paths.extend([args.quality_masked_vcf_output, args.genotype_quality_policy_output])
 
     # `finally`, not an exception handler: the malformed-input paths below
     # leave by `return 1`, which no `except` clause would see, and those
@@ -1086,14 +1731,24 @@ def main(argv: list[str] | None = None) -> int:
                 genotype_accounting_summary_path=_staging_path(
                     args.genotype_accounting_summary_output
                 ),
+                quality_policy=quality_policy,
+                quality_masked_vcf_path=(
+                    _staging_path(args.quality_masked_vcf_output)
+                    if quality_policy is not None
+                    else None
+                ),
             )
+            if quality_policy is not None:
+                write_policy_document(
+                    _staging_path(args.genotype_quality_policy_output), quality_policy
+                )
         except OSError as error:
             print(
                 f"build_gs_panel.py: error: cannot read {args.gs_pass_vcf}: {error}",
                 file=sys.stderr,
             )
             return 1
-        except MalformedVcfError as error:
+        except (MalformedVcfError, quality.GenotypeQualityPolicyError) as error:
             print(f"build_gs_panel.py: error: {error}", file=sys.stderr)
             return 1
 

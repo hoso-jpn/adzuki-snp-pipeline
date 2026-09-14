@@ -23,6 +23,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "build_gs_panel.py"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
+# Issue #64: build_gs_panel.py imports its sibling bin/gs_genotype_quality.py
+# the way bin/build_gs_panel_manifest.py imports manifest_utils. Running a
+# script puts its own directory on sys.path; loading it by file path from a
+# test does not, so bin/ is added here exactly as that manifest's tests do.
+sys.path.insert(0, str(REPO_ROOT / "bin"))
+
 
 def _load_module(name: str, path: Path) -> types.ModuleType:
     """Load a bin/ script by path, without needing it to be a package."""
