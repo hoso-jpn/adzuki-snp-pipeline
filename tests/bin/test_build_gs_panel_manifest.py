@@ -51,6 +51,10 @@ SNP_FILTER_CLI_ARGS = [
     "-8.0",
 ]
 
+# Issue #64: schema v3 requires the genotype quality mask state to be stated
+# either way. These existing tests describe unmasked panels, so they say so.
+QUALITY_MASK_DISABLED_CLI_ARGS = ["--no-genotype-quality-mask"]
+
 # Issue #52: one --container-<process-name> flag per GS-lineage process
 # (schema v2), replacing the old --bcftools-container/--gatk-container/
 # --python-container triple. Deliberately not all sharing one image
@@ -196,8 +200,12 @@ class BuildManifestTests(unittest.TestCase):
         defaults.update(overrides)
         return manifest_module.build_manifest(**defaults)
 
-    def test_schema_version_is_two(self) -> None:
-        self.assertEqual(self._build()["schema_version"], 2)
+    def test_schema_version_is_three(self) -> None:
+        # Issue #64: v2 -> v3. A `nan` in a v3 matrix can be a call the
+        # genotype quality policy masked, which a v2 reader has no way to know
+        # to look for; bumping the version makes a strict v2 consumer refuse
+        # rather than misread. See docs/gs_panel_data_contract.md.
+        self.assertEqual(self._build()["schema_version"], 3)
 
     def test_recorded_processes_are_the_whole_gs_lineage_including_this_one(
         self,
@@ -295,6 +303,7 @@ class CliTests(unittest.TestCase):
                     *CONTAINER_CLI_ARGS,
                     *PLOIDY_CLI_ARGS,
                     *SNP_FILTER_CLI_ARGS,
+                    *QUALITY_MASK_DISABLED_CLI_ARGS,
                     "--record-accounting",
                     str(accounting_path),
                     "--checksum-file",
@@ -306,7 +315,7 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             manifest = json.loads(output_path.read_text(encoding="utf-8"))
-            self.assertEqual(manifest["schema_version"], 2)
+            self.assertEqual(manifest["schema_version"], 3)
             self.assertIsNone(manifest["git_commit"])
             self.assertEqual(manifest["panel_status"], "populated")
             self.assertIn("matrix.tsv.gz", manifest["checksums"])
@@ -334,6 +343,7 @@ class CliTests(unittest.TestCase):
                         *CONTAINER_CLI_ARGS,
                         *PLOIDY_CLI_ARGS,
                         *SNP_FILTER_CLI_ARGS,
+                        *QUALITY_MASK_DISABLED_CLI_ARGS,
                         "--record-accounting",
                         str(missing_accounting),
                         "--output",
@@ -363,6 +373,7 @@ class CliTests(unittest.TestCase):
                         "--sample-ploidy",
                         ploidy,
                         *SNP_FILTER_CLI_ARGS,
+                        *QUALITY_MASK_DISABLED_CLI_ARGS,
                         "--record-accounting",
                         str(accounting_path),
                         "--output",
@@ -388,7 +399,7 @@ class CliTests(unittest.TestCase):
 
     def test_ploidy_error_names_the_current_schema_version(self) -> None:
         # Issue #52 review (P3): this message hardcoded "(v1)" while
-        # SCHEMA_VERSION had already moved to 2. Asserting against the
+        # SCHEMA_VERSION had already moved on (2 then, 3 since Issue #64). Asserting against the
         # constant (rather than a literal "v2") keeps the message and the
         # schema version from ever being two independently edited facts.
         _exit_code, _output_path, stderr = self._run_main_with_ploidy("3")
@@ -414,6 +425,7 @@ class CliTests(unittest.TestCase):
                     *CONTAINER_CLI_ARGS,
                     *PLOIDY_CLI_ARGS,
                     *SNP_FILTER_CLI_ARGS,
+                    *QUALITY_MASK_DISABLED_CLI_ARGS,
                     "--record-accounting",
                     str(accounting_path),
                     "--output",
@@ -444,6 +456,7 @@ class CliTests(unittest.TestCase):
                 *CONTAINER_CLI_ARGS,
                 *PLOIDY_CLI_ARGS,
                 *SNP_FILTER_CLI_ARGS,
+                *QUALITY_MASK_DISABLED_CLI_ARGS,
                 "--record-accounting",
                 str(accounting_path),
                 "--output",
@@ -479,6 +492,7 @@ class CliTests(unittest.TestCase):
                 *CONTAINER_CLI_ARGS,
                 *PLOIDY_CLI_ARGS,
                 *SNP_FILTER_CLI_ARGS,
+                *QUALITY_MASK_DISABLED_CLI_ARGS,
                 "--record-accounting",
                 str(accounting_path),
                 "--output",
@@ -517,6 +531,7 @@ class CliTests(unittest.TestCase):
                 *CONTAINER_CLI_ARGS,
                 *PLOIDY_CLI_ARGS,
                 *SNP_FILTER_CLI_ARGS,
+                *QUALITY_MASK_DISABLED_CLI_ARGS,
                 "--record-accounting",
                 str(accounting_path),
                 "--output",
@@ -696,3 +711,158 @@ class ContainerIdentityRedactionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ==========================================================================
+# Issue #64: schema v3 genotype quality mask block
+# ==========================================================================
+
+import gs_genotype_quality as quality  # noqa: E402
+
+MASK_POLICY = quality.GenotypeQualityPolicy(
+    min_dp=10, min_gq=None, missing_format_field="unevaluated", missing_value="mask"
+)
+MASK_CONTAINER_CLI_ARGS = [
+    "--container-gs-index-quality-masked-vcf",
+    "bcftools:1.24-mask",
+    "--container-verify-gs-genotype-quality-mask",
+    "python:3.12-verify",
+]
+
+
+class GenotypeQualityMaskManifestTests(unittest.TestCase):
+    def _run(
+        self, extra: list[str], policy_document: object | None = MASK_POLICY
+    ) -> tuple[int, dict | None, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            accounting_path = tmp_path / "accounting.tsv"
+            _write_record_accounting(accounting_path, "populated")
+            policy_path = tmp_path / "cohort.gs_panel.genotype_quality_policy.json"
+            if policy_document is not None:
+                document = (
+                    policy_document.document()
+                    if isinstance(policy_document, quality.GenotypeQualityPolicy)
+                    else policy_document
+                )
+                policy_path.write_text(json.dumps(document), encoding="utf-8")
+            vcf_path = tmp_path / "cohort.gs_panel.quality_masked.vcf.gz"
+            vcf_path.write_bytes(b"masked")
+            output_path = tmp_path / "manifest.json"
+            argv = [
+                "--cohort-id",
+                "cohort",
+                "--pipeline-version",
+                "0.2.0",
+                *CONTAINER_CLI_ARGS,
+                *PLOIDY_CLI_ARGS,
+                *SNP_FILTER_CLI_ARGS,
+                "--record-accounting",
+                str(accounting_path),
+                "--output",
+                str(output_path),
+            ]
+            argv += [
+                token.replace("@POLICY@", str(policy_path)).replace("@VCF@", str(vcf_path))
+                for token in extra
+            ]
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                exit_code = manifest_module.main(argv)
+            manifest = (
+                json.loads(output_path.read_text(encoding="utf-8"))
+                if output_path.exists()
+                else None
+            )
+            return exit_code, manifest, stderr.getvalue()
+
+    ENABLED = [
+        "--genotype-quality-mask",
+        "--genotype-quality-policy",
+        "@POLICY@",
+        "--quality-masked-vcf",
+        "@VCF@",
+        *MASK_CONTAINER_CLI_ARGS,
+    ]
+
+    def test_disabled_manifest_records_the_mask_as_off_explicitly(self) -> None:
+        exit_code, manifest, stderr = self._run(["--no-genotype-quality-mask"])
+        self.assertEqual(exit_code, 0, stderr)
+        block = manifest["genotype_quality_mask"]
+        self.assertEqual(
+            block,
+            {
+                "enabled": False,
+                "policy": {"schema": "gs_genotype_quality_policy_v1", "enabled": False},
+                "policy_hash": quality.disabled_policy_hash(),
+                "matrix_nan_includes_quality_masked_calls": False,
+                "quality_masked_vcf": None,
+            },
+        )
+        self.assertNotIn("gs_index_quality_masked_vcf", manifest["containers"])
+        self.assertNotIn("cohort.gs_panel.quality_masked.vcf.gz", manifest["checksums"])
+
+    def test_enabled_manifest_records_policy_hash_checksums_and_containers(self) -> None:
+        exit_code, manifest, stderr = self._run(self.ENABLED)
+        self.assertEqual(exit_code, 0, stderr)
+        block = manifest["genotype_quality_mask"]
+        self.assertIs(block["enabled"], True)
+        self.assertEqual(block["policy"], MASK_POLICY.document())
+        self.assertEqual(block["policy_hash"], MASK_POLICY.policy_hash())
+        self.assertIs(block["matrix_nan_includes_quality_masked_calls"], True)
+        self.assertEqual(block["quality_masked_vcf"], "cohort.gs_panel.quality_masked.vcf.gz")
+        self.assertIn("cohort.gs_panel.quality_masked.vcf.gz", manifest["checksums"])
+        self.assertIn("cohort.gs_panel.genotype_quality_policy.json", manifest["checksums"])
+        self.assertEqual(
+            manifest["containers"]["gs_index_quality_masked_vcf"], "bcftools:1.24-mask"
+        )
+        self.assertEqual(
+            manifest["containers"]["verify_gs_genotype_quality_mask"], "python:3.12-verify"
+        )
+        self.assertEqual(manifest["schema_version"], 3)
+
+    def test_contradictory_or_incomplete_mask_inputs_write_no_manifest(self) -> None:
+        cases = {
+            "enabled without policy": (
+                [
+                    "--genotype-quality-mask",
+                    "--quality-masked-vcf",
+                    "@VCF@",
+                    *MASK_CONTAINER_CLI_ARGS,
+                ],
+                MASK_POLICY,
+                "needs --genotype-quality-policy",
+            ),
+            "enabled without containers": (
+                [
+                    "--genotype-quality-mask",
+                    "--genotype-quality-policy",
+                    "@POLICY@",
+                    "--quality-masked-vcf",
+                    "@VCF@",
+                ],
+                MASK_POLICY,
+                "needs --container-gs-index-quality-masked-vcf",
+            ),
+            "disabled with policy": (
+                ["--no-genotype-quality-mask", "--genotype-quality-policy", "@POLICY@"],
+                MASK_POLICY,
+                "given with --no-genotype-quality-mask",
+            ),
+            "enabled with disabled document": (
+                self.ENABLED,
+                quality.DISABLED_POLICY_DOCUMENT,
+                "disabled policy",
+            ),
+            "enabled with tampered document": (
+                self.ENABLED,
+                MASK_POLICY.document() | {"comparison": "a value > its threshold passes"},
+                "canonical form",
+            ),
+        }
+        for label, (extra, document, expected) in cases.items():
+            with self.subTest(case=label):
+                exit_code, manifest, stderr = self._run(extra, document)
+                self.assertEqual(exit_code, 1)
+                self.assertIsNone(manifest)
+                self.assertIn(expected, stderr)

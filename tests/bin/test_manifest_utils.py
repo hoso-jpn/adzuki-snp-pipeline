@@ -164,9 +164,27 @@ class RefactorRegressionTests(unittest.TestCase):
         )
 
     def test_gs_manifest_hash_matches_pre_refactor_implementation(self) -> None:
+        # Issue #64 moved the GS manifest to schema v3, which adds the
+        # `genotype_quality_mask` block, so the whole document -- and its
+        # hash -- legitimately changed. What this test guards is that the
+        # Issue #42 extraction did not change the *hashing mechanics*. Undo
+        # exactly the Issue #64 document change and hash again with the shared
+        # function: it must still reproduce the pre-refactor digest.
+        manifest = _build_gs_manifest_fixture()
+        self.assertEqual(manifest["schema_version"], 3)
+        self.assertIs(manifest["genotype_quality_mask"]["enabled"], False)
+        as_v2 = {
+            key: value
+            for key, value in manifest.items()
+            if key not in ("manifest_hash", "genotype_quality_mask")
+        }
+        as_v2["schema_version"] = 2
+        self.assertEqual(manifest_utils.canonical_json_hash(as_v2), PRE_REFACTOR_GS_MANIFEST_HASH)
         self.assertEqual(
-            _build_gs_manifest_fixture()["manifest_hash"],
-            PRE_REFACTOR_GS_MANIFEST_HASH,
+            manifest_utils.canonical_json_hash(
+                {key: value for key, value in manifest.items() if key != "manifest_hash"}
+            ),
+            manifest["manifest_hash"],
         )
 
     def test_manifest_hash_is_over_the_document_without_its_own_hash(self) -> None:
