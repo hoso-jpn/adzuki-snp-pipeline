@@ -1,0 +1,82 @@
+nextflow_process {
+
+    name "VERIFY_GS_GENOTYPE_QUALITY_MASK accepts one masked state and refuses a disagreement"
+    script "modules/local/verify_gs_genotype_quality_mask.nf"
+    process "VERIFY_GS_GENOTYPE_QUALITY_MASK"
+
+    tag "issue64_genotype_quality_mask"
+
+    // Issue #64: the verifier inside the real task container, over the
+    // committed masked artifacts (tests/bin/test_gs_genotype_quality_mask.py
+    // pins that they are exactly what the current builder produces).
+    def FIXTURES = 'tests/modules/fixtures'
+    def MASKED = 'tests/modules/fixtures/gs_panel_quality_masked'
+
+    test("the builder's masked artifacts verify as consistent") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort' ],
+                    file("${projectDir}/${FIXTURES}/gs_panel_quality.vcf.gz"),
+                    file("${projectDir}/${FIXTURES}/gs_panel_quality.vcf.gz.tbi"),
+                ]
+                input[1] = [
+                    [ id: 'cohort' ],
+                    file("${projectDir}/${MASKED}/cohort.gs_panel.quality_masked.vcf.gz"),
+                    file("${projectDir}/${MASKED}/cohort.gs_panel.quality_masked.vcf.gz.tbi"),
+                ]
+                input[2] = [ [ id: 'cohort' ], file("${projectDir}/${MASKED}/cohort.gs_panel.genotype_matrix.tsv.gz") ]
+                input[3] = file("${projectDir}/${MASKED}/cohort.gs_panel.sample_metadata.tsv")
+                input[4] = file("${projectDir}/${MASKED}/cohort.gs_panel.variant_metadata.tsv")
+                input[5] = file("${projectDir}/${MASKED}/cohort.gs_panel.genotype_encoding_accounting.tsv")
+                input[6] = file("${projectDir}/${MASKED}/cohort.gs_panel.genotype_quality_policy.json")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def verification = [:]
+            path(process.out.verification[0][1]).readLines().drop(1).each { line ->
+                def parts = line.split('\t')
+                verification[parts[1]] = parts[2]
+            }
+            assert verification['verification_status'] == 'consistent'
+            assert verification['verified_variant_records'] == '8'
+            assert verification['quality_masked_calls'] == '14'
+        }
+    }
+
+    test("an unmasked matrix next to a masked VCF fails the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort' ],
+                    file("${projectDir}/${FIXTURES}/gs_panel_quality.vcf.gz"),
+                    file("${projectDir}/${FIXTURES}/gs_panel_quality.vcf.gz.tbi"),
+                ]
+                input[1] = [
+                    [ id: 'cohort' ],
+                    file("${projectDir}/${MASKED}/cohort.gs_panel.quality_masked.vcf.gz"),
+                    file("${projectDir}/${MASKED}/cohort.gs_panel.quality_masked.vcf.gz.tbi"),
+                ]
+                input[2] = [ [ id: 'cohort' ], file("${projectDir}/tests/bin/fixtures/build_panel_genotype_quality_disabled_golden/genotype_matrix.tsv.gz") ]
+                input[3] = file("${projectDir}/${MASKED}/cohort.gs_panel.sample_metadata.tsv")
+                input[4] = file("${projectDir}/${MASKED}/cohort.gs_panel.variant_metadata.tsv")
+                input[5] = file("${projectDir}/${MASKED}/cohort.gs_panel.genotype_encoding_accounting.tsv")
+                input[6] = file("${projectDir}/${MASKED}/cohort.gs_panel.genotype_quality_policy.json")
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = process.stdout.toString() + process.errorReport.toString()
+            assert output.contains("matrix token")
+        }
+    }
+}

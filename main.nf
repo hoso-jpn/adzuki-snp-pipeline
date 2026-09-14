@@ -158,6 +158,38 @@ workflow {
         )
     }
 
+    // Issue #64: the genotype quality mask is opt-in and has no default
+    // threshold. Refuse the combinations that would otherwise be silently
+    // ignored or do nothing: a threshold without the mask, the mask without a
+    // threshold, or the mask without the GS panel it belongs to. The same
+    // String-vs-Boolean coercion as enable_gs_panel above applies.
+    def gsQualityMask = params.gs_genotype_quality_mask.toString().toBoolean()
+    def gsQualityThresholds = [
+        gs_genotype_min_dp: params.gs_genotype_min_dp,
+        gs_genotype_min_gq: params.gs_genotype_min_gq,
+    ].findAll { _name, value -> value != null }
+
+    if (gsQualityMask && !gsPanelEnabled) {
+        error(
+            'params.gs_genotype_quality_mask is true, but params.enable_gs_panel is false. ' +
+            'The genotype quality mask is a stage of the GS panel and cannot run without it.'
+        )
+    }
+    if (gsQualityMask && gsQualityThresholds.isEmpty()) {
+        error(
+            'params.gs_genotype_quality_mask is true, but neither params.gs_genotype_min_dp ' +
+            'nor params.gs_genotype_min_gq is set. No threshold is defaulted, because none ' +
+            'has been calibrated for this cohort; set the one(s) this run intends to apply.'
+        )
+    }
+    if (!gsQualityMask && !gsQualityThresholds.isEmpty()) {
+        error(
+            "${gsQualityThresholds.keySet().join(' and ')} set while " +
+            'params.gs_genotype_quality_mask is false; the threshold(s) would be silently ' +
+            'ignored. Set --gs_genotype_quality_mask true to apply them, or remove them.'
+        )
+    }
+
     sample_rows = samplesheetToList(
         params.input,
         'assets/schema_input.json'

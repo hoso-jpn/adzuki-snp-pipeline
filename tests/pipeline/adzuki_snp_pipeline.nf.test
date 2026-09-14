@@ -751,7 +751,12 @@ nextflow_pipeline {
             def manifestJson = new groovy.json.JsonSlurper().parse(
                 new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
             )
-            assert manifestJson.schema_version == 2
+            // Issue #64: schema v3 states the genotype quality mask either
+            // way; with it at its default (off) the manifest says so.
+            assert manifestJson.schema_version == 3
+            assert manifestJson.genotype_quality_mask.enabled == false
+            assert manifestJson.genotype_quality_mask.quality_masked_vcf == null
+            assert manifestJson.genotype_quality_mask.policy == [schema: 'gs_genotype_quality_policy_v1', enabled: false]
             assert manifestJson.panel_status == "empty"
             assert manifestJson.cohort_id == "cohort"
             assert manifestJson.parameters.sample_ploidy == 2
@@ -1103,7 +1108,7 @@ nextflow_pipeline {
             def manifestJson = new groovy.json.JsonSlurper().parse(
                 new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
             )
-            assert manifestJson.schema_version == 2
+            assert manifestJson.schema_version == 3
 
             // The fixture rewrites every default to the same image
             // referenced by digest alone; this is the identical
@@ -1220,7 +1225,7 @@ nextflow_pipeline {
             def manifestJson = new groovy.json.JsonSlurper().parse(
                 new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
             )
-            assert manifestJson.schema_version == 2
+            assert manifestJson.schema_version == 3
 
             def containerDefaults = GsContainerDefaults.read(projectDir)
             def gatkDefault = containerDefaults.gatk
@@ -1498,6 +1503,209 @@ nextflow_pipeline {
             assert runManifest.checksums.containsKey("cohort.raw.vcf.gz")
             assert runManifest.checksums["cohort.raw.vcf.gz"] ==
                 sha256Of("$outputDir/variants/raw/cohort.raw.vcf.gz")
+        }
+    }
+
+    // Issue #64: the genotype quality mask, end to end. The synthetic GS
+    // panel is empty (both SNPs fail SNP_SOR_HIGH), so this proves the
+    // wiring, the publication and the provenance rather than the masking
+    // itself -- every cell-level case is pinned by
+    // tests/bin/test_gs_genotype_quality_mask.py and inside the containers by
+    // tests/modules/{build_gs_panel,gs_index_quality_masked_vcf,
+    // verify_gs_genotype_quality_mask}.nf.test.
+    test("with the genotype quality mask enabled, the masked VCF, policy and verification are published and recorded in both manifests") {
+
+        tag "issue64_genotype_quality_mask"
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll("tests/data/reads/", "${projectDir}/tests/data/reads/")
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                sample_ploidy = "2"
+                // CLI-equivalent Strings, as elsewhere in this file.
+                gs_genotype_quality_mask = "true"
+                gs_genotype_min_dp = "3"
+                gs_genotype_min_gq = "10"
+                gs_genotype_missing_value = "unevaluated"
+            }
+        }
+
+        then {
+            assert workflow.success
+            PublishedOutputContract.verify(outputDir.toString(), true, true, true, true)
+
+            def gsPanel = "$outputDir/gs_panel"
+            def policy = new groovy.json.JsonSlurper().parse(new File("${gsPanel}/cohort.gs_panel.genotype_quality_policy.json"))
+            assert policy.enabled == true
+            assert policy.min_dp == 3
+            assert policy.min_gq == 10
+            assert policy.missing_value == 'unevaluated'
+            assert policy.missing_format_field == 'reject'
+
+            def maskedHeader = path("${gsPanel}/cohort.gs_panel.quality_masked.vcf.gz").linesGzip
+                .findAll { line -> line.startsWith('##gs_genotype_quality_mask=') }
+            assert maskedHeader.size() == 1
+            assert maskedHeader[0].contains('MinDP=3,MinGQ=10')
+
+            def verification = [:]
+            new File("${gsPanel}/cohort.gs_panel.genotype_quality_mask_verification.tsv").readLines().drop(1).each { line ->
+                def parts = line.split('\t')
+                verification[parts[1]] = parts[2]
+            }
+            assert verification['verification_status'] == 'consistent'
+            assert verification['verified_variant_records'] == '0'
+
+            def manifestJson = new groovy.json.JsonSlurper().parse(new File("${gsPanel}/cohort.gs_panel.manifest.json"))
+            assert manifestJson.schema_version == 3
+            assert manifestJson.genotype_quality_mask.enabled == true
+            assert manifestJson.genotype_quality_mask.policy == policy
+            assert manifestJson.genotype_quality_mask.policy_hash == verification['genotype_quality_policy_hash']
+            assert manifestJson.genotype_quality_mask.quality_masked_vcf == 'cohort.gs_panel.quality_masked.vcf.gz'
+            assert manifestJson.genotype_quality_mask.matrix_nan_includes_quality_masked_calls == true
+            // The eleven unmasked checksums plus the policy, the masked VCF and
+            // its index, and both verification outputs.
+            assert manifestJson.checksums.size() == 16
+            [
+                'cohort.gs_panel.genotype_quality_policy.json',
+                'cohort.gs_panel.quality_masked.vcf.gz',
+                'cohort.gs_panel.quality_masked.vcf.gz.tbi',
+                'cohort.gs_panel.genotype_quality_mask_verification.tsv',
+                'cohort.gs_panel.genotype_quality_mask_verification.summary.txt',
+            ].each { name -> assert manifestJson.checksums.containsKey(name): "no checksum for ${name}" }
+
+            def containerDefaults = GsContainerDefaults.read(projectDir)
+            assert manifestJson.containers.size() == 10
+            assert manifestJson.containers.gs_index_quality_masked_vcf == containerDefaults.bcftools
+            assert manifestJson.containers.verify_gs_genotype_quality_mask == containerDefaults.python
+
+            def runManifest = readRunManifest(outputDir.toString())
+            assert runManifest.gs_panel.schema_version == 3
+            assert runManifest.gs_panel.manifest_hash == manifestJson.manifest_hash
+            assert runManifest.containers.gs_index_quality_masked_vcf == containerDefaults.bcftools
+            assert runManifest.containers.verify_gs_genotype_quality_mask == containerDefaults.python
+            assert runManifest.containers.keySet() ==
+                executedProcessKeys(workflow.trace.tasks().collect { task -> task.name })
+
+            // The site-level scientific filter is untouched by the mask.
+            def gsPassRecords = path("$outputDir/variants/gs_pass/cohort_gs.snp.pass.vcf.gz").linesGzip
+                .findAll { line -> !line.startsWith('#') }
+            assert gsPassRecords.isEmpty()
+        }
+    }
+
+    test("the genotype quality mask without any threshold is rejected before any process runs") {
+
+        tag "issue64_genotype_quality_mask"
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll("tests/data/reads/", "${projectDir}/tests/data/reads/")
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                gs_genotype_quality_mask = "true"
+            }
+        }
+
+        then {
+            assert !workflow.success
+            assert workflow.stdout.join("\n").contains("neither params.gs_genotype_min_dp nor params.gs_genotype_min_gq is set")
+            assert workflow.trace.tasks().isEmpty()
+        }
+    }
+
+    test("a genotype threshold without the genotype quality mask is rejected rather than ignored") {
+
+        tag "issue64_genotype_quality_mask"
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll("tests/data/reads/", "${projectDir}/tests/data/reads/")
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                gs_genotype_min_gq = "20"
+            }
+        }
+
+        then {
+            assert !workflow.success
+            assert workflow.stdout.join("\n").contains("gs_genotype_min_gq set while params.gs_genotype_quality_mask is false")
+            assert workflow.trace.tasks().isEmpty()
+        }
+    }
+
+    test("the genotype quality mask with the GS panel disabled is rejected before any process runs") {
+
+        tag "issue64_genotype_quality_mask"
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll("tests/data/reads/", "${projectDir}/tests/data/reads/")
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                enable_gs_panel = "false"
+                gs_genotype_quality_mask = "true"
+                gs_genotype_min_dp = "5"
+            }
+        }
+
+        then {
+            assert !workflow.success
+            assert workflow.stdout.join("\n").contains("cannot run without it")
+            assert workflow.trace.tasks().isEmpty()
+        }
+    }
+
+    test("an unknown genotype quality policy action is rejected by the parameter schema") {
+
+        tag "issue64_genotype_quality_mask"
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll("tests/data/reads/", "${projectDir}/tests/data/reads/")
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                gs_genotype_quality_mask = "true"
+                gs_genotype_min_dp = "5"
+                gs_genotype_missing_value = "pass"
+            }
+        }
+
+        then {
+            assert !workflow.success
+            def output = (workflow.stdout + workflow.stderr).join("\n")
+            assert output.contains("gs_genotype_missing_value")
+            assert workflow.trace.tasks().isEmpty()
         }
     }
 

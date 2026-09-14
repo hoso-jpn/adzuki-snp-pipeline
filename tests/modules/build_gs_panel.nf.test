@@ -108,6 +108,92 @@ nextflow_process {
         }
     }
 
+    // Issue #64: the optional genotype quality mask, inside the real task
+    // container. The fixture carries every DP/GQ case the policy separates
+    // (boundary, below, '.', truncated, malformed, absent from FORMAT, phased,
+    // originally missing, non-standard); tests/bin/test_gs_genotype_quality_mask.py
+    // pins every cell, so this checks the container path renders the policy
+    // from params and publishes the same artifacts.
+    test("with the genotype quality mask enabled, low DP/GQ calls become nan and a masked BGZF VCF and policy are emitted") {
+
+        tag "issue64_genotype_quality_mask"
+
+        when {
+            params {
+                gs_genotype_quality_mask = "true"
+                gs_genotype_min_dp = "10"
+                gs_genotype_min_gq = "20"
+                gs_genotype_missing_format_field = "unevaluated"
+                gs_genotype_missing_value = "mask"
+                gs_genotype_malformed_value = "mask"
+            }
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort' ],
+                    file("${projectDir}/${FIXTURES}/gs_panel_quality.vcf.gz"),
+                    file("${projectDir}/${FIXTURES}/gs_panel_quality.vcf.gz.tbi"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def matrixLines = path(process.out.matrix[0][1].toString()).linesGzip
+            assert matrixLines[2] == 'chrQ:200:C:T\tnan\tnan\tnan\tnan'
+            assert matrixLines[1] == 'chrQ:100:A:G\t-1\t0\t1\t0'
+
+            def accounting = [:]
+            path(process.out.genotype_accounting[0]).readLines().drop(1).each { line ->
+                def parts = line.split('\t')
+                accounting[parts[1]] = parts[2]
+            }
+            assert accounting['total_genotype_cells'] == '32'
+            assert accounting['quality_masked_calls'] == '14'
+            assert accounting['total_treated_as_missing'] == '18'
+
+            // Same bytes as the committed expectation built outside the
+            // container, which the verifier module test consumes.
+            def expected = "${projectDir}/${FIXTURES}/gs_panel_quality_masked"
+            def masked = file(process.out.quality_masked_vcf[0][1])
+            assert masked.name == 'cohort.gs_panel.quality_masked.vcf.gz'
+            assert masked.bytes == file("${expected}/cohort.gs_panel.quality_masked.vcf.gz").bytes
+            assert file(process.out.quality_policy[0]).text ==
+                file("${expected}/cohort.gs_panel.genotype_quality_policy.json").text
+            assert file(process.out.matrix[0][1]).bytes ==
+                file("${expected}/cohort.gs_panel.genotype_matrix.tsv.gz").bytes
+        }
+    }
+
+    test("with the default reject policy, a call whose DP cannot be read fails the task") {
+
+        tag "issue64_genotype_quality_mask"
+
+        when {
+            params {
+                gs_genotype_quality_mask = "true"
+                gs_genotype_min_dp = "10"
+            }
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort' ],
+                    file("${projectDir}/${FIXTURES}/gs_panel_quality.vcf.gz"),
+                    file("${projectDir}/${FIXTURES}/gs_panel_quality.vcf.gz.tbi"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert !process.success
+            def output = process.stdout.toString() + process.errorReport.toString()
+            assert output.contains("DP is value_missing and the policy rejects it")
+        }
+    }
+
     test("a FORMAT column with no GT subfield fails the task and publishes no panel") {
 
         when {

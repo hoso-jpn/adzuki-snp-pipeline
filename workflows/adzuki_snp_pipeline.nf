@@ -127,6 +127,14 @@ include {
 } from '../modules/local/build_gs_panel_manifest'
 
 include {
+    GS_INDEX_QUALITY_MASKED_VCF
+} from '../modules/local/gs_index_quality_masked_vcf'
+
+include {
+    VERIFY_GS_GENOTYPE_QUALITY_MASK
+} from '../modules/local/verify_gs_genotype_quality_mask'
+
+include {
     HASH_INPUT_FASTQS
 } from '../modules/local/hash_input_fastqs'
 
@@ -729,6 +737,39 @@ workflow ADZUKI_SNP_PIPELINE {
             BUILD_GS_PANEL.out.sample_metadata,
         )
 
+        // Issue #64: the optional genotype quality mask. BUILD_GS_PANEL has
+        // already written the masked VCF and the policy in the same pass as
+        // the matrix when it is enabled; here the VCF is indexed and every
+        // masked artifact is verified against the policy and each other
+        // before the manifest may record them. Disabled, none of these
+        // processes starts and the manifest receives an explicit "off".
+        gs_quality_mask_enabled = params.gs_genotype_quality_mask.toString().toBoolean()
+        if (gs_quality_mask_enabled) {
+            GS_INDEX_QUALITY_MASKED_VCF(BUILD_GS_PANEL.out.quality_masked_vcf)
+            VERIFY_GS_GENOTYPE_QUALITY_MASK(
+                gs_pass_for_panel_ch,
+                GS_INDEX_QUALITY_MASKED_VCF.out.vcf,
+                BUILD_GS_PANEL.out.matrix,
+                BUILD_GS_PANEL.out.sample_metadata,
+                BUILD_GS_PANEL.out.variant_metadata,
+                BUILD_GS_PANEL.out.genotype_accounting,
+                BUILD_GS_PANEL.out.quality_policy,
+            )
+            gs_quality_mask_files_ch = BUILD_GS_PANEL.out.quality_policy
+                .combine(GS_INDEX_QUALITY_MASKED_VCF.out.vcf.map { _meta, vcf, vcf_index -> [vcf, vcf_index] })
+                .combine(
+                    VERIFY_GS_GENOTYPE_QUALITY_MASK.out.verification
+                        .map { _meta, verification, summary -> [verification, summary] }
+                )
+                .map { files -> files.flatten() }
+            gs_index_quality_masked_vcf_container_ch = GS_INDEX_QUALITY_MASKED_VCF.out.container_id
+            verify_gs_genotype_quality_mask_container_ch = VERIFY_GS_GENOTYPE_QUALITY_MASK.out.container_id
+        } else {
+            gs_quality_mask_files_ch = channel.value([])
+            gs_index_quality_masked_vcf_container_ch = channel.value('')
+            verify_gs_genotype_quality_mask_container_ch = channel.value('')
+        }
+
         // Issue #52: no literal container digests here any more. Each GS
         // process below emits its own `container_id` -- task.container,
         // captured from inside that exact task after Nextflow has already
@@ -764,6 +805,10 @@ workflow ADZUKI_SNP_PIPELINE {
             GATK_SELECTPASSVARIANTS_GS.out.container_id,
             BUILD_GS_PANEL.out.container_id,
             RECONCILE_GS_PANEL_ACCOUNTING.out.container_id,
+            gs_quality_mask_enabled,
+            gs_quality_mask_files_ch,
+            gs_index_quality_masked_vcf_container_ch,
+            verify_gs_genotype_quality_mask_container_ch,
         )
 
         gs_normalized_vcf_ch = GS_NORMALIZE_VARIANTS.out.vcf
@@ -793,6 +838,14 @@ workflow ADZUKI_SNP_PIPELINE {
             .mix(containerProvenance(BUILD_GS_PANEL.out.container_id, 'build_gs_panel'))
             .mix(containerProvenance(RECONCILE_GS_PANEL_ACCOUNTING.out.container_id, 'reconcile_gs_panel_accounting'))
             .mix(containerProvenance(BUILD_GS_PANEL_MANIFEST.out.container_id, 'build_gs_panel_manifest'))
+
+        // Issue #64: two more GS processes run only with the genotype quality
+        // mask, and their keys appear in the run manifest only then.
+        if (gs_quality_mask_enabled) {
+            optional_container_provenance_ch = optional_container_provenance_ch
+                .mix(containerProvenance(GS_INDEX_QUALITY_MASKED_VCF.out.container_id, 'gs_index_quality_masked_vcf'))
+                .mix(containerProvenance(VERIFY_GS_GENOTYPE_QUALITY_MASK.out.container_id, 'verify_gs_genotype_quality_mask'))
+        }
     } else {
         // enable_gs_panel=false: skip the entire GS lineage (normalization
         // through the reproducibility manifest) without starting a single
