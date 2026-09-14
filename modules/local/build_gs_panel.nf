@@ -32,7 +32,9 @@ def genotypeQualityArguments(prefix) {
     }
     arguments << "--quality-masked-vcf-output ${prefix}.quality_masked.vcf.gz"
     arguments << "--genotype-quality-policy-output ${prefix}.genotype_quality_policy.json"
-    return arguments.join(' ')
+    // Leading space included here, so with the mask off the rendered
+    // command has no trailing whitespace and is exactly the historical one.
+    return ' ' + arguments.join(' ')
 }
 
 // Issue #30: dedicated resource label (see nextflow.config for the
@@ -81,6 +83,6 @@ process BUILD_GS_PANEL {
         --sample-metadata-output ${prefix}.sample_metadata.tsv \
         --variant-metadata-output ${prefix}.variant_metadata.tsv \
         --genotype-accounting-output ${prefix}.genotype_encoding_accounting.tsv \
-        --genotype-accounting-summary-output ${prefix}.genotype_encoding_accounting.summary.txt ${quality_args}
+        --genotype-accounting-summary-output ${prefix}.genotype_encoding_accounting.summary.txt${quality_args}
     """
 }

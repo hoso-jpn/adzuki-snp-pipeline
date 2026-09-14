@@ -270,12 +270,141 @@ a purely informational count of how many calls (standard or otherwise)
 used `|`, independent of whether that call was ultimately encoded as a
 dosage or as missing.
 
+### Genotype quality mask (Issue #64, optional, off by default)
+
+The site-level hard filter judges a *site*. A PASS site can still carry
+individual calls supported by one or two reads, and the matrix encodes
+them like any other. `params.gs_genotype_quality_mask` adds an explicit,
+separate stage that turns such calls into missing genotypes. It is off by
+default, and **no threshold has a default**: none has been calibrated for
+a real adzuki cohort (see `docs/gs_panel_genotype_quality_mask.md` for the
+sensitivity measured on the 51-sample public cohort, which is not an
+accuracy result). With it off, every published byte and the process graph
+of the GS lineage are exactly what they were before; the only difference a
+reader sees is the manifest's schema v3 `genotype_quality_mask` block
+stating that it was off.
+
+| Parameter | Default | Meaning |
+| --- | --- | --- |
+| `gs_genotype_quality_mask` | `false` | enable the stage (requires `enable_gs_panel`) |
+| `gs_genotype_min_dp` | none | mask a call whose `FORMAT/DP` is below this; the value itself passes |
+| `gs_genotype_min_gq` | none | mask a call whose `FORMAT/GQ` is below this; the value itself passes |
+| `gs_genotype_missing_format_field` | `reject` | a configured field is absent from the row's FORMAT |
+| `gs_genotype_missing_value` | `reject` | the sample's value is `.`, or its subfields stop before it |
+| `gs_genotype_malformed_value` | `reject` | the value is not a non-negative decimal integer |
+
+The last three each take `reject` (fail the build, publish nothing),
+`unevaluated` (keep the call and count that the field could not be judged)
+or `mask`. The pipeline refuses, before any process starts, a threshold
+without the mask (it would be silently ignored), the mask without any
+threshold (nothing to evaluate), and the mask without the GS panel.
+
+**Single source of truth.** `bin/gs_genotype_quality.py` is the only
+place the rule lives. `bin/build_gs_panel.py` applies it once per call in
+its existing single pass and writes the matrix, the metadata, the
+accounting and the masked VCF from that one verdict;
+`bin/verify_gs_genotype_quality_mask.py` uses the same evaluator to check
+the published artifacts. There is no second masking implementation for the
+VCF to drift from.
+
+**What is evaluated.** Only calls the encoding would otherwise turn into a
+dosage — diploid, biallelic-index, no missing allele (`0/0`, `0/1`, `1/0`,
+`1/1`), **phased or not**. A call that is already missing (`./.`, `0/.`)
+or non-standard (haploid, non-biallelic index) is `nan` regardless and is
+counted under its existing reason; it is not evaluated a second time, and
+an unreadable DP on such a call cannot trigger `reject`.
+
+**Per-field status.** For each configured field every evaluated call has
+exactly one of `pass`, `below_threshold`, `format_field_absent`,
+`value_missing` (`.`), `value_truncated` (trailing subfields dropped, which
+real GATK output does for no-calls and some calls) or `value_malformed`.
+An absent or unreadable value is never read as `0` and never read as a
+pass. `below_threshold` always masks; the other four follow the three
+policies above. Note that htslib refuses a non-integer in an Integer FORMAT
+field outright, so `value_malformed` is a defensive category for input
+that did not come through htslib.
+
+**Masking and accounting.** A masked call is `nan` in the matrix. Because a
+call can fail DP and GQ at once, masked calls are partitioned by their
+*pair* of per-field reasons, each `none`, `low`, `unavailable` (absent,
+`.` or truncated, masked by policy) or `malformed`, so a call failing both
+is counted once, in `quality_masked_reason.dp_low.gq_low`, never in both
+single-reason rows. The accounting TSV keeps every historical row in its
+historical order — the three `standard_*_calls` rows now count calls still
+encoded after masking, and `total_treated_as_missing` includes the masked
+calls — and appends:
+
+| Row | Meaning |
+| --- | --- |
+| `genotype_quality_policy_hash` | canonical hash of the policy document |
+| `quality_evaluated_calls` | calls evaluated (see above) |
+| `quality_passed_calls` / `quality_kept_unevaluated_calls` / `quality_masked_calls` | partition of the evaluated calls |
+| `quality_masked_{hom_ref,het,hom_alt}_calls` | masked calls by the dosage they would have had |
+| `quality_masked_reason.<dp_r>.<gq_r>` | partition of the masked calls by reason pair (only configured fields appear) |
+| `dp_status.<status>`, `gq_status.<status>` | per configured field, a partition of the evaluated calls |
+
+The following hold by construction and are checked independently by the
+verifier:
+`total_genotype_cells = standard_hom_ref + standard_het + standard_hom_alt + total_treated_as_missing`;
+`total_treated_as_missing = missing + non_diploid + non_biallelic_index + quality_masked`;
+`quality_evaluated = passed + kept_unevaluated + masked = encoded + masked`;
+the reason pairs sum to `quality_masked_calls`; and each field's statuses
+sum to `quality_evaluated_calls`.
+
+Both metadata files gain one appended column,
+`quality_masked_genotype_count`, the subset of `missing_genotype_count`
+the policy masked; every existing column keeps its name, position and
+meaning.
+
+**Quality-masked VCF** (`cohort.gs_panel.quality_masked.vcf.gz` + `.tbi`).
+The GS-eligible PASS VCF is not modified. The builder writes a derived
+copy, as BGZF, in the same pass as the matrix; `GS_INDEX_QUALITY_MASKED_VCF`
+only indexes it, so no second tool re-serializes it. Relative to the PASS
+VCF:
+
+- one header line is added before `#CHROM`,
+  `##gs_genotype_quality_mask=<Schema=…,PolicyHash=…,MinDP=…,MinGQ=…,…>`;
+- sample order, variant order, fixed columns, FILTER and FORMAT are unchanged;
+- a masked call's GT alleles become `.` keeping its separator (`./.`, or
+  `.|.` for a phased call); **every other FORMAT subfield (AD, DP, GQ, PL,
+  …) is retained**, so the evidence behind each masking stays auditable;
+- on a row with at least one masked call, `AC`, `AN` and `AF` are
+  recomputed from that row's masked GTs (`AF=.` when `AN=0`); a row with no
+  masked call is copied byte for byte. Other INFO annotations (`DP`, `QD`,
+  `MLEAC`, `InbreedingCoeff`, …) describe the original call set and are
+  **not** recomputed.
+- sites are never removed, so a site whose calls are all masked remains,
+  with `AC=0;AN=0;AF=.`. Site exclusion, sample exclusion and MAF selection
+  are separate stages and are not part of this one.
+
+The PASS VCF header must define `AC`, `AN` and `AF` as INFO when the mask
+is enabled; otherwise the build fails rather than writing undeclared
+fields.
+
+**Verification.** `VERIFY_GS_GENOTYPE_QUALITY_MASK` streams the original
+PASS VCF, the masked VCF, the matrix and the variant metadata in lockstep
+and checks every cell: the masked VCF differs from the original only as
+described above, each call is masked exactly when the recorded policy
+masks it, each matrix token is the original dosage or `nan` exactly when
+the call was non-standard or masked, AC/AN/AF match the masked GTs, and
+the metadata and accounting equal the counts it re-derives. Any
+disagreement fails the run with no output, and `BUILD_GS_PANEL_MANIFEST`
+waits for it. Its result is published as
+`cohort.gs_panel.genotype_quality_mask_verification.{tsv,summary.txt}`.
+
+**Memory.** Both the builder's enabled path and the verifier hold one row
+of each input plus per-sample and fixed-size counters, as Issue #44
+requires; `tests/bin/test_gs_genotype_quality_mask.py` measures peak RSS
+across a 16x variant increase for both, and the production path is
+checked never to reach the materializing reference implementation.
+
 ### Diploid-only constraint (genotype encoding `diploid_additive_dosage_v1`)
 
 This constraint belongs to the *genotype encoding* schema
 (`diploid_additive_dosage_v1`), which is versioned independently of the
-manifest's own `schema_version` (2 since Issue #52) — the encoding did
-not change when the manifest's `containers` field did.
+manifest's own `schema_version` (2 since Issue #52, 3 since Issue #64) —
+the encoding did not change when the manifest's `containers` field did,
+nor when the optional genotype quality mask was added.
 
 This encoding is diploid-only by design, not merely by convention: the
 classification rule above has no way to assign a meaningful dosage to a
@@ -474,6 +603,7 @@ header order:
 | `missing_genotype_count` | Count of `nan` cells for this sample, any reason |
 | `missing_genotype_rate` | `missing_genotype_count / total_variants`, or `NA` if there are zero variants |
 | `non_standard_genotype_count` | Subset of `missing_genotype_count` caused by non-diploid/non-biallelic-index calls specifically (excludes plain missing; a phased call is not "non-standard" by itself — see "Dosage encoding" above) |
+| `quality_masked_genotype_count` | Only with the genotype quality mask: subset of `missing_genotype_count` masked by the policy |
 
 `cohort.gs_panel.variant_metadata.tsv` — one row per variant, in
 genomic-coordinate (file) order:
@@ -486,6 +616,7 @@ genomic-coordinate (file) order:
 | `chrom`, `pos`, `ref`, `alt`, `qual` | The post-split, post-classification record's own fixed VCF columns |
 | `missing_genotype_count` | Count of `nan` cells for this variant, any reason |
 | `missing_genotype_rate` | `missing_genotype_count / total_samples` |
+| `quality_masked_genotype_count` | Only with the genotype quality mask: subset of `missing_genotype_count` masked by the policy |
 
 ## Record accounting (concern 5)
 
@@ -567,7 +698,7 @@ plain field-count-only check would miss.
 ## Reproducibility manifest (concern 6)
 
 `cohort.gs_panel.manifest.json` (`bin/build_gs_panel_manifest.py`) is
-schema-versioned (`schema_version: 2`) and mirrors the *shape* of the
+schema-versioned (`schema_version: 3`) and mirrors the *shape* of the
 sibling repository's own `run_manifest.py` — a sortable `run_id`
 (`<UTC-timestamp>-<uuid4-hex8>`), deterministic canonical JSON, a
 self-referential `manifest_hash`, and filename-only checksums (never an
@@ -578,7 +709,7 @@ stdlib-only Python instead.
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "run_id": "20260814T074225Z-c22d6e72",
   "generated_at": "2026-08-14T07:42:25Z",
   "cohort_id": "cohort",
@@ -602,6 +733,13 @@ stdlib-only Python instead.
     "missing_token": "nan",
     "matrix_orientation": "variant_rows_by_sample_columns",
     "ploidy": "diploid_only"
+  },
+  "genotype_quality_mask": {
+    "enabled": false,
+    "policy": { "schema": "gs_genotype_quality_policy_v1", "enabled": false },
+    "policy_hash": "sha256:...",
+    "matrix_nan_includes_quality_masked_calls": false,
+    "quality_masked_vcf": null
   },
   "panel_status": "empty",
   "checksums": { "cohort.gs_panel.genotype_matrix.tsv.gz": "sha256:...", "...": "..." },
@@ -690,6 +828,32 @@ the same field. Older, already-published `schema_version: 1` manifests
 in this repository's docs) are untouched by this change and remain valid
 schema v1 documents; only newly generated manifests use schema v2.
 
+**`genotype_quality_mask` (schema v3, Issue #64).** Present in every v3
+manifest. With the mask off it records `enabled: false` and the disabled
+policy document, so "no mask was applied" is stated rather than inferred
+from an absent field. With the mask on it records the exact policy document
+the build wrote (refused unless it is in canonical form), its hash — the
+same value as the accounting's `genotype_quality_policy_hash` and the masked
+VCF's `PolicyHash` — `matrix_nan_includes_quality_masked_calls: true`, and
+the masked VCF's file name. `checksums` then also covers the policy JSON, the
+masked VCF and its index, and both verification outputs (16 entries instead
+of 11), and `containers` gains `gs_index_quality_masked_vcf` and
+`verify_gs_genotype_quality_mask` (10 instead of 8). Those two keys, and
+those five checksums, appear if and only if the mask ran; a manifest
+invocation that contradicts that fails.
+
+**Schema v2 → v3: why a version bump.** In a masked panel a `nan` can be a
+call the policy removed. A v2 reader has no field telling it to look for
+that, and would read every `nan` as missing or non-standard — the silent
+misreading the Issue asks to prevent. Adding an ignorable field would leave
+exactly that reader able to proceed, so the version moves instead: a
+consumer that checks `schema_version == 2` refuses a v3 manifest and fails
+closed. v3 is otherwise v2 plus the block above, so migrating a consumer
+means accepting 3 and reading `genotype_quality_mask.enabled` (and, when it
+is true, `policy`) before interpreting `nan`. The disabled data artifacts
+are byte-identical to v2-era panels. Published schema v1 and v2 manifests
+are not rewritten.
+
 Software versions are therefore recorded as each GS process's own
 effective container identity (see `containers` above) rather than by
 shelling out to e.g. `bcftools --version` at run time.
@@ -721,6 +885,12 @@ timestamp:
 - `cohort.gs_panel.variant_metadata.tsv`
 - `cohort.gs_panel.genotype_encoding_accounting.tsv` and its `.summary.txt`
 - `cohort.gs_panel.record_accounting.tsv` and its `.summary.txt`
+
+With the genotype quality mask on, the policy JSON and both verification
+outputs join that list. The masked VCF is deterministic for a given PASS
+VCF and policy, but it copies the PASS VCF's header, so across independent
+runs it inherits the same `##GATKCommandLine` timestamp caveat described
+below.
 
 These are byte-for-byte reproducible across independent runs over
 identical input (`bin/build_gs_panel.py`'s matrix writer explicitly sets
