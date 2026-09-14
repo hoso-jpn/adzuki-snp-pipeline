@@ -1,0 +1,561 @@
+{
+  "schema_version": 1,
+  "target_samples": 327,
+  "decides_nothing": "inputs to the reviewed 327 gate; see gate_327_decision.json",
+  "observed": {
+    "scaling_window": "NC_068975.1:1-20000000",
+    "scaling_levels": [
+      {
+        "samples": 13,
+        "output_variants": 181326,
+        "genotype_cells_millions": 2.357,
+        "genotype_peak_rss_gib": 1.27,
+        "genotype_wall_seconds": 248.6,
+        "import_wall_seconds": 274.6,
+        "import_peak_rss_gib": 1.08,
+        "workspace_bytes": 797043805,
+        "workspace_file_count": 47,
+        "output_vcf_bytes": 31376547,
+        "batches_completed": [
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      {
+        "samples": 26,
+        "output_variants": 273562,
+        "genotype_cells_millions": 7.113,
+        "genotype_peak_rss_gib": 2.107,
+        "genotype_wall_seconds": 453.2,
+        "import_wall_seconds": 527.5,
+        "import_peak_rss_gib": 0.802,
+        "workspace_bytes": 1548786687,
+        "workspace_file_count": 47,
+        "output_vcf_bytes": 74297841,
+        "batches_completed": [
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      {
+        "samples": 51,
+        "output_variants": 792503,
+        "genotype_cells_millions": 40.418,
+        "genotype_peak_rss_gib": 7.463,
+        "genotype_wall_seconds": 1009.1,
+        "import_wall_seconds": 901.2,
+        "import_peak_rss_gib": 1.309,
+        "workspace_bytes": 2705621852,
+        "workspace_file_count": 87,
+        "output_vcf_bytes": 311144108,
+        "batches_completed": [
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ]
+      }
+    ],
+    "e0_chromosomes_at_51": [
+      {
+        "contig": "NC_068970.1",
+        "bp": 65407200,
+        "variants": 1728274,
+        "genotype_peak_rss_gib": 17.547,
+        "genotype_wall_seconds": 3158.0
+      },
+      {
+        "contig": "NC_068971.1",
+        "bp": 52846339,
+        "variants": 1421279,
+        "genotype_peak_rss_gib": 14.755,
+        "genotype_wall_seconds": 2555.3
+      },
+      {
+        "contig": "NC_068972.1",
+        "bp": 42681439,
+        "variants": 1143535,
+        "genotype_peak_rss_gib": 11.798,
+        "genotype_wall_seconds": 2051.4
+      },
+      {
+        "contig": "NC_068973.1",
+        "bp": 42641100,
+        "variants": 1099962,
+        "genotype_peak_rss_gib": 11.658,
+        "genotype_wall_seconds": 2030.3
+      },
+      {
+        "contig": "NC_068974.1",
+        "bp": 41033850,
+        "variants": 1332434,
+        "genotype_peak_rss_gib": 13.032,
+        "genotype_wall_seconds": 2079.4
+      },
+      {
+        "contig": "NC_068975.1",
+        "bp": 38121061,
+        "variants": 1180578,
+        "genotype_peak_rss_gib": 11.686,
+        "genotype_wall_seconds": 1905.1
+      },
+      {
+        "contig": "NC_068976.1",
+        "bp": 37163307,
+        "variants": 1170122,
+        "genotype_peak_rss_gib": 11.225,
+        "genotype_wall_seconds": 1821.4
+      },
+      {
+        "contig": "NC_068977.1",
+        "bp": 36286043,
+        "variants": 1234785,
+        "genotype_peak_rss_gib": 12.009,
+        "genotype_wall_seconds": 1827.7
+      },
+      {
+        "contig": "NC_068978.1",
+        "bp": 32215300,
+        "variants": 1181881,
+        "genotype_peak_rss_gib": 10.866,
+        "genotype_wall_seconds": 1639.6
+      },
+      {
+        "contig": "NC_068979.1",
+        "bp": 31493818,
+        "variants": 938812,
+        "genotype_peak_rss_gib": 9.995,
+        "genotype_wall_seconds": 1522.7
+      },
+      {
+        "contig": "NC_068980.1",
+        "bp": 27654650,
+        "variants": 783453,
+        "genotype_peak_rss_gib": 8.428,
+        "genotype_wall_seconds": 1303.0
+      }
+    ],
+    "e2a_adopted_plan_at_51": {
+      "interval_count": 53,
+      "import_wall_seconds_sum": 19215.7,
+      "genotype_wall_seconds_sum": 21752.4,
+      "elapsed_seconds_including_validation": 14708.6,
+      "import_peak_rss_gib_max": 1.764,
+      "genotype_peak_rss_gib_max": 7.428,
+      "workspace_bytes": 55117622673,
+      "workspace_file_count": 4611,
+      "gathered_callset_bytes": 4858608859,
+      "genotype_tier_gib": 32.0,
+      "concurrent_tasks": 3
+    },
+    "chromosome_variant_density_per_mb_at_51": 29528,
+    "scaling_window_variant_density_per_mb_at_51": 39625,
+    "composition": {
+      "method": "one streaming pass over the 51-sample level's own joint.vcf.gz: per sample, called genotypes with any non-reference allele, heterozygous calls and no-calls; per site, the lowest manifest position among non-reference carriers",
+      "sites_by_first_non_reference_carrier": {
+        "positions_1_13": 213235,
+        "positions_14_26": 87400,
+        "positions_27_51": 491868
+      },
+      "sites_total": 792503,
+      "per_sample_non_reference_calls": {
+        "typical_range": "43,211-83,519",
+        "high_divergence_samples": {
+          "SRR29908888": 215509,
+          "SRR29909068": 160634,
+          "SRR29909070": 213379,
+          "SRR29909072": 177442,
+          "SRR29909073": 176546,
+          "SRR29909074": 216808,
+          "SRR29909423": 177680
+        },
+        "high_divergence_note": "these seven samples, all at manifest positions 33-50, carry 2-3x the typical non-reference calls, mostly homozygous-alternative, i.e. they are far more divergent from the Longxiaodou 4 reference than the rest; the public metadata has no attribute that identifies them in advance"
+      },
+      "consequence": "the 26->51 step adds seven divergent samples, so variant count (x2.90), GenotypeGVCFs RSS (x3.54) and output size (x4.19) jump far more than sample count (x1.96). Sample count and cohort composition are confounded along this series; a trend fitted over N alone attributes composition to N.",
+      "new_sites_per_added_sample": {
+        "positions_14_26": 6723,
+        "positions_27_51": 19675
+      }
+    },
+    "input_gvcf_51": {
+      "bytes_total": 48034833731,
+      "bytes_min": 398382477,
+      "bytes_median": 986835700,
+      "bytes_max": 1278319188
+    },
+    "fastq_bytes": {
+      "selected_51": 207358941216,
+      "all_327": 1554504969936
+    },
+    "generation_51": {
+      "run_id": "issue45-51gvcf-20260910-200521",
+      "source": "Nextflow trace.tsv and the controller's host monitor",
+      "tasks_completed": 359,
+      "retries": 0,
+      "nextflow_aggregate_allocation": "24 logical CPUs / 96 GiB",
+      "elapsed_seconds": 61556,
+      "cpu_hours_by_process": {
+        "BWA_MEM2_MEM_SORT": 131.44,
+        "GATK_HAPLOTYPECALLER": 123.59,
+        "FASTP": 7.88,
+        "GATK_MARKDUPLICATES": 5.47,
+        "SAMTOOLS_MERGE": 2.95,
+        "SAMTOOLS_QC": 1.29,
+        "SAMTOOLS_INDEX": 0.26,
+        "BWA_MEM2_INDEX": 0.03
+      },
+      "cpu_hours_total": 272.9,
+      "storage_consumed_bytes_net": 780679118848,
+      "storage_consumed_scope": "work directory and published outputs with every intermediate retained (no Nextflow cleanup), excluding the pre-existing input FASTQs",
+      "mem_available_min_gib": 76.4,
+      "swap_delta_mib": -82.75,
+      "fastq_bytes": 207358941216,
+      "fastq_bytes_source": "sum of published fastq_bytes in cohort_selection.json"
+    },
+    "host": {
+      "name": "seedcore-01",
+      "logical_cpus": 32,
+      "memory_total_bytes": 132607356928,
+      "benchmark_launch_memory_gate_bytes": 118111600640,
+      "data_volume_total_bytes": 3936817758208,
+      "data_volume_free_bytes_after_scaling": 2028107632640,
+      "note": "the data volume holds this Issue's retained FASTQ, gVCF, workspaces and callsets; free space is a point reading and moves with retention decisions"
+    },
+    "production_resource_contract": {
+      "source": "nextflow.config and modules/local at production SHA 3158ca50c2c13c31bdc80db302c7df4bbb5670bf",
+      "genotypegvcfs": "process_high: 8 CPU, 16 GB x task.attempt, maxRetries 1 on exit 137/140/143, so 16 GB then 32 GB",
+      "genomicsdbimport": "process_genomicsdb: 8 CPU, 16 GB x task.attempt",
+      "interval_strategy": "one task per contig",
+      "sample_input": "repeated --variant",
+      "consolidate": "not passed (GATK default false)",
+      "cleanup": "not configured"
+    }
+  },
+  "empirical_trends": {
+    "genotype_rss_vs_cells": {
+      "e0_eleven_chromosomes_fixed_51_samples": {
+        "intercept": 0.5755676466346404,
+        "slope": 0.18794248010560358,
+        "r2": 0.9514321462762356,
+        "max_abs_residual": 1.0379756094488748
+      },
+      "e0_same_points_vs_length_for_comparison": {
+        "intercept": 3.172277495983499,
+        "slope": 0.2192050928830161,
+        "r2": 0.9331667121705383,
+        "max_abs_residual": 0.8826370778443859
+      },
+      "scaling_pair_slopes_gib_per_million_cells": {
+        "13_to_26": 0.17618664789373362,
+        "26_to_51": 0.16080088879313484
+      },
+      "slope_range_gib_per_million_cells": [
+        0.16080088879313484,
+        0.18794248010560358
+      ],
+      "largest_observed_task_cells_millions": 88.141974,
+      "largest_observed_task_rss_gib": 17.547,
+      "reading": "three independent estimates, one at fixed N across contigs and two along N, agree within 0.16-0.19 GiB per million genotype cells"
+    },
+    "genotype_rss_vs_n_alone_not_used": {
+      "power_fit": {
+        "coefficient": 0.04048886082114492,
+        "exponent": 1.2931269900404587,
+        "r2_log": 0.938630494715889
+      },
+      "reason": "composition changes with N along the prefix series, so an N-only exponent is not a property of sample count"
+    },
+    "genotype_wall_vs_n": {
+      "linear_fit": {
+        "intercept": -39.06423149100533,
+        "slope": 20.311743966311138,
+        "r2": 0.9935596486435329,
+        "max_abs_residual": 35.87798060408841
+      },
+      "power_fit": {
+        "coefficient": 17.333171968495705,
+        "exponent": 1.024208580311795,
+        "r2_log": 0.9918339643100454
+      },
+      "ratio_to_last_observed": {
+        "linear": 6.543274945424407,
+        "power": 6.461918181275908,
+        "upper_pair_slope": 7.082238080968188
+      },
+      "ratio_min": 6.461918181275908,
+      "ratio_max": 7.082238080968188
+    },
+    "genotype_wall_at_fixed_n": {
+      "vs_length_r2": 0.9917619930537427,
+      "vs_variants_r2": 0.8701901516886447,
+      "reading": "wall time follows interval length more closely than variant count, so it is less composition-sensitive than memory"
+    },
+    "import_wall_vs_n": {
+      "linear_fit": {
+        "intercept": 79.24541869552974,
+        "slope": 16.2828054737154,
+        "r2": 0.9951730929801516,
+        "max_abs_residual": 24.879254213842728
+      },
+      "power_fit": {
+        "coefficient": 29.978504460898478,
+        "exponent": 0.8698722566798439,
+        "r2_log": 0.9976244858516888
+      },
+      "ratio_to_last_observed": {
+        "linear": 5.996426554920294,
+        "power": 5.120881746920637,
+        "upper_pair_slope": 5.577916536850606
+      },
+      "ratio_min": 5.120881746920637,
+      "ratio_max": 5.996426554920294
+    },
+    "import_peak_rss_gib": {
+      "observed": [
+        1.08,
+        0.802,
+        1.309
+      ],
+      "reading": "no trend with N; readers are bounded by the batch size"
+    },
+    "workspace_bytes_vs_n": {
+      "linear_fit": {
+        "intercept": 192939400.05093837,
+        "slope": 49695934.93163539,
+        "r2": 0.9965925387613997,
+        "max_abs_residual": 63752978.72654152
+      },
+      "power_fit": {
+        "coefficient": 81559591.10208122,
+        "exponent": 0.8944476606589925,
+        "r2_log": 0.9982331833779592
+      },
+      "ratio_to_last_observed": {
+        "linear": 6.077534490099065,
+        "power": 5.3498215633475485,
+        "upper_pair_slope": 5.72034191036686
+      },
+      "ratio_min": 5.3498215633475485,
+      "ratio_max": 6.077534490099065
+    },
+    "workspace_files_per_array": {
+      "fixed": 7,
+      "per_batch": 40,
+      "reading": "47 files with one batch and 87 with two"
+    },
+    "output_bytes_per_cell": {
+      "observed": [
+        13.31,
+        10.45,
+        7.7
+      ],
+      "log_log_slope_upper_pair": -0.17567821296780955
+    }
+  },
+  "assumptions": {
+    "A1_cells_model_extrapolates": "GenotypeGVCFs peak RSS stays linear in genotype cells beyond the largest observed task (88 M cells)",
+    "A2_variant_scenarios": {
+      "S0_no_new_sites": "the 276 additional samples add no variant site; a floor, since sites are practically never removed by adding samples",
+      "S1_neutral_harmonic": "discovery follows Watterson's a_n from 51 to 327 samples, i.e. the 51 samples are representative of a panmictic 327; contradicted in part by the observed divergent subgroup",
+      "S2_typical_rate_constant": "every added sample contributes 6723 new sites, the rate observed for positions 14-26, without the decline discovery normally shows",
+      "S3_divergent_mix_rate_constant": "every added sample contributes 19675 new sites, the rate observed for positions 27-51 including seven divergent samples, without decline; a deliberately pessimistic bound"
+    },
+    "A3_window_is_representative": "the scaling window's variant growth applies genome-wide; at 51 samples it is denser than the chromosome average, which makes window-level memory conservative",
+    "A4_seven_batches": "7 import batches behave like the observed one- and two-batch regimes, per sample and per batch",
+    "A5_same_host_and_io": "the same host, storage and 3-task concurrency as the suite",
+    "A6_upstream_scales_with_fastq_bytes": "generation storage and CPU scale with FASTQ bytes (ratio from the published 327 sizes) or with sample count; both are shown",
+    "A7_retained_intermediates": "production has no cleanup configured, so a full run retains intermediates the way the 51-sample generation did"
+  },
+  "projected": {
+    "per_variant_scenario": {
+      "S0_no_new_sites": {
+        "window_variants": 792503,
+        "variant_growth_vs_51": 1.0,
+        "window_genotype_cells_millions": 259.1,
+        "genotype_peak_rss_gib_20mb_window": [
+          42.6,
+          48.6
+        ],
+        "fits_current_genotype_tier": false,
+        "concurrent_tasks_within_launch_gate_at_projected_rss": 2,
+        "max_window_bp_within_observed_cells": 6802430,
+        "chromosome_tasks_at_that_window": 72,
+        "gathered_callset_gb": [
+          22.5,
+          31.2
+        ],
+        "callset_gb_with_per_interval_copies": [
+          45.0,
+          62.3
+        ],
+        "production_per_contig_longest_genotype_rss_gib": [
+          94.2,
+          107.2
+        ],
+        "full_run_retained_storage_tb": [
+          6.9,
+          7.82
+        ]
+      },
+      "S1_neutral_harmonic": {
+        "window_variants": 1121263,
+        "variant_growth_vs_51": 1.415,
+        "window_genotype_cells_millions": 366.7,
+        "genotype_peak_rss_gib_20mb_window": [
+          59.9,
+          68.8
+        ],
+        "fits_current_genotype_tier": false,
+        "concurrent_tasks_within_launch_gate_at_projected_rss": 1,
+        "max_window_bp_within_observed_cells": 4807922,
+        "chromosome_tasks_at_that_window": 96,
+        "gathered_callset_gb": [
+          29.9,
+          44.1
+        ],
+        "callset_gb_with_per_interval_copies": [
+          59.8,
+          88.2
+        ],
+        "production_per_contig_longest_genotype_rss_gib": [
+          131.9,
+          151.3
+        ],
+        "full_run_retained_storage_tb": [
+          6.91,
+          7.85
+        ]
+      },
+      "S2_typical_rate_constant": {
+        "window_variants": 2648072,
+        "variant_growth_vs_51": 3.341,
+        "window_genotype_cells_millions": 865.9,
+        "genotype_peak_rss_gib_20mb_window": [
+          140.2,
+          162.6
+        ],
+        "fits_current_genotype_tier": false,
+        "concurrent_tasks_within_launch_gate_at_projected_rss": 0,
+        "max_window_bp_within_observed_cells": 2035800,
+        "chromosome_tasks_at_that_window": 224,
+        "gathered_callset_gb": [
+          60.8,
+          104.1
+        ],
+        "callset_gb_with_per_interval_copies": [
+          121.5,
+          208.2
+        ],
+        "production_per_contig_longest_genotype_rss_gib": [
+          307.0,
+          355.9
+        ],
+        "full_run_retained_storage_tb": [
+          6.98,
+          7.97
+        ]
+      },
+      "S3_divergent_mix_rate_constant": {
+        "window_variants": 6222726,
+        "variant_growth_vs_51": 7.852,
+        "window_genotype_cells_millions": 2034.8,
+        "genotype_peak_rss_gib_20mb_window": [
+          328.2,
+          382.3
+        ],
+        "fits_current_genotype_tier": false,
+        "concurrent_tasks_within_launch_gate_at_projected_rss": 0,
+        "max_window_bp_within_observed_cells": 866332,
+        "chromosome_tasks_at_that_window": 523,
+        "gathered_callset_gb": [
+          122.9,
+          244.6
+        ],
+        "callset_gb_with_per_interval_copies": [
+          245.8,
+          489.2
+        ],
+        "production_per_contig_longest_genotype_rss_gib": [
+          716.9,
+          835.0
+        ],
+        "full_run_retained_storage_tb": [
+          7.1,
+          8.25
+        ]
+      }
+    },
+    "task_hours": {
+      "import": [
+        27.3,
+        32.0
+      ],
+      "genotype": [
+        39.0,
+        42.8
+      ],
+      "elapsed_hours_at_3_tasks": [
+        23.8,
+        26.9
+      ],
+      "elapsed_hours_at_2_tasks": [
+        35.7,
+        40.3
+      ],
+      "elapsed_hours_at_1_task": [
+        71.5,
+        80.6
+      ],
+      "scheduling_overhead_factor_observed_e2a": 1.077
+    },
+    "workspace": {
+      "bytes_gb": [
+        294.9,
+        353.4
+      ],
+      "files_per_array": 287,
+      "files_e2a_plan": 15211
+    },
+    "import_batches_per_array": 7,
+    "input_gvcf_gb": [
+      308.0,
+      360.1
+    ],
+    "generation": {
+      "retained_storage_tb": [
+        5.01,
+        5.85
+      ],
+      "cpu_hours": [
+        1750,
+        2046
+      ],
+      "elapsed_hours_same_allocation": [
+        110,
+        128
+      ]
+    },
+    "fastq_tb": 1.55,
+    "data_volume_tb": {
+      "total": 3.94,
+      "free_now": 2.03
+    }
+  },
+  "uncertainty": [
+    "Variant count at 327 samples is unmeasured; S0-S3 span a factor of about eight and dominate the memory and callset ranges.",
+    "A1 extrapolates the cells model beyond its largest observation (88 M cells); even S0 needs about three times that for a 20 Mb window.",
+    "Peak RSS is a resident-set reading under a 26 GiB heap, not a measured live set; the E0 OOM shows the live set does track it near a ceiling.",
+    "The 51-sample cohort is an accession-order selection, not a random sample of the 327; the divergent subgroup's share of the 327 is unknown.",
+    "Import at seven batches is extrapolated from one- and two-batch regimes.",
+    "Wall-time ranges come from one window and the three N-trend forms; composition could add to genotype time, though less than to memory.",
+    "Upstream generation figures are one 51-sample run on this host with every intermediate retained; they are context for a full run, not a Joint Genotyping measurement."
+  ]
+}

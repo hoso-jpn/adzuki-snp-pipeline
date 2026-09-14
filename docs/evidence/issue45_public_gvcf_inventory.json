@@ -1,0 +1,76 @@
+{
+  "audit_date": "2026-09-10",
+  "search_scope": [
+    "known public cohort archive for Issues 11, 26, 33, 35",
+    "public pipeline checkouts and Issue 44 replay",
+    "data volume top-level inventory"
+  ],
+  "published_gvcf_sets": [
+    {
+      "run": "issue11-genomicsdb-smoke-2026-08-23/gvcf",
+      "gvcf_count": 1,
+      "unique_sample_count": 1,
+      "gatk_versions": [
+        "4.6.2.0"
+      ]
+    },
+    {
+      "run": "issue26-cohort-2026-08-23",
+      "gvcf_count": 5,
+      "unique_sample_count": 5,
+      "gatk_versions": [
+        "4.6.2.0"
+      ]
+    },
+    {
+      "run": "issue33-cohort-2026-08-25/runs/10sample",
+      "gvcf_count": 10,
+      "unique_sample_count": 10,
+      "gatk_versions": [
+        "4.6.2.0"
+      ]
+    },
+    {
+      "run": "issue33-cohort-2026-08-25/runs/20sample",
+      "gvcf_count": 20,
+      "unique_sample_count": 20,
+      "gatk_versions": [
+        "4.6.2.0"
+      ]
+    },
+    {
+      "run": "phase5-2026-08-23",
+      "gvcf_count": 1,
+      "unique_sample_count": 1,
+      "gatk_versions": [
+        "4.6.2.0"
+      ]
+    }
+  ],
+  "unique_public_samples_across_sets": 20,
+  "samples": [
+    "SRR29908836",
+    "SRR29908888",
+    "SRR29908965",
+    "SRR29909067",
+    "SRR29909068",
+    "SRR29909069",
+    "SRR29909070",
+    "SRR29909072",
+    "SRR29909073",
+    "SRR29909074",
+    "SRR29909124",
+    "SRR29909135",
+    "SRR29909171",
+    "SRR29909330",
+    "SRR29909372",
+    "SRR29909384",
+    "SRR29909418",
+    "SRR29909421",
+    "SRR29909423",
+    "SRR29909434"
+  ],
+  "required_samples": 51,
+  "missing_unique_samples_at_least": 31,
+  "decision": "BLOCKED: no 51+ homogeneous public gVCF cohort located"
+}

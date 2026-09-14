@@ -19,7 +19,8 @@
 | Synthetic CI | 実装済み | Python unit tests、Nextflow lint、pipeline/module-level nf-test、GitHub Actions |
 | Real cohort | 20検体まで検証済み | Issue #26で5検体、Issue #33で10→20検体。30検体は追加情報量とコストを比較し明示的にskip |
 | Classifier memory | streaming化済み | Issue #35。10/20検体targeted replayでPython RSS約20.8/20.9 MiB、swap delta 0 |
-| 327検体 | 未検証 | 50検体超のJoint Genotyping設計・benchmarkを先に実施する |
+| 50検体超Joint Genotyping | 51検体でtargeted benchmark済み | Issue #45。sample-name-map・20 Mb window採用、grouping・ReblockGVCF・consolidate不採用。productionは未変更 |
+| 327検体 | **NO-GO** | Issue #45のresource envelopeで、GenotypeGVCFs memoryとstorageが現行契約を超えると投影。再評価条件はbenchmark文書に記載 |
 | Hard-filter biological calibration | 未確立 | 現在値は設定可能な運用上の出発点。truth setなしに最適性を主張しない |
 | Production use | 非対応 | research / engineering validation repository |
 
@@ -257,7 +258,7 @@ Versioned research releasesは[GitHub Releases](https://github.com/hoso-jpn/adzu
 - MultiQC統合はsynthetic fixtureのみで検証しています。real 20検体でのMultiQC再実行は未実施です。
 - hard-filter thresholdの生物学的妥当性は未確立です。truth setがないため`FILTER=PASS`は「設定された規則を通過した」以上の意味を持たず、accuracy / precision / recallは主張しません。
 - 30検体stageはコストと情報量の比較により明示的にskipしており、失敗ではなく未測定です。
-- 50検体超のGenomicsDB batchingと327検体full cohortは未検証です。`genomicsdb_batch_size=50`は初期運用値であり最適化値ではありません。
+- 51検体でGenomicsDBの50 + 1 batchingを実測しましたが、production pipelineへの反映と327検体full cohortは未実施です。`genomicsdb_batch_size=50`は初期運用値であり最適化値ではありません。
 - BQSRは検証済みknown-sites未確立のため意図的に除外しています。
 - production SLAとvariant call精度の優位性は保証しません。
 
@@ -279,6 +280,16 @@ Versioned research releasesは[GitHub Releases](https://github.com/hoso-jpn/adzu
 - [`docs/real_cohort_scale_validation.md`](docs/real_cohort_scale_validation.md)
 - `docs/real_cohort_scale_validation_10sample_manifest.json`
 - `docs/real_cohort_scale_validation_20sample_manifest.json`
+
+### 50+ sample Joint Genotyping — Issue #45
+
+327検体full E2Eの前段として、51検体以上の同一lineage gVCFだけを使い、sample-name-map、
+interval split/group、ReblockGVCFs、consolidateを一要因ずつ比較するtargeted benchmark手順を
+実行しました。51検体でE0〜E4、13/26/51検体のscaling補助測定、327検体resource envelopeを記録し、
+full 327-sample runのGateは**NO-GO**です（GenotypeGVCFs memoryとstorageが現行契約を超える投影）。
+production設定は変更していません。
+
+- [`docs/joint_genotyping_50plus_benchmark.md`](docs/joint_genotyping_50plus_benchmark.md)
 
 ### Streaming classifier — Issue #35
 

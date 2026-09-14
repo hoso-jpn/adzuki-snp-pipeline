@@ -1,0 +1,20 @@
+{
+  "data_type": "synthetic regression only",
+  "production_sha": "3158ca50c2c13c31bdc80db302c7df4bbb5670bf",
+  "nextflow": "26.04.6",
+  "gatk": "4.6.2.0",
+  "samples": [
+    {
+      "sample": "sample_a",
+      "records": 75,
+      "record_sha256": "ccf921d5efec2ffa65bf2fe0627566ca84a95ea7f370098ef1c3549eb122f197",
+      "record_bytes_identical_to_full_frozen_main": true
+    },
+    {
+      "sample": "sample_b",
+      "records": 52,
+      "record_sha256": "8fde0c17001416271af39b17221971d9a4dfa8b2a84249d94451b52885016bda",
+      "record_bytes_identical_to_full_frozen_main": true
+    }
+  ]
+}

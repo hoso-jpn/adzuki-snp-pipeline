@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "title": "GenotypeGVCFs peak RSS against interval length at 51 samples",
+  "source_run": "issue45-e0-e4-20260913-0040",
+  "source_experiment": "E0",
+  "allocation_regime": "common_ceiling_comparison (32 GiB container, 26 GiB derived heap)",
+  "why_this_supersedes_the_earlier_ratio": "The 16 GiB attempt's per-contig ratios averaged about 0.28 GiB/Mb, but its two longest readings were clipped by the ceiling under test and it never completed the longest contig. Every point below was measured under a ceiling no reading approached, so the fit rests on unclipped data.",
+  "observed": {
+    "sample_count": 51,
+    "reference_accession": "GCF_016808095.1",
+    "gatk_version": "4.6.2.0",
+    "sample_ploidy": 2,
+    "chromosome_scale_points": 11,
+    "chromosome_scale_range_mb": [
+      27.65,
+      65.41
+    ],
+    "chromosome_scale_peak_rss_gib": [
+      8.43,
+      17.55
+    ],
+    "small_interval_points": 25,
+    "small_interval_peak_rss_gib": [
+      0.79,
+      1.17
+    ],
+    "genomicsdb_import_peak_rss_gib_range": [
+      0.9,
+      2.13
+    ],
+    "per_interval": [
+      {
+        "interval_id": "interval_0001",
+        "mb": 65.407,
+        "genotype_peak_rss_gib": 17.547
+      },
+      {
+        "interval_id": "interval_0002",
+        "mb": 52.846,
+        "genotype_peak_rss_gib": 14.755
+      },
+      {
+        "interval_id": "interval_0003",
+        "mb": 42.681,
+        "genotype_peak_rss_gib": 11.798
+      },
+      {
+        "interval_id": "interval_0004",
+        "mb": 42.641,
+        "genotype_peak_rss_gib": 11.658
+      },
+      {
+        "interval_id": "interval_0005",
+        "mb": 41.034,
+        "genotype_peak_rss_gib": 13.032
+      },
+      {
+        "interval_id": "interval_0006",
+        "mb": 38.121,
+        "genotype_peak_rss_gib": 11.686
+      },
+      {
+        "interval_id": "interval_0007",
+        "mb": 37.163,
+        "genotype_peak_rss_gib": 11.225
+      },
+      {
+        "interval_id": "interval_0008",
+        "mb": 36.286,
+        "genotype_peak_rss_gib": 12.009
+      },
+      {
+        "interval_id": "interval_0009",
+        "mb": 32.215,
+        "genotype_peak_rss_gib": 10.866
+      },
+      {
+        "interval_id": "interval_0010",
+        "mb": 31.494,
+        "genotype_peak_rss_gib": 9.995
+      },
+      {
+        "interval_id": "interval_0011",
+        "mb": 27.655,
+        "genotype_peak_rss_gib": 8.428
+      }
+    ]
+  },
+  "fit": {
+    "form": "peak_rss_gib = intercept + slope * interval_megabases",
+    "intercept_gib": 3.172,
+    "slope_gib_per_mb": 0.2192,
+    "r_squared": 0.9332,
+    "max_absolute_residual_gib": 0.883,
+    "interpretation": "The relationship is affine, not proportional. A positive intercept of about 3.2 GiB is per-task overhead that does not shrink with the interval, which is why the naive peak-over-length ratio falls from 0.337 to 0.268 GiB/Mb as intervals lengthen. A slope through the origin would therefore understate short intervals: at 20 Mb it predicts about 5.6 GiB against this fit's 7.6 GiB."
+  },
+  "assumption_if_used_for_interval_sizing": {
+    "statement": "Within this cohort size and reference, a shorter interval's peak RSS is predicted by the same affine fit.",
+    "status": "ASSUMPTION, not measured: E0 contains no chromosome-scale interval below 27.7 Mb, so the fit is interpolated at 20 Mb rather than observed there.",
+    "directly_testable_by": "E2a, which runs 20 Mb windows over the same cohort under the same ceiling and will measure this point rather than assume it."
+  },
+  "explicitly_not_claimed": {
+    "sample_count_scaling": "Nothing here measures how peak RSS varies with sample count. Both coefficients were fitted at exactly 51 samples, and neither is extrapolated to 327 samples.",
+    "other_conditions": "Valid for this reference, GATK version, ploidy and HaplotypeCaller condition only.",
+    "wall_time": "Wall times in this run were measured with three tasks running concurrently and are not comparable to a task measured alone."
+  }
+}

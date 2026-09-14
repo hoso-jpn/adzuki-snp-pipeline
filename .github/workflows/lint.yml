@@ -24,10 +24,10 @@ jobs:
         run: python3 -m pip install --requirement requirements-dev.txt
 
       - name: Lint Python
-        run: ruff check bin tests/bin tests/scripts
+        run: ruff check bin tests/bin tests/scripts benchmarks/issue45
 
       - name: Check Python formatting
-        run: ruff format --check bin tests/bin tests/scripts
+        run: ruff format --check bin tests/bin tests/scripts benchmarks/issue45
 
       - name: Check README exists
         run: test -f README.md

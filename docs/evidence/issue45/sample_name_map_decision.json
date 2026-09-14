@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "decision_subject": "GenomicsDBImport --sample-name-map versus repeated --variant arguments",
+  "isolating_experiment": "E1 against E0",
+  "source_run": "issue45-e0-e4-20260913-0040",
+  "allocation_regime": "common_ceiling_comparison; E0 and E1 share one identical resource policy, so allocation is not a confound",
+  "one_factor_changed": "input form only. Same 51 gVCFs, same per-contig interval plan, same reference, same batch size, same ceilings, same concurrency.",
+  "correctness": {
+    "shared_variants": 13219170,
+    "identical_records": 13219170,
+    "different_records": 0,
+    "left_only_variants": 0,
+    "right_only_variants": 0,
+    "record_sha256_equal": true,
+    "variant_gt_sha256_equal": true,
+    "accounting_sha256_equal": true,
+    "shared_header_sha256_equal": true,
+    "sample_order_equal": true,
+    "ordered_contigs_equal": true,
+    "conclusion": "byte-identical callset; the input form changed nothing about the result"
+  },
+  "performance": {
+    "import_wall_sum_delta_percent": 0.17,
+    "genotype_wall_sum_delta_percent": -0.06,
+    "elapsed_including_validation_delta_percent": -0.63,
+    "workspace_bytes_delta_percent": 0.0,
+    "workspace_file_count_delta": 0,
+    "import_peak_rss_gib": {
+      "E0": 2.13,
+      "E1": 1.76
+    },
+    "conclusion": "no measurable performance difference at 51 samples. All deltas are within run-to-run noise for wall time, and both import peaks sit far below their 16 GiB allocation, so the import RSS difference is not a meaningful effect."
+  },
+  "operational": {
+    "argv_items": {
+      "E0": 148,
+      "E1": 50
+    },
+    "command_characters": {
+      "E0": 2871,
+      "E1": 1013
+    },
+    "variant_arguments": {
+      "E0": 51,
+      "E1": 0
+    },
+    "sample_name_map_lines": 51,
+    "explicit_index_paths_in_map": true,
+    "gatk_validate_sample_name_map_enabled": true,
+    "command_length_is_not_a_constraint": {
+      "projected_command_characters_at_327_samples": 13359,
+      "host_arg_max": 2097152,
+      "fraction_of_limit": 0.0064,
+      "note": "A commonly cited reason to adopt sample-name-map does not apply here. The repeated-variant form remains about 0.6% of ARG_MAX at 327 samples, so it would not fail on command length. This reason is recorded as not supporting the decision."
+    }
+  },
+  "limitations": {
+    "sample_ordering_was_not_exercised": {
+      "finding": "This cohort's 51 run accessions are already in lexicographic order, and the repeated-variant order, the map file order and the output sample order are all identical to sorted order.",
+      "implication": "GATK derives sample order from the map when one is given. Because sorted order and input order coincide here, E1 could not have detected a reordering difference between the two input forms. A byte-identical result at 51 samples is therefore not evidence that the two forms agree on ordering for a cohort whose sample names are not already sorted.",
+      "condition_for_327": "Before adopting at 327 samples, confirm the production samplesheet order against sorted sample-name order, or accept the map's sorted order as the contract and verify the output sample order explicitly.",
+      "condition_for_327_resolved": {
+        "checked_against": "docs/evidence/issue45/candidate_cohort.tsv, the full eligible set",
+        "eligible_runs": 327,
+        "unique_run_accessions": 327,
+        "unique_biosamples": 327,
+        "sample_id_contract": "the pipeline uses the unchanged run accession as the sample ID",
+        "run_accessions_already_lexicographically_sorted": true,
+        "lexicographic_equals_numeric_order": true,
+        "why_that_holds": "every run accession is the same length (11 characters), so lexicographic and numeric order coincide and no zero-padding pitfall applies",
+        "result": "RESOLVED for the planned configuration. At 327 samples the map's sorted order coincides with the samplesheet order exactly as it did at 51, so adopting --sample-name-map cannot reorder output samples.",
+        "what_would_invalidate_it": {
+          "finding": "BioSample accessions are NOT in the same order as run accessions; sorting by BioSample induces a different run order.",
+          "implication": "If the sample ID were ever changed from the run accession to the BioSample accession, or to any other identifier, GATK's map-derived sorted order would no longer match the samplesheet order and output sample order could change between the two input forms. Re-check this property before any such change.",
+          "biosample_order_equals_sorted": false
+        }
+      }
+    },
+    "scale": "measured at 51 samples only; no header-loading advantage for very large cohorts was observable at this size"
+  },
+  "decision": "ADOPT",
+  "rationale": "Adoption is justified on data-integrity and auditability grounds rather than performance. The map carries an explicit index path per sample, enables GATK's own map validation, and is a single checksummable artefact recording exactly which gVCFs entered a run, which matters more at 327 inputs than at 51. It costs nothing measurable and changes nothing about the callset. The command-length argument is explicitly not part of this rationale, and adoption is conditional on the sample-ordering check above.",
+  "not_claimed": "No performance benefit is claimed. No accuracy change is claimed; there is no truth set, and the callsets are byte-identical in any case.",
+  "condition_status": "condition discharged; the ordering property was verified for the full 327-sample eligible set under the current sample-ID contract"
+}

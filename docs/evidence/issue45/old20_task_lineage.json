@@ -1,0 +1,182 @@
+[
+  {
+    "sample_id": "SRR29909068",
+    "trace_status": "CACHED",
+    "task_hash": "3d/f4194b",
+    "command_sha256": "0eedeeb0c6010095da46c212fc253efc6aa3e6db700bf28d210e23e55f85a54c",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909418",
+    "trace_status": "CACHED",
+    "task_hash": "ae/1bfde1",
+    "command_sha256": "61184b0b8e692da157e4e8b7af3c688fe3aaa9b1964887c9a1686970fae2723b",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909067",
+    "trace_status": "CACHED",
+    "task_hash": "1b/05c841",
+    "command_sha256": "478065d1ddfa9bda26e982f780ceb8bcf448062a3b9e8fbfd55d891bc42b67c6",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909073",
+    "trace_status": "CACHED",
+    "task_hash": "93/1eef06",
+    "command_sha256": "631e76125e841a501a3ac809aa6cd55cb5c99b80240f92a0b0c7792b5ed34924",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909072",
+    "trace_status": "CACHED",
+    "task_hash": "6e/711a09",
+    "command_sha256": "720d915aeb58c3786ca97eb9abbe5b4dfacda741eca590da458dcd7f42303377",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909421",
+    "trace_status": "CACHED",
+    "task_hash": "af/038dcf",
+    "command_sha256": "1bbf555789f96eb3400cacce883da5d4a24667544ab6c55fcd9ee5cdd877fb8c",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909069",
+    "trace_status": "CACHED",
+    "task_hash": "3f/5126ed",
+    "command_sha256": "ec87ad46c8360aabed19d2e0b855651ef2a62aaa957173ef9f4120953c76e6ae",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909070",
+    "trace_status": "CACHED",
+    "task_hash": "db/5c80ef",
+    "command_sha256": "b1396ec6f3a80938786e677c69237c896dcfe409bdbb4bdd28cd412b22ba8ac7",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909074",
+    "trace_status": "CACHED",
+    "task_hash": "12/b5abd7",
+    "command_sha256": "7eb62887737db399c957a64c3fd7bd96a025360ee1a52237ed51c696f1b4fc72",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909135",
+    "trace_status": "CACHED",
+    "task_hash": "fc/44110a",
+    "command_sha256": "8ff3954ea1920735f232b5c9d7a7213a942a945123771ee66853b5a04007d34a",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909124",
+    "trace_status": "COMPLETED",
+    "task_hash": "20/debe0e",
+    "command_sha256": "de6abd6384b9e4928d148511084a32454bcf8300daaffc4e636ddd478ce076fa",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29908965",
+    "trace_status": "COMPLETED",
+    "task_hash": "e5/502fcb",
+    "command_sha256": "04c79a8cd3ca9232735549704b2e01a4c57e77ecdad1cf9cda1a962462af649e",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909330",
+    "trace_status": "COMPLETED",
+    "task_hash": "aa/0a24fd",
+    "command_sha256": "4be70f25c7b03080e2f0de808c746a4212f913d39fd2061e9725efecb3e74b73",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29908836",
+    "trace_status": "COMPLETED",
+    "task_hash": "97/385152",
+    "command_sha256": "a32216e98bc8cd6a27cbecbf49660613c178c61ec7319aebdcc8a290735ad383",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909171",
+    "trace_status": "COMPLETED",
+    "task_hash": "33/9adf33",
+    "command_sha256": "be12f81d52053b9b29117288eee9bb54feaad7f00a67d9038f3fc58bc65b612e",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909372",
+    "trace_status": "COMPLETED",
+    "task_hash": "76/963662",
+    "command_sha256": "8225d652b122f89403d7b737f57ca383a083ea6fd061a48c71f478799fb21725",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909384",
+    "trace_status": "COMPLETED",
+    "task_hash": "46/56f160",
+    "command_sha256": "d11ced965dfff715b02a5f0f240524c80c1a6b4229549f65a6de6021cf5fd7d1",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909434",
+    "trace_status": "COMPLETED",
+    "task_hash": "12/e41d8e",
+    "command_sha256": "aed1cccce884edba8d140a0b2c6a03ef14f3bd58fd0ad6d1aa2ec20a93cb3e83",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29909423",
+    "trace_status": "COMPLETED",
+    "task_hash": "26/7be760",
+    "command_sha256": "d013d1c0d603ad5ed64e4070bb34baeae8ac2411190d34599acff5c360db5c82",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  },
+  {
+    "sample_id": "SRR29908888",
+    "trace_status": "COMPLETED",
+    "task_hash": "c1/59cb02",
+    "command_sha256": "af57e34b6d3de74711001e6117483e808c703152d8f90b390f1edeee38808272",
+    "canonical_command_sha256": "3424d795982bc4539d1097570c5031cfd20436afcab6a3b5f4066325e302ccd1",
+    "pinned_container_present_in_task_launcher": true,
+    "exit": "0"
+  }
+]

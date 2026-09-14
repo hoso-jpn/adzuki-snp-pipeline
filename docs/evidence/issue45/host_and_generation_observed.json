@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-09-14",
+  "purpose": "observed inputs to the 327-sample projection that are not already in committed evidence; values are copied from private records and host readings, not modelled",
+  "host": {
+    "name": "seedcore-01",
+    "logical_cpus": 32,
+    "memory_total_bytes": 132607356928,
+    "benchmark_launch_memory_gate_bytes": 118111600640,
+    "data_volume_total_bytes": 3936817758208,
+    "data_volume_free_bytes_after_scaling": 2028107632640,
+    "note": "the data volume holds this Issue's retained FASTQ, gVCF, workspaces and callsets; free space is a point reading and moves with retention decisions"
+  },
+  "generation_51": {
+    "run_id": "issue45-51gvcf-20260910-200521",
+    "source": "Nextflow trace.tsv and the controller's host monitor",
+    "tasks_completed": 359,
+    "retries": 0,
+    "nextflow_aggregate_allocation": "24 logical CPUs / 96 GiB",
+    "elapsed_seconds": 61556,
+    "cpu_hours_by_process": {
+      "BWA_MEM2_MEM_SORT": 131.44,
+      "GATK_HAPLOTYPECALLER": 123.59,
+      "FASTP": 7.88,
+      "GATK_MARKDUPLICATES": 5.47,
+      "SAMTOOLS_MERGE": 2.95,
+      "SAMTOOLS_QC": 1.29,
+      "SAMTOOLS_INDEX": 0.26,
+      "BWA_MEM2_INDEX": 0.03
+    },
+    "cpu_hours_total": 272.9,
+    "storage_consumed_bytes_net": 780679118848,
+    "storage_consumed_scope": "work directory and published outputs with every intermediate retained (no Nextflow cleanup), excluding the pre-existing input FASTQs",
+    "mem_available_min_gib": 76.4,
+    "swap_delta_mib": -82.75,
+    "fastq_bytes": 207358941216,
+    "fastq_bytes_source": "sum of published fastq_bytes in cohort_selection.json"
+  },
+  "e2a_outputs": {
+    "gathered_callset_bytes": 4858608859,
+    "per_interval_callsets_bytes": 4860300776,
+    "note": "per-interval joint.vcf.gz files are retained next to the gathered callset, so a run holds both"
+  },
+  "input_gvcf_51": {
+    "bytes_total": 48034833731,
+    "bytes_min": 398382477,
+    "bytes_median": 986835700,
+    "bytes_max": 1278319188
+  },
+  "production_resource_contract": {
+    "source": "nextflow.config and modules/local at production SHA 3158ca50c2c13c31bdc80db302c7df4bbb5670bf",
+    "genotypegvcfs": "process_high: 8 CPU, 16 GB x task.attempt, maxRetries 1 on exit 137/140/143, so 16 GB then 32 GB",
+    "genomicsdbimport": "process_genomicsdb: 8 CPU, 16 GB x task.attempt",
+    "interval_strategy": "one task per contig",
+    "sample_input": "repeated --variant",
+    "consolidate": "not passed (GATK default false)",
+    "cleanup": "not configured"
+  }
+}

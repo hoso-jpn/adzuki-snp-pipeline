@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "decision_subject": "ReblockGVCFs (E3) against E2b",
+  "source_run": "issue45-e0-e4-20260913-0040",
+  "experiment_status": "FAILED at output validation",
+  "failure": {
+    "raised_by": "joint_integrity on the gathered callset",
+    "message": "Unexpected joint genotype ploidy",
+    "cause": "51 sample columns written as a bare '.' (whole-column missing), which the validator's diploid check rejects",
+    "note": "the validator behaved fail-closed and correctly refused to certify the callset; its message names ploidy rather than whole-column missingness, which is a reporting improvement tracked separately and does not affect this decision",
+    "reblock_and_all_29_interval_tasks_completed_successfully": true
+  },
+  "reblock_effect": {
+    "input_bytes": 48030000000,
+    "output_bytes": 11110000000,
+    "size_reduction_percent": 76.9,
+    "reblock_wall_hours_sum": 4.83,
+    "reblock_peak_rss_gib": 1.3,
+    "reblock_retries": 0,
+    "reblock_nonzero_exits": 0,
+    "gq_bands": [
+      20,
+      100
+    ],
+    "keep_all_alts": true,
+    "floor_blocks": false,
+    "drop_low_quals": false
+  },
+  "downstream_resource": {
+    "import_peak_rss_gib": {
+      "E2b": 6.57,
+      "E3": "see suite evidence"
+    },
+    "genotype_peak_rss_gib": {
+      "E2b": 7.35,
+      "E3_observed_max_during_run": 7.25
+    },
+    "gathered_callset_bytes": {
+      "E2b_approx": 5000000000,
+      "E3": 3807296796
+    },
+    "note": "resource direction was favourable; it does not enter the verdict because the data contract failed first"
+  },
+  "variant_set": {
+    "shared_variants": 13173035,
+    "e2b_only_variants": 46135,
+    "e3_only_variants": 130776,
+    "variant_set_changed_total": 176911,
+    "records_with_genotype_change": 12938827,
+    "records_with_filter_change": 0
+  },
+  "genotype_transitions_by_category": {
+    "hom_ref -> no_call": 86599428,
+    "hom_ref phasing/representation only": 3980897,
+    "no_call -> fully_missing": 48952,
+    "het phasing/representation only": 26122,
+    "no_call -> het": 22509,
+    "hom_ref -> fully_missing": 12873,
+    "het_multiallelic phasing/representation only": 10981,
+    "het -> no_call": 8098,
+    "no_call -> hom_ref": 7978,
+    "het -> fully_missing": 5336,
+    "no_call -> het_multiallelic": 4309,
+    "hom_alt phasing/representation only": 3904,
+    "het -> hom_ref": 2681,
+    "hom_alt_multiallelic phasing/representation only": 2671,
+    "het_multiallelic -> no_call": 2357,
+    "no_call -> hom_alt": 2078,
+    "het_multiallelic -> fully_missing": 1944,
+    "het -> het_multiallelic": 1898,
+    "hom_ref -> het": 1630,
+    "hom_alt -> no_call": 1384,
+    "no_call -> hom_alt_multiallelic": 913,
+    "hom_alt -> het": 835,
+    "hom_alt_multiallelic -> het_multiallelic": 515,
+    "hom_ref -> het_multiallelic": 422,
+    "het_multiallelic -> hom_ref": 268,
+    "hom_alt_multiallelic -> no_call": 229,
+    "het -> hom_alt": 220,
+    "hom_alt -> hom_ref": 193,
+    "no_call -> no_call": 133,
+    "hom_alt -> fully_missing": 128,
+    "het_multiallelic -> hom_alt_multiallelic": 123,
+    "hom_ref -> hom_alt": 84,
+    "hom_alt_multiallelic -> fully_missing": 84,
+    "hom_ref -> hom_alt_multiallelic": 30,
+    "het_nonref_multiallelic -> het_multiallelic": 16,
+    "hom_alt_multiallelic -> hom_ref": 13,
+    "het_nonref_multiallelic -> no_call": 6,
+    "het_nonref_multiallelic -> hom_alt_multiallelic": 6,
+    "het_multiallelic -> het": 2,
+    "het -> hom_alt_multiallelic": 2,
+    "hom_alt -> het_nonref_multiallelic": 1,
+    "hom_alt_multiallelic -> het_nonref_multiallelic": 1,
+    "hom_alt -> hom_alt_multiallelic": 1,
+    "hom_alt_multiallelic -> hom_alt": 1
+  },
+  "separation": {
+    "representation_change_expected_from_reblocking": {
+      "count": 4073660,
+      "includes": "phasing collapse (phased to unphased, same alleles) and no-call written as whole-column missing",
+      "assessment": "these alter how an identical call is written, not which call was made"
+    },
+    "scientific_semantic_difference": {
+      "hom_ref_calls_lost_to_missing": 86612301,
+      "called_non_reference_genotypes_lost_to_missing": 19566,
+      "calls_gained_from_no_call": 37787,
+      "variant_set_changed": 176911,
+      "an_records_changed": 12831569,
+      "ac_records_changed": 28037,
+      "assessment": "these change which calls exist and what the cohort accounting says, regardless of cause"
+    }
+  },
+  "annotation_differences": {
+    "info_fields": {
+      "DP": 13142352,
+      "InbreedingCoeff": 13127242,
+      "QD": 12930873,
+      "AN": 12831569,
+      "AF": 12702781,
+      "MLEAF": 12691537,
+      "MLEAC": 6885699,
+      "ExcessHet": 2794485,
+      "SOR": 1764073,
+      "MQ": 1740972,
+      "FS": 1550976,
+      "MQRankSum": 694300,
+      "ReadPosRankSum": 679147,
+      "BaseQRankSum": 615892,
+      "AC": 28037,
+      "ReadPosRankSum (removed)": 26362,
+      "MQRankSum (removed)": 26247,
+      "BaseQRankSum (removed)": 25373,
+      "InbreedingCoeff (added)": 7476
+    },
+    "format_fields": {
+      "PL": 508154869,
+      "GQ": 487041168,
+      "AD": 450601830,
+      "DP": 450009159,
+      "GT": 90752256,
+      "PID": 22682468,
+      "PGT": 22646077,
+      "PS": 4770743
+    },
+    "column_fields": {
+      "QUAL": 13123414,
+      "FORMAT_order": 74863
+    }
+  },
+  "decision": "REJECT",
+  "decision_scope": "The storage-saving trade-off is incompatible with this repository's current exact scientific/data-contract requirement. This is not a finding that ReblockGVCFs is incorrect: discarding reference-confidence resolution to shrink gVCFs is precisely what the tool is designed to do, and the 86.6 million hom-ref calls that became no-calls are that design working as documented under GQ bands 20/100. The repository's contract currently requires the joint callset to preserve called genotypes, non-reference calls, the variant set and cohort accounting exactly, and that contract and this trade-off cannot both hold.",
+  "revisit_if": "storage becomes the primary blocker and a different contract is defined that explicitly accepts a bounded callset difference, with the accepted bounds stated in advance and verified against a truth set or an agreed tolerance",
+  "not_the_reason": "size reduction and resource improvements were real and are recorded above; they did not enter the verdict",
+  "scope": {
+    "sample_count": 51,
+    "reference_accession": "GCF_016808095.1",
+    "gatk_version": "4.6.2.0",
+    "truth_set": "none available; no accuracy claim is made for either side",
+    "explicitly_not_claimed": "no claim that reblocking is less accurate, only that it is not callset-preserving under this contract"
+  }
+}

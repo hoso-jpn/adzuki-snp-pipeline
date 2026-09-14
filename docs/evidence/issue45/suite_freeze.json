@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "run_id": "issue45-e0-e4-20260913-0040",
+  "frozen_at": "2026-09-14T02:15:00+09:00",
+  "suite_state": {
+    "controller_exited": true,
+    "controller_stdout_bytes": 0,
+    "benchmark_containers_remaining": 0,
+    "resource_preparation_finished_at": "2026-09-13T17:11:40.516067+00:00",
+    "workload_stopped": false,
+    "experiments": {
+      "E0": "COMPLETED_AWAITING_COMPARATIVE_REVIEW",
+      "E1": "COMPLETED_AWAITING_COMPARATIVE_REVIEW",
+      "E2a": "COMPLETED_AWAITING_COMPARATIVE_REVIEW",
+      "E2b": "COMPLETED_AWAITING_COMPARATIVE_REVIEW",
+      "E3": "FAILED (ValueError at output validation; retained as evidence)",
+      "E4": "COMPLETED_AWAITING_COMPARATIVE_REVIEW"
+    }
+  },
+  "execution_helper": {
+    "commit": "e368eda",
+    "note": "the recorded execution lineage checksums were taken from this checkout; later commits changed only declarations in run_benchmarks.py before the freeze, and afterwards benchmark_tools.py's error wording (0a8f9a0), which the suite never ran"
+  },
+  "summarizer": {
+    "file": "benchmarks/issue45/summarize_evidence.py",
+    "sha256": "f1e170e3ca78ff9f15908aa414cffeb2ad5c2105186b727b119e718ba455ae23",
+    "output": "docs/evidence/issue45/benchmark_results.json",
+    "diff_against_previous_commit": "only host_during_run.monitor_samples and storage_free_min_bytes changed among pre-existing values; E0/E1 blocks are unchanged and E2a, E2b, E3, E4 were added"
+  },
+  "private_record_sha256": {
+    "execution_lineage.json": "51d5841b70f7ff3e872da7aa0d63e8e700895d6460d369b14028eab5e3578b25",
+    "interval_plan.tsv": "20077561218c1a19a9185a71ccfcf41ad3aba49d0da94c85df4ca60aa43990b4",
+    "host.tsv": "d882b17f7bed45d960129756600692c6d4771181b728145c2c2f6eb3c30ff4e5",
+    "resource-preparation.private.json": "8cb2ab911b5df043e8dd242396086006356f8a2c5e6f8448782e10cbf88d28b5",
+    "suite_results.private.json": "2e4ee369cb2e84c63840a2e577d27014f757850ceeb6ba1d734a57b0242a9a0b",
+    "E0/experiment_result.private.json": "90fdf27d6c1dd32b94c172e9effda7f347f1bfd4b5577fea2ec460139aa7ca20",
+    "E1/experiment_result.private.json": "7b507520ccdeed2437859cce956e66b35a0057fbfc93af2c97c0e523fe55fd10",
+    "E2a/experiment_result.private.json": "51688a635f30ae2346aa61d799f84a3d5c4d3495907c99012e455b321f014176",
+    "E2b/experiment_result.private.json": "7c1d6e3b3c33bc7b0fbc4909479c97e4bcb8fa50620504229ee800316ae19771",
+    "E3/experiment_result.private.json": "b35ef9fa9fc33e3aaeaa5d2d4b855bd04ed11317a08d76c0b09f844723c2f2fb",
+    "E4/experiment_result.private.json": "f44810cbb085bc81f541e2c2c2417ff16d2a1c2ac701ad102d70f11daaeed1e3"
+  },
+  "gathered_callset_file_sha256": {
+    "E0": "efdaca1be770ae605abe5c6f061574f159410289bf18143dadd554eefdb1b04a",
+    "E1": "e83b6531bbceed7f20fb63a1e04420227faa522b7ecccce424c15e95ae3b0f3a",
+    "E2a": "a93205da3dd9dabaaa7fcf54318b328bc6435a5d84ccc69463c8caa9f3de10bd",
+    "E2b": "e3e8950c2c3d0f0700b0f7cd9908ffccd4cc2c4a5ce51e09cfbd5755a9ea8ebf",
+    "E3": "5a6fbd3fca200572f08f352097606b17fa0b9866dc8f3bc80e47bf8627c46496",
+    "E4": "1a250ed7321e7e00849b9885b2c2d2fe2469533e9cbae4844bba066e5d2a7438"
+  },
+  "file_vs_record_checksums": "gathered file checksums differ between experiments whose record_sha256 agree (E0/E1, E2b/E4). For E2b/E4 a header diff and a record-body hash confirmed the only difference is the two ##GATKCommandLine lines; E0/E1 were not header-diffed. Record equality is judged by the record-level checksums in benchmark_results.json, not by file bytes",
+  "protection": "the record files above, each experiment_config.json and the controller log were made read-only on the host after checksumming; bulk data (workspaces, callsets, reblocked gVCFs) is retained unchanged",
+  "not_rerun": "E3 was not re-executed and its REJECT verdict (reblock_decision.json) is not reopened by this freeze"
+}

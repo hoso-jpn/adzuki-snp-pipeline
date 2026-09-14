@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "decision_subject": "GenomicsDBImport --consolidate true (E4) against E2b",
+  "source_run": "issue45-e0-e4-20260913-0040",
+  "source_evidence": "docs/evidence/issue45/benchmark_results.json",
+  "experiment_status": "COMPLETED_AWAITING_COMPARATIVE_REVIEW",
+  "one_factor_change": "--consolidate false -> true; plan, sample-name-map, batch size, inputs, reference, GATK image, allocation and concurrency identical to E2b",
+  "data_contract_gate": {
+    "verdict": "ADOPT_CANDIDATE",
+    "shared_variants": 13219170,
+    "identical_records": 13219170,
+    "different_records": 0,
+    "e2b_only_variants": 0,
+    "e4_only_variants": 0,
+    "qd_only_differences": 0,
+    "record_sha256_equal": true,
+    "variant_gt_sha256_equal": true,
+    "accounting_sha256_equal": true,
+    "shared_header_sha256_equal": true,
+    "sample_order_equal": true,
+    "ordered_contigs_equal": true,
+    "record_body_sha256_both": "1d3675570ed397714616d28de3a963f4dffb611d27762f5201014e10274c1adb",
+    "file_bytes_differ_only_in": "the two ##GATKCommandLine header lines (GenomicsDBImport and GenotypeGVCFs), which record --consolidate, the sample-name-map path and the run date",
+    "note": "unlike E2a/E2b the partition is unchanged, so not even QD jitter differs; passing this gate makes E4 comparable, it does not adopt it"
+  },
+  "architecture_gate": {
+    "verdict": "REJECT",
+    "scope_of_like_for_like_comparison": "the 28 single-contig chromosome windows, which are the identical tasks in E2a (the adopted strategy), E2b and E4",
+    "chromosome_windows": {
+      "task_count": 28,
+      "import_wall_seconds_sum": {
+        "E2b": 18996.7,
+        "E4": 27278.4,
+        "change_percent": 43.6
+      },
+      "import_wall_change_per_task_percent": {
+        "min": 25.1,
+        "median": 43.6,
+        "max": 46.4,
+        "note": "the 25.1% minimum is the 1.03 Mb window (52 s -> 65 s); every task over 300 s is within 40.7-46.4%"
+      },
+      "import_peak_rss_gib_max": {
+        "E2b": 1.725,
+        "E4": 2.434
+      },
+      "genotype_wall_seconds_sum": {
+        "E2b": 21691.2,
+        "E4": 21319.7,
+        "change_percent": -1.71
+      },
+      "genotype_wall_change_per_task_percent": {
+        "min": -3.4,
+        "median": -1.7,
+        "max": 0.1
+      },
+      "genotype_peak_rss_gib_max": {
+        "E2b": 7.349,
+        "E4": 7.312
+      },
+      "workspace_bytes": {
+        "E2b": 55103924227,
+        "E4": 55351950804,
+        "change_percent": 0.45
+      },
+      "workspace_file_count": {
+        "E2b": 2436,
+        "E4": 1316,
+        "per_window": "87 -> 47"
+      }
+    },
+    "whole_experiment": {
+      "elapsed_seconds_including_validation": {
+        "E2b": 14644.3,
+        "E4": 17435.9,
+        "change_percent": 19.1
+      },
+      "import_user_cpu_seconds_sum": {
+        "E2b": 18857.3,
+        "E4": 26309.1
+      },
+      "workspace_file_count": {
+        "E2b": 4515,
+        "E4": 2395
+      },
+      "retries": 0,
+      "oom": 0
+    },
+    "where_the_cost_is": {
+      "observation": "on NC_068975.1:1-20000000 (interval_0017), batch 1 took 15 min 12 s in both runs and batch 2's one-sample ingest about 20 s in both; E4 then logs 'Consolidating GenomicsDB array' and spends 6 min 55 s before reporting batch 2 done",
+      "interpretation": "the entire import overhead is the post-load rewrite of the array into one fragment, not slower ingest"
+    },
+    "grouped_small_scaffold_task": {
+      "note": "interval_0029 (25 scaffolds, E2b grouping) showed files 2079 -> 1079 and import peak 6.57 -> 5.39 GiB; grouping is already REJECTED, so this does not transfer to the adopted per-scaffold plan and does not enter the verdict"
+    },
+    "reasoning": "Consolidation is paid for with a measured +43.6% import wall time and +19.1% elapsed, and returns a -1.7% GenotypeGVCFs wall time, no memory relief on the process that was the ceiling concern, and 1,120 fewer workspace files in the chromosome windows. File count is scheduling overhead here, not a measured constraint."
+  },
+  "decision": "REJECT",
+  "decision_scope": "Consolidation is not adopted for the 327-sample plan; production stays at GATK's default (consolidate=false, which the production module already uses by not passing the flag). The callset is unaffected either way, so this is purely a resource judgement at the measured fragment count.",
+  "pinned_tool_guidance": {
+    "source": "https://github.com/broadinstitute/gatk/blob/4.6.2.0/src/main/java/org/broadinstitute/hellbender/tools/genomicsdb/GenomicsDBArgumentCollection.java",
+    "batch_size_doc": "Use the consolidate flag if more than a hundred batches were used. This will improve feature read time.",
+    "consolidate_doc": "Merging can potentially improve read performance, however overall benefit might not be noticeable as the top Java layers have significantly higher overheads. This flag has no effect if only one batch is used."
+  },
+  "limits_of_this_measurement": {
+    "fragments_per_array_measured": 2,
+    "fragments_per_array_at_327_samples": "7 (ceil(327/50)), an arithmetic consequence of batch_size=50, not a measurement",
+    "unmeasured": "the read-side benefit at 7 fragments and the rewrite cost at 327-sample array size; both are assumptions in the 327 projection, and the rewrite cost is expected to grow with array bytes rather than shrink",
+    "context": "7 fragments is far below the pinned tool's own >100-batch guidance, so nothing measured or documented points towards consolidation at 327 samples"
+  },
+  "revisit_if": "batch count per array approaches the pinned guidance (for example incremental imports or a much smaller batch size), or a GenotypeGVCFs read-time problem attributable to fragment count is observed at 327 samples",
+  "scope": {
+    "sample_count": 51,
+    "reference_accession": "GCF_016808095.1",
+    "gatk_version": "4.6.2.0",
+    "concurrency": "3 interval tasks at once, identical in E2b and E4"
+  }
+}
