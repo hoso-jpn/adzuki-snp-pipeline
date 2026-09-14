@@ -1,0 +1,67 @@
+// Issue #64: rebuild the GS-eligible PASS VCF from an existing joint callset.
+//
+// Staged outside the checkout. @MAIN@ is replaced with a clean checkout of the
+// pinned main SHA, so every scientific command below is rendered by the
+// production modules and the production hard-filter definitions, unchanged.
+// The only thing this wrapper adds is the input: an already-validated joint
+// callset instead of FASTQ, so no read processing or variant calling runs.
+include { GS_NORMALIZE_VARIANTS } from '@MAIN@/modules/local/gs_normalize_variants'
+include { CLASSIFY_NORMALIZED_VARIANTS } from '@MAIN@/modules/local/classify_normalized_variants'
+include { GS_INDEX_CLASSIFIED_VARIANTS } from '@MAIN@/modules/local/gs_index_classified_variants'
+include { GATK_VARIANTFILTRATION as GATK_VARIANTFILTRATION_GS } from '@MAIN@/modules/local/gatk_variantfiltration'
+include { GATK_SELECTPASSVARIANTS as GATK_SELECTPASSVARIANTS_GS } from '@MAIN@/modules/local/gatk_selectpassvariants'
+include { BUILD_GS_PANEL } from '@MAIN@/modules/local/build_gs_panel'
+include { RECONCILE_GS_PANEL_ACCOUNTING } from '@MAIN@/modules/local/reconcile_gs_panel_accounting'
+include { hardFiltersForVariantType } from '@MAIN@/workflows/adzuki_snp_pipeline'
+
+workflow {
+    def checkout = file('@MAIN@').toString()
+    def head = ['git', '-C', checkout, 'rev-parse', 'HEAD'].execute()
+    head.waitFor()
+    if (head.exitValue() != 0 || head.text.trim() != params.main_sha) {
+        error('Main checkout differs from the pinned SHA')
+    }
+    def status = ['git', '-C', checkout, 'status', '--porcelain'].execute()
+    status.waitFor()
+    if (status.exitValue() != 0 || !status.text.trim().isEmpty()) {
+        error('Main checkout must be clean')
+    }
+
+    raw_all_ch = channel.value(tuple(
+        [id: 'cohort'],
+        file(params.joint_callset, checkIfExists: true),
+        file("${params.joint_callset}.tbi", checkIfExists: true),
+    ))
+    reference_ch = channel.value(tuple([id: params.reference_id], file(params.reference_fasta, checkIfExists: true)))
+    reference_fai_ch = channel.value(tuple([id: params.reference_id], file(params.reference_fai, checkIfExists: true)))
+
+    // The same sequence as workflows/adzuki_snp_pipeline.nf's GS lineage.
+    GS_NORMALIZE_VARIANTS(
+        raw_all_ch.map { meta, vcf, vcf_index -> tuple(meta + [id: 'cohort_gs'], vcf, vcf_index) },
+        reference_ch,
+        reference_fai_ch,
+    )
+    CLASSIFY_NORMALIZED_VARIANTS(GS_NORMALIZE_VARIANTS.out.vcf)
+    GS_INDEX_CLASSIFIED_VARIANTS(CLASSIFY_NORMALIZED_VARIANTS.out.vcf)
+    GATK_VARIANTFILTRATION_GS(
+        GS_INDEX_CLASSIFIED_VARIANTS.out.vcf.map { meta, vcf, vcf_index ->
+            tuple(meta + [variant_type: 'snp'], vcf, vcf_index, hardFiltersForVariantType('snp'))
+        }
+    )
+    GATK_SELECTPASSVARIANTS_GS(GATK_VARIANTFILTRATION_GS.out.vcf)
+    gs_pass_for_panel_ch = GATK_SELECTPASSVARIANTS_GS.out.vcf
+        .map { meta, vcf, vcf_index -> tuple(meta + [id: 'cohort'], vcf, vcf_index) }
+
+    // The unmasked main-branch panel, kept as the baseline that a disabled
+    // quality policy must reproduce exactly.
+    BUILD_GS_PANEL(gs_pass_for_panel_ch)
+    RECONCILE_GS_PANEL_ACCOUNTING(
+        raw_all_ch,
+        GS_NORMALIZE_VARIANTS.out.vcf,
+        CLASSIFY_NORMALIZED_VARIANTS.out.accounting,
+        gs_pass_for_panel_ch,
+        BUILD_GS_PANEL.out.matrix,
+        BUILD_GS_PANEL.out.variant_metadata,
+        BUILD_GS_PANEL.out.sample_metadata,
+    )
+}
