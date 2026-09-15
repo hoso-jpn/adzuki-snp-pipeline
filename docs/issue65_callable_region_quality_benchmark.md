@@ -143,8 +143,9 @@ same records, `caller_concordance` reports `site_agreement_rate` 8/15 and
 All assets were computed from the exact FASTA (SHA256 `e9838db1…`), with fixed
 parameters, by [`build_region_assets.py`](../benchmarks/issue65/build_region_assets.py)
 and [`mappability.py`](../benchmarks/issue65/mappability.py). No human or other
-mask was used. Hashes are in `evidence/issue65/region_assets.json` and
-`mappability.json`.
+mask was used. Hashes are in
+[`run_records/regions/region_assets.json`](evidence/issue65/run_records/regions/region_assets.json)
+and [`run_records/mappability/mappability.json`](evidence/issue65/run_records/mappability/mappability.json).
 
 | asset | kind | parameters | bases | fraction |
 |---|---|---|---|---|
@@ -156,7 +157,7 @@ mask was used. Hashes are in `evidence/issue65/region_assets.json` and
 | `low_mappability` | partition | same, failing that rule | 74,613,350 | 16.6% |
 | `mappability_undefined` | partition | no tile starts there (N, contig end) | 12,142 | 0.003% |
 
-Resources: region assets 16.9 s at 289 MiB RSS. Mappability took 39.8 s wall
+Resources: region assets 16.9 s at 289 MiB RSS (host Python 3.12.3). Mappability took 39.8 s wall
 for 8,967,010 tiles aligned with 30 threads. Two mappability runs produced
 byte-identical BEDs.
 
@@ -262,13 +263,23 @@ streams into one Python process.
 
 (the full-depth set has 5,095,926 reads, mean depth 23.09)
 
-The by-stratum, het/hom-alt and SNP/indel figures are in
+Split by the full-depth call's ALT dosage (SNP and indel together):
+
+| subsample | het retention | het new-call fraction | hom-alt retention | hom-alt new-call fraction | core hom-alt retention |
+|---|---|---|---|---|---|
+| 0.5, seed 65 | 0.660 | 0.179 | 0.939 | 0.006 | 0.977 |
+| 0.5, seed 66 | 0.660 | 0.180 | 0.946 | 0.006 | 0.976 |
+| 0.25, seed 65 | 0.409 | 0.173 | 0.850 | 0.012 | 0.928 |
+| 0.25, seed 66 | 0.407 | 0.177 | 0.849 | 0.010 | 0.919 |
+
+Every stratum × SNP/indel/het/hom-alt figure is in
 `delivery_support_matrix.tsv` and `evaluations.json`.
 
-This sample's full-depth calls are 82% heterozygous, and most of those have an
-alternate-allele fraction of 10-20% (§10). Such calls are depth-sensitive, which
-is why overall retention at half depth is only about 0.71. Retention is not a
-statement about accuracy.
+This sample's full-depth calls are 82% heterozygous (54,660 of 67,027 records).
+Of the heterozygous calls with AD >= 10, most have an alternate-allele fraction
+of 10-20%. Such calls come and go with depth, which is why overall retention at
+half depth is only about 0.71. The hom-alt calls are far more stable. Retention
+is not a statement about accuracy.
 
 Resources: the whole run took 6 min 37 s wall, with the five HaplotypeCaller
 jobs in parallel at 4 threads.
@@ -293,12 +304,68 @@ this is agreement, not accuracy.
 |---|---|---|---|---|---|
 | all | 45,023 | 13,896 | 22,032 | 0.556 | 0.978 |
 | SNP | 42,338 | 13,527 | 17,840 | 0.574 | 0.985 |
+| het (by HaplotypeCaller dosage) | 33,385 | 12,972 | 21,465 | 0.492 | 0.988 |
+| hom-alt | 11,638 | 924 | 567 | 0.886 | 0.946 |
+| core, hom-alt | 4,536 | 119 | 96 | 0.955 | 0.986 |
+| core, het | 11,077 | 4,614 | 7,190 | 0.484 | 0.991 |
 
 bcftools took 42.9 s at 92 MiB.
 
 ## 10. Cross-platform self-consistency
 
-CROSSPLATFORM_SECTION
+**Input.** Illumina NovaSeq WGS reads SRR11787767 from BioSample SAMN14776547,
+the same BioSample as the PacBio-derived reference. Identity rests on the
+accession.
+
+- Only a leading byte range of each mate was downloaded (1.6 GB each; SHA256
+  `6d229d36…` / `f9c0aa9f…`, published whole-file MD5s not checkable).
+- It was trimmed to 23,355,933 whole read pairs that pair up by name.
+
+**Processing.** The reads went through the production fastp, BWA-MEM2 | sort,
+MarkDuplicates and HaplotypeCaller arguments on the window, then single-sample
+GenotypeGVCFs. Duplication was 16.1%, window mean depth 10.6x (MAPQ>=20,
+BQ>=10), and 17.47 Mb of the window had depth >= 5.
+
+**Interpretation.** Neither side is truth.
+
+- A **hom-alt** call means these reads disagree with the assembly consensus at
+  that base.
+- A **het** call in this plant's own reads can come from residual
+  heterozygosity, collapsed paralogs or mis-mapping.
+
+| stratum | bases | non-ref records/Mb | het calls | hom-alt calls |
+|---|---|---|---|---|
+| window | 20,000,000 | 2,323 | 46,411 | 47 |
+| core | 8,262,745 | 1,877 | 15,506 | 0 |
+| difficult | 11,737,255 | 2,622 | 30,725 | 47 |
+| cohort callable | 15,142,446 | 2,169 | 32,830 | 10 |
+| low mappability | 4,556,550 | 1,926 | 8,752 | 24 |
+| median depth 10-15 | 13,847,094 | 1,114 | 15,413 | 7 |
+| median depth 15-25 | 1,081,320 | 20,668 | 22,346 | 3 |
+| median depth 25+ | 244,862 | 29,245 | 7,160 | 1 |
+
+Consensus disagreements are rare: 47 hom-alt calls in 20 Mb, none in core.
+99.9% of the reference plant's non-reference calls are heterozygous, and
+29,506 of its 46,411 hets (64%) fall in the 1.3 Mb whose *cohort* median depth
+is at least 15x. That is independent support, from a different sequencing run
+of a different plant, for the §7 reading: excess-depth regions of this
+reference attract heterozygous calls that do not behave like alleles. It
+remains an interpretation, not a verified cause.
+
+The het density in core (1,877/Mb) is also far above what a selfed cultivar is
+expected to carry. So a heterozygous call is weak evidence even there.
+
+Resources:
+
+| step | wall | memory peak |
+|---|---|---|
+| fastp | 48.8 s | 4.6 GiB |
+| BWA-MEM2 + sort, 24 threads | 322 s | 22.8 GiB |
+| MarkDuplicates | 142 s | 16.0 GiB |
+| HaplotypeCaller | 141 s | 1.5 GiB |
+| GenotypeGVCFs | 11 s | |
+
+Download: 3.2 GB in about 36 min. Output storage: 6.1 GB.
 
 ## 11. Delivery-support matrix (Phase 8)
 
@@ -321,7 +388,49 @@ and introduces no numeric threshold:
   (`cohort_non_callable`), `supported_with_caveat` when any of its cells is,
   and `not_evaluated` otherwise.
 
-MATRIX_SECTION
+**Result.** 85 rows:
+
+- 80 `supported_with_caveat`;
+- 4 `unsupported` (cohort non-callable × SNP/indel/het/hom-alt);
+- 1 `not_evaluated` (the genome outside the window, as a whole).
+- **No row is `supported`**: that would need an independent truth cell, and
+  none exists.
+
+`supported_with_caveat` is the *ceiling* this evidence can reach. It is not an
+endorsement, and within it the evidence differs widely:
+
+| scope (window NC_068975.1:1-20000000) | half-depth retention | quarter-depth retention | caller agreement | reference plant's own Illumina calls | GS panel het share |
+|---|---|---|---|---|---|
+| core, hom-alt | 0.977 | 0.928 | 0.955 | 0 hom-alt calls in 8.26 Mb | |
+| core, het | 0.634 | 0.368 | 0.484 | 15,506 het calls (1,877/Mb) | 54.1% |
+| difficult, hom-alt | 0.915 | 0.801 | 0.848 | 47 hom-alt calls | |
+| difficult, het | 0.673 | 0.429 | 0.498 | 30,725 het calls | 72.8% |
+| cohort median depth 15-25x, SNP | 0.713 | 0.470 | 0.604 | 20,668 records/Mb, 99.99% het | 95.3% |
+| cohort median depth 25x+, SNP | 0.784 | 0.601 | 0.532 | 29,245 records/Mb, 99.99% het | 97.2% |
+| cohort non-callable, SNP | 0.773 | 0.574 | 0.590 | 2,735 records/Mb | 79.2% (`unsupported` by definition) |
+| indel, window | 0.716 | 0.499 | 0.371 | | not in GS panel |
+
+**Conclusion for delivery**, stated as evidence and not as accuracy:
+
+- **Strongest evidence (caveated).** Homozygous-alternate SNP calls inside
+  `core` (cohort-callable, high-mappability, non-repeat, non-homopolymer
+  positions of the window) are stable under halving depth, agree across two
+  callers, and correspond to no consensus disagreement in the reference plant's
+  own reads.
+- **Weak evidence.** Heterozygous calls are depth-sensitive and split between
+  callers everywhere. The reference plant itself shows about 1,900 het calls per
+  Mb in core and 20,000-29,000 per Mb in excess-depth strata. A heterozygous
+  genotype in this cohort should not be delivered as an assured call in any
+  stratum.
+- **Indels** agree between callers far less than SNPs, and the GS panel does
+  not deliver them.
+- **Outside the window** only sequence-derived strata and genome-wide GS panel
+  counts exist. Callable status there is `not_evaluated`.
+
+Turning these differences into `unsupported` cells for particular scopes would
+need a decision threshold. Adopting one is outside this issue's scope, so the
+matrix keeps the evaluated/unevaluated rule above and shows the metrics side by
+side.
 
 ## 12. Not evaluated
 
@@ -342,11 +451,21 @@ The run scripts used on seedcore-01 live under [`benchmarks/issue65/run/`](../be
 Each script pins its container images by digest and records input and output
 SHA256. Re-running from the recorded inputs is:
 
-1. `run_mappability.sh`, then `build_region_assets.py`.
+Each script expects the benchmark code copied into `<workdir>/tools` and the
+configs into `<workdir>/configs`.
+
+1. `run_region_assets.sh` and `run_mappability.sh`.
 2. `run_callable.sh`.
 3. `assemble_evidence.py derive-strata`.
-4. `run_stratify.sh`, `run_downsampling.sh` and `run_crossplatform.sh`.
-5. `assemble_evidence.py assemble --git-sha <sha>`.
+4. `run_stratify.sh`, `run_downsampling.sh`, and
+   `download_SRR11787767_partial.sh` followed by `run_crossplatform.sh`.
+5. `run_assemble.sh <git sha>`, which stratifies the cross-platform calls and
+   runs `assemble_evidence.py assemble`.
+
+Machine-readable run records (manifests, input/output SHA256, MarkDuplicates
+metrics, container wall/memory) are in
+[`evidence/issue65/run_records/`](evidence/issue65/run_records/) and
+[`container_resources.tsv`](evidence/issue65/container_resources.tsv).
 
 Determinism checks:
 
@@ -354,6 +473,10 @@ Determinism checks:
 - `assemble_evidence.py assemble` was run twice on the final inputs and gave
   byte-identical `evaluations.json`, `delivery_support_matrix.json/.tsv` (see
   `evidence_manifest.json`).
+- After the code was committed (`eea9eb3`), the region, mappability, callable
+  and derived-strata steps were re-run with it. The BEDs and manifests were
+  byte-identical to the first run, and the stratification records were equal
+  (the config hash field was left out of that comparison).
 - Unit tests assert identical records, denominators, membership and region
   hashes on re-runs.
 

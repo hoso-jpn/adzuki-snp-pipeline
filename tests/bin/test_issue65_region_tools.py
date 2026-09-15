@@ -405,3 +405,44 @@ class DeliveryMatrixTests(unittest.TestCase):
         for record in records:
             validate_evaluation(record)
             self.assertEqual(record["metrics"], {})
+
+
+class CommittedEvidenceTests(unittest.TestCase):
+    """The published Issue #65 records obey the contract and match their manifest."""
+
+    EVIDENCE = REPO_ROOT / "docs" / "evidence" / "issue65"
+
+    def test_records_validate_and_match_manifest_hashes(self) -> None:
+        import hashlib
+
+        import evidence_model as model
+
+        manifest = json.loads((self.EVIDENCE / "evidence_manifest.json").read_text())
+        for name, digest in manifest["outputs_sha256"].items():
+            self.assertEqual(
+                hashlib.sha256((self.EVIDENCE / name).read_bytes()).hexdigest(), digest, name
+            )
+        evaluations = json.loads((self.EVIDENCE / "evaluations.json").read_text())
+        for record in evaluations:
+            model.validate_evaluation(record)
+        classes = {r["evidence_class"] for r in evaluations if r["not_evaluated_reason"] is None}
+        self.assertNotIn("independent_truth", classes)
+        self.assertNotIn("technical_replicate_concordance", classes)
+        text = (self.EVIDENCE / "evaluations.json").read_text()
+        for word in ('"precision"', '"recall"', '"true_positive"', '"f1"'):
+            self.assertNotIn(word, text)
+
+    def test_matrix_claims_nothing_stronger_than_its_evidence(self) -> None:
+        import evidence_model as model
+
+        document = json.loads((self.EVIDENCE / "delivery_support_matrix.json").read_text())
+        self.assertNotIn("supported", {row["overall_status"] for row in document["rows"]})
+        for cell in document["cells"]:
+            again = model.delivery_row(
+                scope=cell["scope"],
+                evidence_class=cell["evidence_class"],
+                status=cell["status"],
+                evidence_refs=cell["evidence"],
+                rationale=cell["rationale"],
+            )
+            self.assertEqual(again, cell)

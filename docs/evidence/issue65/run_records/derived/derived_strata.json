@@ -1,0 +1,16 @@
+{
+  "window": "NC_068975.1:1-20000000",
+  "definition": {
+    "core": "cohort_callable AND high_mappability AND NOT repeat_windowmasker AND NOT homopolymer_ge10",
+    "difficult": "window AND NOT core"
+  },
+  "bases": {
+    "core": 8262745,
+    "difficult": 11737255,
+    "window": 20000000
+  },
+  "sha256": {
+    "core.bed": "e3995aa331155cc1048357d6cd1ba264f1530625c086ba29dfa6b41474bdf01a",
+    "difficult.bed": "137086152e5667c40d799362071419cc55aa73743d224017dcc24a6ad0a5efd9"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "reference_fasta_sha256": "e9838db1b048b54b21534285aaf95eae64cb3019d85af270b44e20b3d545f383",
+  "reference_bases": 448362642,
+  "contigs": 36,
+  "parameters": {
+    "gc_window_bp": 1000,
+    "gc_edges": [
+      0.25,
+      0.3,
+      0.35,
+      0.4,
+      0.45
+    ],
+    "homopolymer_min": 10,
+    "gc_undefined_rule": "more than half of the window is N"
+  },
+  "assets": {
+    "n_regions": {
+      "file": "n_regions.bed",
+      "sha256": "6a2bbd3941708a2776480ad3a86682dce1069868f0295a3f4f5b7683f1db414d",
+      "bases": 3200,
+      "fraction_of_reference": 7e-06,
+      "kind": "tag"
+    },
+    "repeat_windowmasker": {
+      "file": "repeat_windowmasker.bed",
+      "sha256": "d961aba8e1b5606c0fdd81b1f3893a2e249b83e6274e93c69ce3fa314d638aa2",
+      "bases": 162429013,
+      "fraction_of_reference": 0.362272,
+      "kind": "tag"
+    },
+    "homopolymer_ge10": {
+      "file": "homopolymer_ge10.bed",
+      "sha256": "bce4909255090bc4f1eedae152c39f46ad31591903482c58a2f19e8a30b9fe89",
+      "bases": 1089560,
+      "fraction_of_reference": 0.00243,
+      "kind": "tag"
+    },
+    "gc_00_25": {
+      "file": "gc_00_25.bed",
+      "sha256": "e39b69117023697c4ba79317893ef7497e63a3abcd168ca537ba5b10eea080a4",
+      "bases": 58410395,
+      "fraction_of_reference": 0.130275,
+      "kind": "partition:gc"
+    },
+    "gc_25_30": {
+      "file": "gc_25_30.bed",
+      "sha256": "95194170cc90197f8f88a9196fdb94f1716cd9a9c7a2c1c181672b480724e8de",
+      "bases": 68769000,
+      "fraction_of_reference": 0.153378,
+      "kind": "partition:gc"
+    },
+    "gc_30_35": {
+      "file": "gc_30_35.bed",
+      "sha256": "84c2eb678470be8f013db5cf22b80e737da5bd9aa35b674b4ad9be62273e84cc",
+      "bases": 124237369,
+      "fraction_of_reference": 0.277091,
+      "kind": "partition:gc"
+    },
+    "gc_35_40": {
+      "file": "gc_35_40.bed",
+      "sha256": "a88dc4047e0f9387d117ba2e17d4c749fa7fad35702c246c420612f2e501bad3",
+      "bases": 122846432,
+      "fraction_of_reference": 0.273989,
+      "kind": "partition:gc"
+    },
+    "gc_40_45": {
+      "file": "gc_40_45.bed",
+      "sha256": "e4fb6aef608db09c9df0d1f449bc0f2e9f0ca39c8db56b85ecbc3fd0a9d9b37a",
+      "bases": 49188233,
+      "fraction_of_reference": 0.109706,
+      "kind": "partition:gc"
+    },
+    "gc_45_100": {
+      "file": "gc_45_100.bed",
+      "sha256": "c0ff4281df56875413d5d49b9781e30695849514be9b13f4f216bb91b074cf92",
+      "bases": 24911213,
+      "fraction_of_reference": 0.05556,
+      "kind": "partition:gc"
+    },
+    "gc_undefined": {
+      "file": "gc_undefined.bed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bases": 0,
+      "fraction_of_reference": 0.0,
+      "kind": "partition:gc"
+    }
+  },
+  "ncbi_gap_cross_check": {
+    "ncbi_gaps_listed": 32,
+    "all_inside_fasta_n_runs": true
+  },
+  "sources": {
+    "repeat_windowmasker": "lower-case runs of the RefSeq genomic FASTA; NCBI genomes FTP README: 'Repetitive sequences in eukaryotic genome assembly sequence files, as identified by WindowMasker, have been masked to lower-case.'"
+  }
+}
