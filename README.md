@@ -108,7 +108,7 @@ Longxiaodou 4の設定例は[`conf/references/longxiaodou4.config.example`](conf
 | `genomicsdb_batch_size` | `50` | GenomicsDBImportへ伝播。50+ sampleでの実batching性能は未検証 |
 | `gs_genotype_quality_mask` | `false` | GS panelでgenotype単位のDP/GQ maskを有効化 (Issue #64)。site hard filterとは別工程 |
 | `gs_genotype_min_dp` / `gs_genotype_min_gq` | なし | mask有効時のみ指定可能。境界値はpass。未校正のため既定値を置かない |
-| `gs_genotype_missing_format_field` / `gs_genotype_missing_value` / `gs_genotype_malformed_value` | `reject` | FORMAT欠落・値欠落・不正値の扱い (`reject` / `unevaluated` / `mask`)。0やpassへ暗黙変換しない |
+| `gs_genotype_missing_format_field` / `gs_genotype_missing_value` / `gs_genotype_malformed_value` | `reject` | FORMAT欠落・値欠落・不正値の扱い (`reject` / `unevaluated` / `mask`)。0やpassへ暗黙変換しない。mask無効時に`reject`以外を指定すると起動前に拒否 |
 
 SNP / indel hard-filter thresholdもparameter化されています。現在値はGATK系の一般的なhard-filter値を出発点としたもので、Longxiaodou 4 / PRJNA1138464 / アズキ集団に対する最適値ではありません。
 
@@ -180,7 +180,7 @@ variant rows × sample columnsのTSVで、diploid biallelic genotypeを以下へ
 | `1/1` | `+1` |
 | missing / unsupported | `nan` |
 
-phased genotypeはallele countが同じなら同じdosageです。`gs_genotype_quality_mask`を有効にした場合だけ、DP/GQ policyを満たさないcallも`nan`になり、同じ判定を反映した派生VCF・理由別会計・policy hashが出力されます (GS manifest schema v3)。無効時の出力はIssue #64以前とbyte-identicalです。variant keyは`CHROM:POS:REF:ALT`相当の正規化済みidentityを使用し、sample順はVCF header順を維持します。
+phased genotypeはallele countが同じなら同じdosageです。`gs_genotype_quality_mask`を有効にした場合だけ、DP/GQ policyを満たさないcallも`nan`になり、同じ判定を反映した派生VCF・理由別会計・policy hashが出力され、GS manifestはschema v3になります。無効時 (default) はGS manifest (schema v2) を含め、出力はIssue #64以前と同じです。variant keyは`CHROM:POS:REF:ALT`相当の正規化済みidentityを使用し、sample順はVCF header順を維持します。
 
 ## MultiQC
 

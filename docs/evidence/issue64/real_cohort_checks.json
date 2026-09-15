@@ -72,24 +72,18 @@
   },
   "step2_manifest_compatibility": {
     "result": "PASS",
-    "comparison": "main's and the branch's build_gs_panel_manifest.py over the same unmasked panel and arguments, ignoring run_id, generated_at and manifest_hash",
+    "measured_at_sha": "393d3258b09c0418debf08ac6f19e32f6ea2551e",
+    "comparison": "main@7ef04cb's and the branch's build_gs_panel_manifest.py over the same unmasked real panel with main's exact arguments, ignoring run_id, generated_at and manifest_hash",
     "main_schema_version": 2,
-    "feature_schema_version": 3,
-    "keys_only_in_main": [],
-    "keys_only_in_feature": [
-      "genotype_quality_mask"
-    ],
-    "every_other_field_equal": true,
+    "feature_schema_version": 2,
+    "feature_has_genotype_quality_mask": false,
+    "equal_except_run_fields": true,
     "checksums_equal": true,
-    "feature_genotype_quality_mask": {
-      "enabled": false,
-      "matrix_nan_includes_quality_masked_calls": false,
-      "policy": {
-        "enabled": false,
-        "schema": "gs_genotype_quality_policy_v1"
-      },
-      "policy_hash": "sha256:94562b832e50fd12e71659061475eff97edc6d76f612213092e9471d55fdde17",
-      "quality_masked_vcf": null
+    "superseded_measurement": {
+      "sha": "2f5ca34f832e4074ca2b74569eb78622a0d0064e",
+      "feature_schema_version": 3,
+      "feature_had_disabled_genotype_quality_mask_block": true,
+      "why_superseded": "PR #66 review: a v3 manifest for an unmasked panel broke the default-off output contract; fixed in b6e9c41 so only masked panels are v3"
     }
   },
   "step3_default_reject_policy": {
@@ -219,5 +213,28 @@
       "exit_code": 0,
       "measurement": "RUSAGE_CHILDREN inside the pinned python container"
     }
+  },
+  "step6_strengthened_verifier_rerun": {
+    "sha": "393d3258b09c0418debf08ac6f19e32f6ea2551e",
+    "inputs": "the step-4 enabled artifacts and the unchanged PASS VCF",
+    "adds": "every column of variant and sample metadata; accounting header, cohort on every row, no duplicate/missing/unexpected metric, contractual order, values",
+    "verification": {
+      "verified_variant_records": "9746661",
+      "verified_genotype_cells": "497079711",
+      "quality_masked_calls": "210915559",
+      "rows_with_masked_calls": "9743049",
+      "verification_status": "consistent"
+    },
+    "verification_tsv_sha256": "2c4dd444dd671c06900096614d9f64aacdb804ead8215e0324b62c8c313f55d7",
+    "verification_summary_sha256": "4d3302f40ebb522caa2852e60366dfdcdefdc26030c54a45fd6acd6eca965b1f",
+    "identical_to_step4_verification_outputs": true,
+    "inputs_sha256_unchanged": true,
+    "resources": {
+      "wall_seconds": 2055.4,
+      "peak_rss_mib": 24.7,
+      "exit_code": 0,
+      "measurement": "RUSAGE_CHILDREN inside the pinned python container"
+    },
+    "production_masking_code_unchanged_since_measurement": "git diff 2f5ca34 393d325 -- bin/gs_genotype_quality.py bin/build_gs_panel.py is empty"
   }
 }

@@ -19,8 +19,11 @@ genotypes, and no threshold is adopted as a default.
   processing and no variant calling.
 - **Scale**: 13,219,170 raw/all records → 9,746,661 GS-eligible PASS SNPs
   × 51 samples = **497,079,711 genotype cells**.
-- **Branch code**: `2f5ca34`, run in the pinned `python:3.12` and
-  `bcftools:1.24` containers on seedcore-01, one step at a time.
+- **Branch code**: `2f5ca34` for the builds and the sensitivity grid, and
+  `393d325` for the verifier and manifest re-check after review. Production
+  masking code is identical at both. Everything ran in the pinned
+  `python:3.12` and `bcftools:1.24` containers on seedcore-01, one step at a
+  time.
 - **Inputs never modified**: the PASS VCF's SHA256 was `f1ab1c3a…` before
   and after all checks.
 
@@ -36,12 +39,18 @@ metadata, variant metadata, genotype accounting and its summary **byte for
 byte** (all five SHA256 equal). It ran in 700.7 s at 28.4 MiB peak RSS, the
 same as main's 679.5 s at 26.6 MiB.
 
-## 2. Manifest: only the intended v3 change
+## 2. Manifest: unchanged schema v2 with the mask off
 
-main's and the branch's GS manifest builders, given the same unmasked
-panel and arguments, agree on every field and every checksum. The only
-differences are the per-run identifiers and the intended change: v2 → v3
-plus a `genotype_quality_mask` block with `enabled: false`.
+After the PR #66 review fix (`393d325`), main's and the branch's GS
+manifest builders, given the same unmasked panel and the same arguments
+(main's own invocation), both write **schema v2 with no
+`genotype_quality_mask` field**. The two documents are equal in every key
+except the per-run `run_id`, `generated_at` and `manifest_hash`. Only a
+masked panel's manifest is schema v3.
+
+The first measurement, at `2f5ca34`, had shown the unmasked manifest at v3
+with a disabled-policy block. Review found that this broke the default-off
+output contract, and it was fixed as above.
 
 ## 3. The default `reject` policy stops on this cohort
 
@@ -76,6 +85,16 @@ recommendation.
 | build / verify peak RSS | 29.8 MiB / 24.7 MiB |
 | build / verify / index wall time | 1,907 s / 1,965 s / 12 s |
 | masked VCF | 2.38 GB, BGZF, indexed by bcftools |
+
+**Strengthened verifier, re-run** (`393d325`, over the same step-4
+artifacts). This version checks every column of both metadata files and
+the whole accounting shape: header, cohort, no duplicated, missing or
+unexpected metric, and order. It returned `consistent` for all 497,079,711
+cells in 2,055 s at 24.7 MiB. Its verification TSV and summary are byte-
+identical to the first run's, and every input file hashed the same before
+and after. Production masking code (`bin/gs_genotype_quality.py`,
+`bin/build_gs_panel.py`) did not change between `2f5ca34` and `393d325`, so
+the build and the sensitivity grid were not re-run.
 
 Memory stays flat, as the bounded-memory contract requires. Time does not:
 the enabled build takes 2.7× the disabled one, and verification adds about

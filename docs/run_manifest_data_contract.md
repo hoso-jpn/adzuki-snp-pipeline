@@ -240,7 +240,8 @@ re-derived or duplicated here. A GS manifest for a different cohort
 fails the run rather than being attached to this one.
 
 With the GS genotype quality mask (Issue #64) enabled, the embedded
-`schema_version` is 3 and `containers` also records
+`schema_version` is 3 (it stays 2 with the mask off, the default) and
+`containers` also records
 `gs_index_quality_masked_vcf` and `verify_gs_genotype_quality_mask`; with it
 off neither key appears. The policy itself, and the masked artifacts'
 checksums, live in the GS manifest this pointer names.

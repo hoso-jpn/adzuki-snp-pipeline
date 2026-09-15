@@ -279,10 +279,9 @@ separate stage that turns such calls into missing genotypes. It is off by
 default, and **no threshold has a default**: none has been calibrated for
 a real adzuki cohort (see `docs/gs_panel_genotype_quality_mask.md` for the
 sensitivity measured on the 51-sample public cohort, which is not an
-accuracy result). With it off, every published byte and the process graph
-of the GS lineage are exactly what they were before; the only difference a
-reader sees is the manifest's schema v3 `genotype_quality_mask` block
-stating that it was off.
+accuracy result). With it off, every published artifact — including the GS
+manifest, which stays schema v2 with no mask field — and the GS lineage's
+process graph are exactly what they were before Issue #64.
 
 | Parameter | Default | Meaning |
 | --- | --- | --- |
@@ -296,8 +295,11 @@ stating that it was off.
 The last three each take `reject` (fail the build, publish nothing),
 `unevaluated` (keep the call and count that the field could not be judged)
 or `mask`. The pipeline refuses, before any process starts, a threshold
-without the mask (it would be silently ignored), the mask without any
-threshold (nothing to evaluate), and the mask without the GS panel.
+without the mask and any of the three policies set to something other than
+`reject` without the mask (either would be silently ignored; an explicit
+`reject` is indistinguishable from the default and is accepted), the mask
+without any threshold (nothing to evaluate), and the mask without the GS
+panel.
 
 **Single source of truth.** `bin/gs_genotype_quality.py` is the only
 place the rule lives. `bin/build_gs_panel.py` applies it once per call in
@@ -386,8 +388,16 @@ PASS VCF, the masked VCF, the matrix and the variant metadata in lockstep
 and checks every cell: the masked VCF differs from the original only as
 described above, each call is masked exactly when the recorded policy
 masks it, each matrix token is the original dosage or `nan` exactly when
-the call was non-standard or masked, AC/AN/AF match the masked GTs, and
-the metadata and accounting equal the counts it re-derives. Any
+the call was non-standard or masked, and AC/AN/AF match the masked GTs.
+Every column of both metadata files is checked, not only the counts the mask
+touches: for each variant `cohort_id`, `variant_index`, `variant_key`,
+`chrom`, `pos`, `ref`, `alt`, `qual` (against the original VCF), the missing
+count and rate, and the masked count; for each sample `cohort_id`,
+`sample_index`, `sample_id`, the missing count and rate, the non-standard
+count and the masked count. The genotype accounting must have the exact
+header, the run's cohort on every row, no duplicated, missing or unexpected
+metric, the contractual order (historical rows, then the quality rows as
+listed above), and values equal to the counts it re-derives. Any
 disagreement fails the run with no output, and `BUILD_GS_PANEL_MANIFEST`
 waits for it. Its result is published as
 `cohort.gs_panel.genotype_quality_mask_verification.{tsv,summary.txt}`.
@@ -402,9 +412,9 @@ checked never to reach the materializing reference implementation.
 
 This constraint belongs to the *genotype encoding* schema
 (`diploid_additive_dosage_v1`), which is versioned independently of the
-manifest's own `schema_version` (2 since Issue #52, 3 since Issue #64) —
-the encoding did not change when the manifest's `containers` field did,
-nor when the optional genotype quality mask was added.
+manifest's own `schema_version` (2 since Issue #52; 3 only for a panel built
+with the Issue #64 genotype quality mask) — the encoding did not change when
+the manifest's `containers` field did, nor when the optional mask was added.
 
 This encoding is diploid-only by design, not merely by convention: the
 classification rule above has no way to assign a meaningful dosage to a
@@ -698,7 +708,8 @@ plain field-count-only check would miss.
 ## Reproducibility manifest (concern 6)
 
 `cohort.gs_panel.manifest.json` (`bin/build_gs_panel_manifest.py`) is
-schema-versioned (`schema_version: 3`) and mirrors the *shape* of the
+schema-versioned (`schema_version: 2`; `3` only for a panel built with the
+genotype quality mask, see below) and mirrors the *shape* of the
 sibling repository's own `run_manifest.py` — a sortable `run_id`
 (`<UTC-timestamp>-<uuid4-hex8>`), deterministic canonical JSON, a
 self-referential `manifest_hash`, and filename-only checksums (never an
@@ -709,7 +720,7 @@ stdlib-only Python instead.
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 2,
   "run_id": "20260814T074225Z-c22d6e72",
   "generated_at": "2026-08-14T07:42:25Z",
   "cohort_id": "cohort",
@@ -733,13 +744,6 @@ stdlib-only Python instead.
     "missing_token": "nan",
     "matrix_orientation": "variant_rows_by_sample_columns",
     "ploidy": "diploid_only"
-  },
-  "genotype_quality_mask": {
-    "enabled": false,
-    "policy": { "schema": "gs_genotype_quality_policy_v1", "enabled": false },
-    "policy_hash": "sha256:...",
-    "matrix_nan_includes_quality_masked_calls": false,
-    "quality_masked_vcf": null
   },
   "panel_status": "empty",
   "checksums": { "cohort.gs_panel.genotype_matrix.tsv.gz": "sha256:...", "...": "..." },
@@ -828,31 +832,36 @@ the same field. Older, already-published `schema_version: 1` manifests
 in this repository's docs) are untouched by this change and remain valid
 schema v1 documents; only newly generated manifests use schema v2.
 
-**`genotype_quality_mask` (schema v3, Issue #64).** Present in every v3
-manifest. With the mask off it records `enabled: false` and the disabled
-policy document, so "no mask was applied" is stated rather than inferred
-from an absent field. With the mask on it records the exact policy document
-the build wrote (refused unless it is in canonical form), its hash — the
-same value as the accounting's `genotype_quality_policy_hash` and the masked
-VCF's `PolicyHash` — `matrix_nan_includes_quality_masked_calls: true`, and
-the masked VCF's file name. `checksums` then also covers the policy JSON, the
-masked VCF and its index, and both verification outputs (16 entries instead
-of 11), and `containers` gains `gs_index_quality_masked_vcf` and
-`verify_gs_genotype_quality_mask` (10 instead of 8). Those two keys, and
-those five checksums, appear if and only if the mask ran; a manifest
-invocation that contradicts that fails.
+**Schema v3: only for a masked panel (Issue #64).** With the genotype
+quality mask off — the default — the manifest is the schema v2 document
+above, key for key and in the same order as before Issue #64, with no mask
+field; `tests/bin/test_build_gs_panel_manifest.py` pins that against goldens
+written by main@7ef04cb's own manifest builder (byte for byte from
+`build_manifest`, including `manifest_hash`, and from main's exact CLI
+invocation except the per-run `run_id`, `generated_at` and `manifest_hash`).
 
-**Schema v2 → v3: why a version bump.** In a masked panel a `nan` can be a
-call the policy removed. A v2 reader has no field telling it to look for
-that, and would read every `nan` as missing or non-standard — the silent
-misreading the Issue asks to prevent. Adding an ignorable field would leave
-exactly that reader able to proceed, so the version moves instead: a
-consumer that checks `schema_version == 2` refuses a v3 manifest and fails
-closed. v3 is otherwise v2 plus the block above, so migrating a consumer
-means accepting 3 and reading `genotype_quality_mask.enabled` (and, when it
-is true, `policy`) before interpreting `nan`. The disabled data artifacts
-are byte-identical to v2-era panels. Published schema v1 and v2 manifests
-are not rewritten.
+With the mask on, the manifest is `schema_version: 3` and adds, after
+`genotype_encoding`, a `genotype_quality_mask` block: `enabled: true`, the
+exact policy document the build wrote (refused unless it is in canonical
+form), its hash — the same value as the accounting's
+`genotype_quality_policy_hash` and the masked VCF's `PolicyHash` —
+`matrix_nan_includes_quality_masked_calls: true`, and the masked VCF's file
+name. `checksums` also covers the policy JSON, the masked VCF and its index,
+and both verification outputs (16 entries instead of 11), and `containers`
+gains `gs_index_quality_masked_vcf` and `verify_gs_genotype_quality_mask`
+(10 instead of 8). The block, those five checksums and those two keys appear
+if and only if the mask ran; a manifest invocation that contradicts that
+fails.
+
+Why a version, and why only then: in a masked panel a `nan` can be a call
+the policy removed, and a v2 reader has no field telling it to look for that
+— it would read every `nan` as missing or non-standard. An ignorable field
+would let exactly that reader proceed, so a masked panel's manifest moves to
+v3 and a consumer that checks `schema_version == 2` refuses it. An unmasked
+panel carries no such `nan`, so its manifest keeps the v2 shape its existing
+consumers already read correctly. Migrating a consumer to masked panels
+means accepting 3 and reading `genotype_quality_mask.policy` before
+interpreting `nan`. Published schema v1 and v2 manifests are not rewritten.
 
 Software versions are therefore recorded as each GS process's own
 effective container identity (see `containers` above) rather than by
