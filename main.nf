@@ -182,6 +182,23 @@ workflow {
             'has been calibrated for this cohort; set the one(s) this run intends to apply.'
         )
     }
+    // The three unreadable-value policies default to 'reject'. A non-default
+    // value with the mask off would be silently ignored, so it is refused
+    // too; an explicit 'reject' cannot be told apart from the default and is
+    // accepted.
+    def gsQualityPolicyOverrides = [
+        gs_genotype_missing_format_field: params.gs_genotype_missing_format_field,
+        gs_genotype_missing_value: params.gs_genotype_missing_value,
+        gs_genotype_malformed_value: params.gs_genotype_malformed_value,
+    ].findAll { _name, value -> value != null && value.toString() != 'reject' }
+
+    if (!gsQualityMask && !gsQualityPolicyOverrides.isEmpty()) {
+        error(
+            "${gsQualityPolicyOverrides.collect { name, value -> "${name}=${value}" }.join(', ')} " +
+            'set while params.gs_genotype_quality_mask is false; the policy would be silently ' +
+            'ignored. Set --gs_genotype_quality_mask true to apply it, or leave it at reject.'
+        )
+    }
     if (!gsQualityMask && !gsQualityThresholds.isEmpty()) {
         error(
             "${gsQualityThresholds.keySet().join(' and ')} set while " +
