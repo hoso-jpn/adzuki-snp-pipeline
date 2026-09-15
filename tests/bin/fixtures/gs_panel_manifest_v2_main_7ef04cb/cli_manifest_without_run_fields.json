@@ -1,0 +1,45 @@
+{
+  "checksums": {
+    "cohort.gs_panel.genotype_matrix.tsv.gz": "sha256:98ad44cbcc8abd5290245a3cc501902042e83b64f410197a97a9daab3f73017a",
+    "cohort.gs_panel.record_accounting.tsv": "sha256:89281bf18d6fa563bb1baac58d6748afea773a6903844ae425cca928c4cba5ba",
+    "cohort.gs_panel.sample_metadata.tsv": "sha256:caf1f7a7262d4fe3fe3fc72641d8b81b687049165f0d1f9367d582a6850dbf8d",
+    "cohort_gs.snp.pass.vcf.gz": "sha256:228037d98b342b7b69dbb8bf5e478238d0cb8729e38c1fb43a2c62511f7c7b3b"
+  },
+  "cohort_id": "cohort",
+  "containers": {
+    "build_gs_panel": "python:3.12@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "build_gs_panel_manifest": "python:3.12@sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "classify_normalized_variants": "python:3.12@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "gatk_selectpassvariants_gs": "broadinstitute/gatk:4.6.2.0@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "gatk_variantfiltration_gs": "broadinstitute/gatk:4.6.2.0@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "gs_index_classified_variants": "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "gs_normalize_variants": "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "reconcile_gs_panel_accounting": "python:3.12@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "genotype_encoding": {
+    "dosage_by_genotype": {
+      "0/0": -1,
+      "0/1_or_1/0": 0,
+      "1/1": 1
+    },
+    "matrix_orientation": "variant_rows_by_sample_columns",
+    "missing_token": "nan",
+    "phasing": "ignored for dosage; 0|1 encodes identically to 0/1",
+    "ploidy": "diploid_only",
+    "schema": "diploid_additive_dosage_v1"
+  },
+  "git_commit": null,
+  "panel_status": "populated",
+  "parameters": {
+    "sample_ploidy": 2,
+    "snp_filter_fs_max": 60.0,
+    "snp_filter_mq_min": 40.0,
+    "snp_filter_mq_rank_sum_min": -12.5,
+    "snp_filter_qd_min": 2.0,
+    "snp_filter_qual_min": 30.0,
+    "snp_filter_read_pos_rank_sum_min": -8.0,
+    "snp_filter_sor_max": 3.0
+  },
+  "pipeline_version": "0.2.0",
+  "schema_version": 2
+}

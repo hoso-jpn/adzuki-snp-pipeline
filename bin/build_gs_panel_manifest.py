@@ -104,7 +104,16 @@ from manifest_utils import (
 )
 from manifest_utils import sha256_file as sha256_file
 
-SCHEMA_VERSION = 3
+#: Schema of a manifest for an unmasked panel -- the default, and exactly the
+#: shape published before Issue #64.
+SCHEMA_VERSION = 2
+
+#: Issue #64: schema of a manifest for a panel built with the genotype quality
+#: mask. Only such a panel can hold a `nan` that the policy masked, so only its
+#: manifest moves to v3 and carries `genotype_quality_mask`; a strict v2 reader
+#: refuses it rather than misreading those cells, while every unmasked panel
+#: keeps the v2 shape its existing consumers already read.
+QUALITY_MASK_SCHEMA_VERSION = 3
 
 #: Issue #64: processes that exist only when the genotype quality mask is
 #: enabled. Their containers are recorded exactly like the eight above, and
@@ -195,21 +204,14 @@ def read_panel_status(path: Path) -> str:
 
 
 def genotype_quality_mask_block(
-    policy: quality.GenotypeQualityPolicy | None, quality_masked_vcf: str | None
+    policy: quality.GenotypeQualityPolicy, quality_masked_vcf: str
 ) -> dict[str, object]:
-    """Issue #64: what a reader needs before trusting a `nan` in the matrix.
+    """Issue #64: what a reader needs before trusting a `nan` in a masked matrix.
 
-    Present in every schema v3 manifest, enabled or not, so "no mask was
-    applied" is recorded rather than inferred from an absent field.
+    Only a schema v3 manifest -- one for a masked panel -- carries this. An
+    unmasked panel's manifest stays schema v2, with no such field, exactly as
+    before the mask existed.
     """
-    if policy is None:
-        return {
-            "enabled": False,
-            "policy": quality.DISABLED_POLICY_DOCUMENT,
-            "policy_hash": quality.disabled_policy_hash(),
-            "matrix_nan_includes_quality_masked_calls": False,
-            "quality_masked_vcf": None,
-        }
     return {
         "enabled": True,
         "policy": policy.document(),
@@ -233,13 +235,18 @@ def build_manifest(
     generated_at: str,
     genotype_quality_mask: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    """Build the manifest document, including its own content hash."""
+    """Build the manifest document, including its own content hash.
+
+    Without `genotype_quality_mask` this is the schema v2 document, field for
+    field and in the same order as before Issue #64. With it, the document is
+    schema v3 and the block follows `genotype_encoding`.
+    """
     parameters: dict[str, object] = {"sample_ploidy": sample_ploidy, **snp_filter_params}
-    if genotype_quality_mask is None:
-        genotype_quality_mask = genotype_quality_mask_block(None, None)
 
     manifest: dict[str, object] = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": (
+            SCHEMA_VERSION if genotype_quality_mask is None else QUALITY_MASK_SCHEMA_VERSION
+        ),
         "run_id": run_id,
         "generated_at": generated_at,
         "cohort_id": cohort_id,
@@ -248,10 +255,11 @@ def build_manifest(
         "containers": containers,
         "parameters": parameters,
         "genotype_encoding": GENOTYPE_ENCODING_SCHEMA,
-        "genotype_quality_mask": genotype_quality_mask,
-        "panel_status": panel_status,
-        "checksums": checksums,
     }
+    if genotype_quality_mask is not None:
+        manifest["genotype_quality_mask"] = genotype_quality_mask
+    manifest["panel_status"] = panel_status
+    manifest["checksums"] = checksums
     manifest["manifest_hash"] = canonical_json_hash(manifest)
     return manifest
 
@@ -296,10 +304,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
     parser.add_argument(
         "--genotype-quality-mask",
-        required=True,
         action=argparse.BooleanOptionalAction,
-        help="Whether the GS panel was built with a genotype quality policy (Issue #64). "
-        "Required either way, so a manifest never guesses.",
+        default=False,
+        help="The GS panel was built with a genotype quality policy (Issue #64): write "
+        "schema v3 with the policy. Off by default, so the historical invocation still "
+        "writes the historical schema v2 manifest.",
     )
     parser.add_argument(
         "--genotype-quality-policy",
@@ -427,7 +436,9 @@ def main(argv: list[str] | None = None) -> int:
         checksums=checksums,
         run_id=new_run_id(),
         generated_at=utc_now_iso(),
-        genotype_quality_mask=genotype_quality_mask_block(policy, quality_masked_vcf),
+        genotype_quality_mask=(
+            genotype_quality_mask_block(policy, quality_masked_vcf) if policy is not None else None
+        ),
     )
 
     write_json_atomic(args.output, manifest)

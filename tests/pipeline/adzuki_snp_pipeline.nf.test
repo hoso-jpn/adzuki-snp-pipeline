@@ -751,12 +751,11 @@ nextflow_pipeline {
             def manifestJson = new groovy.json.JsonSlurper().parse(
                 new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
             )
-            // Issue #64: schema v3 states the genotype quality mask either
-            // way; with it at its default (off) the manifest says so.
-            assert manifestJson.schema_version == 3
-            assert manifestJson.genotype_quality_mask.enabled == false
-            assert manifestJson.genotype_quality_mask.quality_masked_vcf == null
-            assert manifestJson.genotype_quality_mask.policy == [schema: 'gs_genotype_quality_policy_v1', enabled: false]
+            // Issue #64: with the genotype quality mask at its default (off)
+            // the manifest keeps the pre-Issue #64 schema v2 shape; only a
+            // masked panel's manifest is v3 (see the mask-enabled test).
+            assert manifestJson.schema_version == 2
+            assert !manifestJson.containsKey('genotype_quality_mask')
             assert manifestJson.panel_status == "empty"
             assert manifestJson.cohort_id == "cohort"
             assert manifestJson.parameters.sample_ploidy == 2
@@ -1108,7 +1107,7 @@ nextflow_pipeline {
             def manifestJson = new groovy.json.JsonSlurper().parse(
                 new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
             )
-            assert manifestJson.schema_version == 3
+            assert manifestJson.schema_version == 2
 
             // The fixture rewrites every default to the same image
             // referenced by digest alone; this is the identical
@@ -1225,7 +1224,7 @@ nextflow_pipeline {
             def manifestJson = new groovy.json.JsonSlurper().parse(
                 new File("$outputDir/gs_panel/cohort.gs_panel.manifest.json")
             )
-            assert manifestJson.schema_version == 3
+            assert manifestJson.schema_version == 2
 
             def containerDefaults = GsContainerDefaults.read(projectDir)
             def gatkDefault = containerDefaults.gatk
@@ -1648,6 +1647,37 @@ nextflow_pipeline {
         then {
             assert !workflow.success
             assert workflow.stdout.join("\n").contains("gs_genotype_min_gq set while params.gs_genotype_quality_mask is false")
+            assert workflow.trace.tasks().isEmpty()
+        }
+    }
+
+    test("a non-default genotype quality policy without the mask is rejected rather than ignored") {
+
+        tag "issue64_genotype_quality_mask"
+
+        when {
+            params {
+                def sourceLines = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewrittenLines = sourceLines.collect { line ->
+                    line.replaceAll("tests/data/reads/", "${projectDir}/tests/data/reads/")
+                }
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = rewrittenLines.join("\n") + "\n"
+
+                outdir = "$outputDir"
+                input = absoluteSamplesheet.toString()
+                gs_genotype_missing_value = "unevaluated"
+                // An explicit 'reject' is indistinguishable from the default
+                // and must not trip the check on its own.
+                gs_genotype_malformed_value = "reject"
+            }
+        }
+
+        then {
+            assert !workflow.success
+            def output = workflow.stdout.join("\n")
+            assert output.contains("gs_genotype_missing_value=unevaluated set while params.gs_genotype_quality_mask is false")
+            assert !output.contains("gs_genotype_malformed_value=reject")
             assert workflow.trace.tasks().isEmpty()
         }
     }

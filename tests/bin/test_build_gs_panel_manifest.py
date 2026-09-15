@@ -51,10 +51,6 @@ SNP_FILTER_CLI_ARGS = [
     "-8.0",
 ]
 
-# Issue #64: schema v3 requires the genotype quality mask state to be stated
-# either way. These existing tests describe unmasked panels, so they say so.
-QUALITY_MASK_DISABLED_CLI_ARGS = ["--no-genotype-quality-mask"]
-
 # Issue #52: one --container-<process-name> flag per GS-lineage process
 # (schema v2), replacing the old --bcftools-container/--gatk-container/
 # --python-container triple. Deliberately not all sharing one image
@@ -200,12 +196,8 @@ class BuildManifestTests(unittest.TestCase):
         defaults.update(overrides)
         return manifest_module.build_manifest(**defaults)
 
-    def test_schema_version_is_three(self) -> None:
-        # Issue #64: v2 -> v3. A `nan` in a v3 matrix can be a call the
-        # genotype quality policy masked, which a v2 reader has no way to know
-        # to look for; bumping the version makes a strict v2 consumer refuse
-        # rather than misread. See docs/gs_panel_data_contract.md.
-        self.assertEqual(self._build()["schema_version"], 3)
+    def test_schema_version_is_two(self) -> None:
+        self.assertEqual(self._build()["schema_version"], 2)
 
     def test_recorded_processes_are_the_whole_gs_lineage_including_this_one(
         self,
@@ -303,7 +295,6 @@ class CliTests(unittest.TestCase):
                     *CONTAINER_CLI_ARGS,
                     *PLOIDY_CLI_ARGS,
                     *SNP_FILTER_CLI_ARGS,
-                    *QUALITY_MASK_DISABLED_CLI_ARGS,
                     "--record-accounting",
                     str(accounting_path),
                     "--checksum-file",
@@ -315,7 +306,7 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             manifest = json.loads(output_path.read_text(encoding="utf-8"))
-            self.assertEqual(manifest["schema_version"], 3)
+            self.assertEqual(manifest["schema_version"], 2)
             self.assertIsNone(manifest["git_commit"])
             self.assertEqual(manifest["panel_status"], "populated")
             self.assertIn("matrix.tsv.gz", manifest["checksums"])
@@ -343,7 +334,6 @@ class CliTests(unittest.TestCase):
                         *CONTAINER_CLI_ARGS,
                         *PLOIDY_CLI_ARGS,
                         *SNP_FILTER_CLI_ARGS,
-                        *QUALITY_MASK_DISABLED_CLI_ARGS,
                         "--record-accounting",
                         str(missing_accounting),
                         "--output",
@@ -373,7 +363,6 @@ class CliTests(unittest.TestCase):
                         "--sample-ploidy",
                         ploidy,
                         *SNP_FILTER_CLI_ARGS,
-                        *QUALITY_MASK_DISABLED_CLI_ARGS,
                         "--record-accounting",
                         str(accounting_path),
                         "--output",
@@ -399,7 +388,7 @@ class CliTests(unittest.TestCase):
 
     def test_ploidy_error_names_the_current_schema_version(self) -> None:
         # Issue #52 review (P3): this message hardcoded "(v1)" while
-        # SCHEMA_VERSION had already moved on (2 then, 3 since Issue #64). Asserting against the
+        # SCHEMA_VERSION had already moved to 2. Asserting against the
         # constant (rather than a literal "v2") keeps the message and the
         # schema version from ever being two independently edited facts.
         _exit_code, _output_path, stderr = self._run_main_with_ploidy("3")
@@ -425,7 +414,6 @@ class CliTests(unittest.TestCase):
                     *CONTAINER_CLI_ARGS,
                     *PLOIDY_CLI_ARGS,
                     *SNP_FILTER_CLI_ARGS,
-                    *QUALITY_MASK_DISABLED_CLI_ARGS,
                     "--record-accounting",
                     str(accounting_path),
                     "--output",
@@ -456,7 +444,6 @@ class CliTests(unittest.TestCase):
                 *CONTAINER_CLI_ARGS,
                 *PLOIDY_CLI_ARGS,
                 *SNP_FILTER_CLI_ARGS,
-                *QUALITY_MASK_DISABLED_CLI_ARGS,
                 "--record-accounting",
                 str(accounting_path),
                 "--output",
@@ -492,7 +479,6 @@ class CliTests(unittest.TestCase):
                 *CONTAINER_CLI_ARGS,
                 *PLOIDY_CLI_ARGS,
                 *SNP_FILTER_CLI_ARGS,
-                *QUALITY_MASK_DISABLED_CLI_ARGS,
                 "--record-accounting",
                 str(accounting_path),
                 "--output",
@@ -531,7 +517,6 @@ class CliTests(unittest.TestCase):
                 *CONTAINER_CLI_ARGS,
                 *PLOIDY_CLI_ARGS,
                 *SNP_FILTER_CLI_ARGS,
-                *QUALITY_MASK_DISABLED_CLI_ARGS,
                 "--record-accounting",
                 str(accounting_path),
                 "--output",
@@ -714,7 +699,7 @@ if __name__ == "__main__":
 
 
 # ==========================================================================
-# Issue #64: schema v3 genotype quality mask block
+# Issue #64: genotype quality mask (schema v3 only when the mask ran)
 # ==========================================================================
 
 import gs_genotype_quality as quality  # noqa: E402
@@ -785,22 +770,18 @@ class GenotypeQualityMaskManifestTests(unittest.TestCase):
         *MASK_CONTAINER_CLI_ARGS,
     ]
 
-    def test_disabled_manifest_records_the_mask_as_off_explicitly(self) -> None:
-        exit_code, manifest, stderr = self._run(["--no-genotype-quality-mask"])
-        self.assertEqual(exit_code, 0, stderr)
-        block = manifest["genotype_quality_mask"]
-        self.assertEqual(
-            block,
-            {
-                "enabled": False,
-                "policy": {"schema": "gs_genotype_quality_policy_v1", "enabled": False},
-                "policy_hash": quality.disabled_policy_hash(),
-                "matrix_nan_includes_quality_masked_calls": False,
-                "quality_masked_vcf": None,
-            },
-        )
-        self.assertNotIn("gs_index_quality_masked_vcf", manifest["containers"])
-        self.assertNotIn("cohort.gs_panel.quality_masked.vcf.gz", manifest["checksums"])
+    def test_an_unmasked_manifest_stays_schema_v2_with_no_mask_field(self) -> None:
+        # With the flag omitted (main's own invocation) and with it explicitly
+        # off, the manifest is the pre-Issue #64 shape: schema v2, no
+        # genotype_quality_mask key, no mask checksums or containers.
+        for extra in ([], ["--no-genotype-quality-mask"]):
+            with self.subTest(extra=extra):
+                exit_code, manifest, stderr = self._run(extra)
+                self.assertEqual(exit_code, 0, stderr)
+                self.assertEqual(manifest["schema_version"], 2)
+                self.assertNotIn("genotype_quality_mask", manifest)
+                self.assertEqual(len(manifest["containers"]), 8)
+                self.assertNotIn("cohort.gs_panel.quality_masked.vcf.gz", manifest["checksums"])
 
     def test_enabled_manifest_records_policy_hash_checksums_and_containers(self) -> None:
         exit_code, manifest, stderr = self._run(self.ENABLED)
@@ -866,3 +847,102 @@ class GenotypeQualityMaskManifestTests(unittest.TestCase):
                 self.assertEqual(exit_code, 1)
                 self.assertIsNone(manifest)
                 self.assertIn(expected, stderr)
+
+
+# ==========================================================================
+# Issue #64: default-off backward compatibility with main@7ef04cb
+# ==========================================================================
+#
+# The goldens under fixtures/gs_panel_manifest_v2_main_7ef04cb/ were written by
+# bin/build_gs_panel_manifest.py and bin/manifest_utils.py taken verbatim from
+# main@7ef04cb1dfe38fca6d7f100123f4fc7b8ddc0b6c, over exactly the inputs below,
+# before this branch changed the manifest builder. They pin the unmasked
+# manifest to the shape published before the genotype quality mask existed.
+
+MAIN_GOLDEN_DIR = Path(__file__).resolve().parent / "fixtures" / "gs_panel_manifest_v2_main_7ef04cb"
+COMPAT_CONTAINERS = {
+    "gs_normalize_variants": "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:" + "a" * 64,
+    "classify_normalized_variants": "python:3.12@sha256:" + "b" * 64,
+    "gs_index_classified_variants": "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:"
+    + "c" * 64,
+    "gatk_variantfiltration_gs": "broadinstitute/gatk:4.6.2.0@sha256:" + "d" * 64,
+    "gatk_selectpassvariants_gs": "broadinstitute/gatk:4.6.2.0@sha256:" + "e" * 64,
+    "build_gs_panel": "python:3.12@sha256:" + "f" * 64,
+    "reconcile_gs_panel_accounting": "python:3.12@sha256:" + "1" * 64,
+    "build_gs_panel_manifest": "python:3.12@sha256:" + "2" * 64,
+}
+COMPAT_SNP = {
+    "snp_filter_qd_min": 2.0,
+    "snp_filter_qual_min": 30.0,
+    "snp_filter_sor_max": 3.0,
+    "snp_filter_fs_max": 60.0,
+    "snp_filter_mq_min": 40.0,
+    "snp_filter_mq_rank_sum_min": -12.5,
+    "snp_filter_read_pos_rank_sum_min": -8.0,
+}
+COMPAT_FUNCTION_KWARGS = dict(
+    cohort_id="cohort",
+    pipeline_version="0.2.0",
+    git_commit="",
+    containers=COMPAT_CONTAINERS,
+    sample_ploidy=2,
+    snp_filter_params=COMPAT_SNP,
+    panel_status="populated",
+    checksums={
+        "cohort.gs_panel.genotype_matrix.tsv.gz": "sha256:" + "3" * 64,
+        "cohort.raw.vcf.gz": "sha256:" + "4" * 64,
+    },
+    run_id="20260914T000000Z-deadbeef",
+    generated_at="2026-09-14T00:00:00Z",
+)
+COMPAT_FILES = {
+    "cohort.gs_panel.record_accounting.tsv": "cohort_id\tmetric\tvalue\ncohort\tgs_pass_records\t3\ncohort\tpanel_status\tpopulated\n",
+    "cohort.gs_panel.genotype_matrix.tsv.gz": "not really gzip, only checksummed\n",
+    "cohort.gs_panel.sample_metadata.tsv": "cohort_id\tsample_index\tsample_id\n",
+    "cohort_gs.snp.pass.vcf.gz": "pass vcf bytes\n",
+}
+COMPAT_VOLATILE = ("run_id", "generated_at", "manifest_hash")
+
+
+def _main_cli_argv(directory: Path) -> list[str]:
+    """Exactly the argument list BUILD_GS_PANEL_MANIFEST passed at main@7ef04cb."""
+    argv = ["--cohort-id", "cohort", "--pipeline-version", "0.2.0", "--git-commit", ""]
+    for name, value in COMPAT_CONTAINERS.items():
+        argv += [f"--container-{name.replace('_', '-')}", value]
+    argv += ["--sample-ploidy", "2"]
+    for name, value in COMPAT_SNP.items():
+        argv += [f"--{name.replace('_', '-')}", str(value)]
+    argv += ["--record-accounting", str(directory / "cohort.gs_panel.record_accounting.tsv")]
+    for name in COMPAT_FILES:
+        if name != "cohort.gs_panel.record_accounting.tsv":
+            argv += ["--checksum-file", str(directory / name)]
+    argv += ["--checksum-file", str(directory / "cohort.gs_panel.record_accounting.tsv")]
+    return argv + ["--output", str(directory / "manifest.json")]
+
+
+class MainSchemaV2CompatibilityTests(unittest.TestCase):
+    def test_build_manifest_reproduces_mains_v2_document_including_its_hash(self) -> None:
+        golden = json.loads((MAIN_GOLDEN_DIR / "build_manifest.json").read_text(encoding="utf-8"))
+        document = manifest_module.build_manifest(**COMPAT_FUNCTION_KWARGS)
+        self.assertEqual(list(document), list(golden))
+        self.assertEqual(document, golden)
+        self.assertEqual(document["manifest_hash"], golden["manifest_hash"])
+
+    def test_mains_exact_cli_invocation_writes_mains_v2_manifest(self) -> None:
+        golden = json.loads(
+            (MAIN_GOLDEN_DIR / "cli_manifest_without_run_fields.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            for name, text in COMPAT_FILES.items():
+                (directory / name).write_text(text, encoding="utf-8")
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                exit_code = manifest_module.main(_main_cli_argv(directory))
+            self.assertEqual(exit_code, 0, stderr.getvalue())
+            manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+        # Only the intentionally per-run fields may differ.
+        without_run_fields = {k: v for k, v in manifest.items() if k not in COMPAT_VOLATILE}
+        self.assertEqual(list(without_run_fields), list(golden))
+        self.assertEqual(without_run_fields, golden)
+        self.assertEqual(sorted(set(manifest) - set(without_run_fields)), sorted(COMPAT_VOLATILE))
