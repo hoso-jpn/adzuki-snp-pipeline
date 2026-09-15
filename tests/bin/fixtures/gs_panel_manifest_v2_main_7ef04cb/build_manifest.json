@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "run_id": "20260914T000000Z-deadbeef",
+  "generated_at": "2026-09-14T00:00:00Z",
+  "cohort_id": "cohort",
+  "pipeline_version": "0.2.0",
+  "git_commit": null,
+  "containers": {
+    "gs_normalize_variants": "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "classify_normalized_variants": "python:3.12@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "gs_index_classified_variants": "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "gatk_variantfiltration_gs": "broadinstitute/gatk:4.6.2.0@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "gatk_selectpassvariants_gs": "broadinstitute/gatk:4.6.2.0@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "build_gs_panel": "python:3.12@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "reconcile_gs_panel_accounting": "python:3.12@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "build_gs_panel_manifest": "python:3.12@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "parameters": {
+    "sample_ploidy": 2,
+    "snp_filter_qd_min": 2.0,
+    "snp_filter_qual_min": 30.0,
+    "snp_filter_sor_max": 3.0,
+    "snp_filter_fs_max": 60.0,
+    "snp_filter_mq_min": 40.0,
+    "snp_filter_mq_rank_sum_min": -12.5,
+    "snp_filter_read_pos_rank_sum_min": -8.0
+  },
+  "genotype_encoding": {
+    "schema": "diploid_additive_dosage_v1",
+    "dosage_by_genotype": {
+      "0/0": -1,
+      "0/1_or_1/0": 0,
+      "1/1": 1
+    },
+    "phasing": "ignored for dosage; 0|1 encodes identically to 0/1",
+    "missing_token": "nan",
+    "matrix_orientation": "variant_rows_by_sample_columns",
+    "ploidy": "diploid_only"
+  },
+  "panel_status": "populated",
+  "checksums": {
+    "cohort.gs_panel.genotype_matrix.tsv.gz": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "cohort.raw.vcf.gz": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "manifest_hash": "sha256:3f298bd93bc7817e8d43e167be2a72512db857a516fbc2ac97e6761b1ac14acd"
+}

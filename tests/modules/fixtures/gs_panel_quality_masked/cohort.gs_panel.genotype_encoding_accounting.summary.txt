@@ -1,0 +1,52 @@
+GS panel genotype encoding summary
+Cohort ID: cohort
+Variants: 8
+Samples: 4
+Total genotype cells: 32
+  standard hom-ref (-1): 5
+  standard het (0): 6
+  standard hom-alt (+1): 3
+  missing (nan): 2
+  non-diploid, treated as missing (nan): 1
+  non-biallelic-index, treated as missing (nan): 1
+Total cells treated as missing: 18
+Phased genotype calls: 5 (informational only -- phasing does not affect dosage or missingness; a phased call that is otherwise a clean diploid biallelic-index genotype is encoded exactly like its unphased counterpart, per the VCF specification's definition of '|' as recording phase, not allele identity).
+Every non-standard genotype shape is counted under its own reason rather than a single undifferentiated 'missing' bucket; see the sample and variant metadata files for the same breakdown at finer granularity.
+
+Genotype quality policy (DP/GQ masking, separate from the site hard filter)
+Policy hash: sha256:57eacdc8932981e95b03c7e016d62ac55b36a95cf80e944755b04c3cfdca786a
+Evaluated calls (diploid biallelic-index calls with no missing allele): 28
+  passed: 9
+  kept, a field could not be evaluated: 5
+  masked to nan: 14
+    by original dosage: hom-ref 4, het 7, hom-alt 3
+    by reason pair (each masked call in exactly one):
+      dp_none.gq_low: 3
+      dp_none.gq_unavailable: 2
+      dp_none.gq_malformed: 1
+      dp_low.gq_none: 4
+      dp_low.gq_low: 1
+      dp_low.gq_unavailable: 0
+      dp_low.gq_malformed: 0
+      dp_unavailable.gq_none: 1
+      dp_unavailable.gq_low: 0
+      dp_unavailable.gq_unavailable: 1
+      dp_unavailable.gq_malformed: 0
+      dp_malformed.gq_none: 1
+      dp_malformed.gq_low: 0
+      dp_malformed.gq_unavailable: 0
+      dp_malformed.gq_malformed: 0
+  per-field status (each evaluated call in exactly one, per field):
+    dp_status.pass: 16
+    dp_status.below_threshold: 5
+    dp_status.format_field_absent: 4
+    dp_status.value_missing: 1
+    dp_status.value_truncated: 1
+    dp_status.value_malformed: 1
+    gq_status.pass: 16
+    gq_status.below_threshold: 4
+    gq_status.format_field_absent: 4
+    gq_status.value_missing: 1
+    gq_status.value_truncated: 2
+    gq_status.value_malformed: 1
+The standard hom-ref/het/hom-alt counts above are the calls still encoded after masking, and 'Total cells treated as missing' includes the masked calls. This is a sensitivity to the chosen thresholds, not a measure of genotype accuracy: no truth set was used.

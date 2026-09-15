@@ -1,0 +1,23 @@
+{
+  "comparison": "a value >= its threshold passes; a value < its threshold masks the call",
+  "enabled": true,
+  "evaluated_calls": "diploid biallelic-index calls with no missing allele, phased or unphased; calls already missing or non-standard are not evaluated",
+  "malformed_value": "mask",
+  "masked_genotype": "GT alleles replaced by '.', keeping the call's own separator; every other FORMAT subfield is retained unchanged",
+  "min_dp": 10,
+  "min_gq": 20,
+  "missing_format_field": "unevaluated",
+  "missing_value": "mask",
+  "missing_value_covers": [
+    "value_missing",
+    "value_truncated"
+  ],
+  "recomputed_info": [
+    "AC",
+    "AN",
+    "AF"
+  ],
+  "recomputed_info_scope": "only on rows where at least one call was masked; every other INFO annotation describes the original call set and is not recomputed",
+  "schema": "gs_genotype_quality_policy_v1",
+  "valid_value": "a non-negative decimal integer"
+}

@@ -239,6 +239,13 @@ own artifacts (see `docs/gs_panel_data_contract.md`); nothing is
 re-derived or duplicated here. A GS manifest for a different cohort
 fails the run rather than being attached to this one.
 
+With the GS genotype quality mask (Issue #64) enabled, the embedded
+`schema_version` is 3 (it stays 2 with the mask off, the default) and
+`containers` also records
+`gs_index_quality_masked_vcf` and `verify_gs_genotype_quality_mask`; with it
+off neither key appears. The policy itself, and the masked artifacts'
+checksums, live in the GS manifest this pointer names.
+
 When `enable_gs_panel = false`, `gs_panel` is explicit `null` — a
 present field with a null value, so a reader can distinguish "this run
 had no GS panel" from "this manifest predates the field" — and none of

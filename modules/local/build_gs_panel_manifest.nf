@@ -1,3 +1,13 @@
+// Issue #64: pick one of the quality mask files by its fixed suffix, refusing
+// a missing or ambiguous match rather than recording the wrong file.
+def qualityMaskFile(files, suffix) {
+    def matches = files.findAll { file -> file.name.endsWith(suffix) }
+    if (matches.size() != 1) {
+        error("expected exactly one quality mask file ending in ${suffix}, got ${matches}")
+    }
+    return matches[0]
+}
+
 process BUILD_GS_PANEL_MANIFEST {
     tag "${meta.id}"
     label 'process_low'
@@ -44,6 +54,16 @@ process BUILD_GS_PANEL_MANIFEST {
     val(gatk_selectpassvariants_gs_container)
     val(build_gs_panel_container)
     val(reconcile_gs_panel_accounting_container)
+    // Issue #64: the genotype quality mask. `genotype_quality_mask` states
+    // whether it ran; with it off the workflow passes an empty file list and
+    // empty container identities, and the manifest records the disabled
+    // policy. With it on, the list holds the policy JSON, the masked VCF and
+    // its index, and the verification outputs -- which exist only once
+    // VERIFY_GS_GENOTYPE_QUALITY_MASK has succeeded.
+    val(genotype_quality_mask)
+    path(quality_mask_files)
+    val(gs_index_quality_masked_vcf_container)
+    val(verify_gs_genotype_quality_mask_container)
 
     output:
     tuple(val(meta), path("${meta.id}.gs_panel.manifest.json"), emit: manifest)
@@ -56,6 +76,24 @@ process BUILD_GS_PANEL_MANIFEST {
     val(task.container), emit: container_id
 
     script:
+    def mask_enabled = genotype_quality_mask.toString().toBoolean()
+    def mask_files = (quality_mask_files instanceof List ? quality_mask_files : [quality_mask_files])
+        .findAll { file -> file }
+    def quality_args = '--no-genotype-quality-mask'
+    if (mask_enabled) {
+        quality_args = [
+            '--genotype-quality-mask',
+            "--genotype-quality-policy ${qualityMaskFile(mask_files, '.genotype_quality_policy.json')}",
+            "--quality-masked-vcf ${qualityMaskFile(mask_files, '.quality_masked.vcf.gz')}",
+            "--checksum-file ${qualityMaskFile(mask_files, '.quality_masked.vcf.gz.tbi')}",
+            "--checksum-file ${qualityMaskFile(mask_files, '.genotype_quality_mask_verification.tsv')}",
+            "--checksum-file ${qualityMaskFile(mask_files, '.genotype_quality_mask_verification.summary.txt')}",
+            "--container-gs-index-quality-masked-vcf '${gs_index_quality_masked_vcf_container}'",
+            "--container-verify-gs-genotype-quality-mask '${verify_gs_genotype_quality_mask_container}'",
+        ].join(' ')
+    } else if (!mask_files.isEmpty()) {
+        error("quality mask files were passed while the genotype quality mask is off: ${mask_files}")
+    }
     """
     build_gs_panel_manifest.py \
         --cohort-id '${meta.id}' \
@@ -89,6 +127,7 @@ process BUILD_GS_PANEL_MANIFEST {
         --checksum-file ${raw_all_vcf} \
         --checksum-file ${reference_fasta} \
         --checksum-file ${reference_fai} \
+        ${quality_args} \
         --output ${meta.id}.gs_panel.manifest.json
     """
 }

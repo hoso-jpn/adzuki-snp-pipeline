@@ -1,0 +1,14 @@
+GS panel genotype encoding summary
+Cohort ID: cohort
+Variants: 8
+Samples: 4
+Total genotype cells: 32
+  standard hom-ref (-1): 9
+  standard het (0): 13
+  standard hom-alt (+1): 6
+  missing (nan): 2
+  non-diploid, treated as missing (nan): 1
+  non-biallelic-index, treated as missing (nan): 1
+Total cells treated as missing: 4
+Phased genotype calls: 5 (informational only -- phasing does not affect dosage or missingness; a phased call that is otherwise a clean diploid biallelic-index genotype is encoded exactly like its unphased counterpart, per the VCF specification's definition of '|' as recording phase, not allele identity).
+Every non-standard genotype shape is counted under its own reason rather than a single undifferentiated 'missing' bucket; see the sample and variant metadata files for the same breakdown at finer granularity.

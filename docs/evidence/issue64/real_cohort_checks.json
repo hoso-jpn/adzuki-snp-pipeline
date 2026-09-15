@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "issue": 64,
+  "measured_on": "2026-09-15",
+  "host": "seedcore-01",
+  "lineage": {
+    "joint_callset": {
+      "source": "Issue #45 suite E1 gathered cohort.raw.vcf.gz (51 samples, per-contig plan, record-identical to the production baseline E0)",
+      "sha256": "e83b6531bbceed7f20fb63a1e04420227faa522b7ecccce424c15e95ae3b0f3a"
+    },
+    "reference": {
+      "accession": "GCF_016808095.1",
+      "fasta_sha256": "e9838db1b048b54b21534285aaf95eae64cb3019d85af270b44e20b3d545f383",
+      "fai_sha256": "c5db64484f1c2e8a14368ca68b51e3d4ce8a5afefd277b3780085bd9128ddde5"
+    },
+    "gs_lineage": "GS_NORMALIZE_VARIANTS -> CLASSIFY_NORMALIZED_VARIANTS -> GS_INDEX_CLASSIFIED_VARIANTS -> GATK_VARIANTFILTRATION_GS -> GATK_SELECTPASSVARIANTS_GS -> BUILD_GS_PANEL -> RECONCILE_GS_PANEL_ACCOUNTING, rendered by the production modules and hard-filter definitions of a clean main checkout (benchmarks/issue64/gs_lineage_from_callset.nf.template); no read processing or variant calling",
+    "main_sha": "7ef04cb1dfe38fca6d7f100123f4fc7b8ddc0b6c",
+    "feature_sha": "2f5ca34f832e4074ca2b74569eb78622a0d0064e",
+    "containers": {
+      "python": "python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7",
+      "bcftools": "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3",
+      "gatk": "broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb"
+    },
+    "record_accounting": {
+      "raw_all_records": "13219170",
+      "normalized_records": "14287781",
+      "classified_biallelic_snp_records": "11613248",
+      "gs_hard_filter_excluded_records": "1866587",
+      "gs_pass_records": "9746661",
+      "gs_pass_sample_count": "51",
+      "matrix_variant_records": "9746661",
+      "panel_status": "populated"
+    },
+    "gs_pass_vcf_sha256": {
+      "before_checks": "f1ab1c3a41e7500dca69aae7df5a7b6a13558e35b23afb64995f8c01245190d4",
+      "after_checks": "f1ab1c3a41e7500dca69aae7df5a7b6a13558e35b23afb64995f8c01245190d4",
+      "unchanged": true
+    },
+    "task_realtime_seconds": {
+      "GS_NORMALIZE_VARIANTS": 314.0,
+      "CLASSIFY_NORMALIZED_VARIANTS": 88.4,
+      "GS_INDEX_CLASSIFIED_VARIANTS": 245.0,
+      "GATK_VARIANTFILTRATION_GS": 114.0,
+      "GATK_SELECTPASSVARIANTS_GS": 69.7,
+      "BUILD_GS_PANEL (main)": 679.5,
+      "RECONCILE_GS_PANEL_ACCOUNTING": 203.7
+    }
+  },
+  "step1_disabled_compatibility": {
+    "result": "PASS",
+    "comparison": "branch bin/build_gs_panel.py with no quality option vs main's BUILD_GS_PANEL output from the same PASS VCF, byte for byte",
+    "identical_files_sha256": {
+      "cohort.gs_panel.genotype_matrix.tsv.gz": "b243ea2adf72b351e5b50e1080c1287248e18cd70a2367343533a9a1d3f34fd5",
+      "cohort.gs_panel.sample_metadata.tsv": "da8a1f446c2d6540c99ceed8fc70856eed3f0a469022bf1b7debd550a3c23ede",
+      "cohort.gs_panel.variant_metadata.tsv": "e214932d340e3e51a98385eb85e15ce81c79e65a909eae962f4b00602b00e2b3",
+      "cohort.gs_panel.genotype_encoding_accounting.tsv": "41c2aa25af8ce916b7b530838dd6acd1f795f958e086daeb7f5dc60ec97c974d",
+      "cohort.gs_panel.genotype_encoding_accounting.summary.txt": "dc8212122b9e5b8336017572fd6654ba16465bc7a2ed351da2dc3833a7c7bf90"
+    },
+    "resources": {
+      "branch_disabled": {
+        "wall_seconds": 700.7,
+        "peak_rss_mib": 28.4,
+        "exit_code": 0,
+        "measurement": "RUSAGE_CHILDREN inside the pinned python container"
+      },
+      "main_in_nextflow": {
+        "wall_seconds": 679.5,
+        "peak_rss_mib": 26.6,
+        "measurement": "Nextflow trace"
+      }
+    }
+  },
+  "step2_manifest_compatibility": {
+    "result": "PASS",
+    "measured_at_sha": "393d3258b09c0418debf08ac6f19e32f6ea2551e",
+    "comparison": "main@7ef04cb's and the branch's build_gs_panel_manifest.py over the same unmasked real panel with main's exact arguments, ignoring run_id, generated_at and manifest_hash",
+    "main_schema_version": 2,
+    "feature_schema_version": 2,
+    "feature_has_genotype_quality_mask": false,
+    "equal_except_run_fields": true,
+    "checksums_equal": true,
+    "superseded_measurement": {
+      "sha": "2f5ca34f832e4074ca2b74569eb78622a0d0064e",
+      "feature_schema_version": 3,
+      "feature_had_disabled_genotype_quality_mask_block": true,
+      "why_superseded": "PR #66 review: a v3 manifest for an unmasked panel broke the default-off output contract; fixed in b6e9c41 so only masked panels are v3"
+    }
+  },
+  "step3_default_reject_policy": {
+    "policy": "--genotype-quality-mask --genotype-min-dp 10 --genotype-min-gq 20 with every unreadable-value policy at its default (reject)",
+    "exit_code": 1,
+    "message": "build_gs_panel.py: error: cohort_gs.snp.pass.vcf.gz: line 26705: NC_068970.1:1993424 sample 'SRR29909068': DP is value_missing and the policy rejects it (missing_value=reject)",
+    "published_outputs": 0,
+    "wall_seconds": 5.3,
+    "reading": "this GATK callset has called genotypes whose FORMAT/DP is '.', so the default reject policy stops the build at the first one; a run on it must choose missing_value explicitly"
+  },
+  "step4_illustrative_enabled_build": {
+    "not_a_recommendation": "min_dp=10 and min_gq=20 were chosen only to exercise the enabled path on real data; nothing here makes them a default or an adopted threshold",
+    "policy": {
+      "comparison": "a value >= its threshold passes; a value < its threshold masks the call",
+      "enabled": true,
+      "evaluated_calls": "diploid biallelic-index calls with no missing allele, phased or unphased; calls already missing or non-standard are not evaluated",
+      "malformed_value": "unevaluated",
+      "masked_genotype": "GT alleles replaced by '.', keeping the call's own separator; every other FORMAT subfield is retained unchanged",
+      "min_dp": 10,
+      "min_gq": 20,
+      "missing_format_field": "unevaluated",
+      "missing_value": "unevaluated",
+      "missing_value_covers": [
+        "value_missing",
+        "value_truncated"
+      ],
+      "recomputed_info": [
+        "AC",
+        "AN",
+        "AF"
+      ],
+      "recomputed_info_scope": "only on rows where at least one call was masked; every other INFO annotation describes the original call set and is not recomputed",
+      "schema": "gs_genotype_quality_policy_v1",
+      "valid_value": "a non-negative decimal integer"
+    },
+    "policy_hash": "sha256:a7eb3dff49674d33f84b592d53232ba2333170d93040874e7b2a0183b0e05319",
+    "genotype_encoding_accounting": {
+      "total_genotype_cells": "497079711",
+      "standard_hom_ref_calls": "234438215",
+      "standard_het_calls": "13977875",
+      "standard_hom_alt_calls": "6169167",
+      "missing_calls": "31578895",
+      "non_diploid_calls_treated_as_missing": "0",
+      "non_biallelic_index_calls_treated_as_missing": "0",
+      "total_treated_as_missing": "242494454",
+      "phased_genotype_count": "30447508",
+      "genotype_quality_policy_hash": "sha256:a7eb3dff49674d33f84b592d53232ba2333170d93040874e7b2a0183b0e05319",
+      "quality_evaluated_calls": "465500816",
+      "quality_passed_calls": "254580845",
+      "quality_kept_unevaluated_calls": "4412",
+      "quality_masked_calls": "210915559",
+      "quality_masked_hom_ref_calls": "185203732",
+      "quality_masked_het_calls": "6242066",
+      "quality_masked_hom_alt_calls": "19469761",
+      "quality_masked_reason.dp_none.gq_low": "7462793",
+      "quality_masked_reason.dp_none.gq_unavailable": "0",
+      "quality_masked_reason.dp_none.gq_malformed": "0",
+      "quality_masked_reason.dp_low.gq_none": "80590206",
+      "quality_masked_reason.dp_low.gq_low": "122862560",
+      "quality_masked_reason.dp_low.gq_unavailable": "0",
+      "quality_masked_reason.dp_low.gq_malformed": "0",
+      "quality_masked_reason.dp_unavailable.gq_none": "0",
+      "quality_masked_reason.dp_unavailable.gq_low": "0",
+      "quality_masked_reason.dp_unavailable.gq_unavailable": "0",
+      "quality_masked_reason.dp_unavailable.gq_malformed": "0",
+      "quality_masked_reason.dp_malformed.gq_none": "0",
+      "quality_masked_reason.dp_malformed.gq_low": "0",
+      "quality_masked_reason.dp_malformed.gq_unavailable": "0",
+      "quality_masked_reason.dp_malformed.gq_malformed": "0",
+      "dp_status.pass": "262043460",
+      "dp_status.below_threshold": "203452766",
+      "dp_status.format_field_absent": "0",
+      "dp_status.value_missing": "4590",
+      "dp_status.value_truncated": "0",
+      "dp_status.value_malformed": "0",
+      "gq_status.pass": "335175463",
+      "gq_status.below_threshold": "130325353",
+      "gq_status.format_field_absent": "0",
+      "gq_status.value_missing": "0",
+      "gq_status.value_truncated": "0",
+      "gq_status.value_malformed": "0"
+    },
+    "verification": {
+      "genotype_quality_policy_hash": "sha256:a7eb3dff49674d33f84b592d53232ba2333170d93040874e7b2a0183b0e05319",
+      "verified_variant_records": "9746661",
+      "verified_genotype_cells": "497079711",
+      "quality_masked_calls": "210915559",
+      "rows_with_masked_calls": "9743049",
+      "verification_status": "consistent"
+    },
+    "artifact_sha256": {
+      "cohort.gs_panel.genotype_matrix.tsv.gz": "1afadc54f00e22879283c243ba6e4320e6cb924325e63e9648ed595a9283076c",
+      "cohort.gs_panel.quality_masked.vcf.gz": "c2fa4567dd8c86d36ae17ce72437142cb06b0e7ad1e040bdfbc0a7929f67ff4c",
+      "cohort.gs_panel.quality_masked.vcf.gz.tbi": "a1ca326e4498f161637551999b9d61302a31cc4c153cf8b504b74bbebe6b902b",
+      "cohort.gs_panel.genotype_quality_policy.json": "f32ce2ea06b6e85da6223d967b738364ae433410529798992a0d209113fdac6f",
+      "cohort.gs_panel.genotype_encoding_accounting.tsv": "6f8070a166e99390f03d0ee97f576120bf32d833e6d5d4c8d0c410d4dc40e5e5",
+      "cohort.gs_panel.sample_metadata.tsv": "61e874d89fa1828890ff341bfbcdf5241117b95367ba39b559586eddad827afb",
+      "cohort.gs_panel.variant_metadata.tsv": "904322f3c383336680e15ce8cdbb9b660e9d3d40d068193fc26ca5d05f981d9c",
+      "cohort.gs_panel.genotype_quality_mask_verification.tsv": "2c4dd444dd671c06900096614d9f64aacdb804ead8215e0324b62c8c313f55d7"
+    },
+    "quality_masked_vcf_bytes": 2382576539,
+    "gs_pass_vcf_bytes": 3480113944,
+    "resources": {
+      "build": {
+        "wall_seconds": 1907.2,
+        "peak_rss_mib": 29.8,
+        "exit_code": 0,
+        "measurement": "RUSAGE_CHILDREN inside the pinned python container"
+      },
+      "verify": {
+        "wall_seconds": 1964.7,
+        "peak_rss_mib": 24.7,
+        "exit_code": 0,
+        "measurement": "RUSAGE_CHILDREN inside the pinned python container"
+      },
+      "bcftools_index": {
+        "wall_seconds": 12.4,
+        "measurement": "host /usr/bin/time around docker run"
+      }
+    }
+  },
+  "step5_sensitivity": {
+    "file": "docs/evidence/issue64/real_cohort_genotype_quality_sensitivity.json",
+    "resources": {
+      "wall_seconds": 1851.1,
+      "peak_rss_mib": 24.4,
+      "exit_code": 0,
+      "measurement": "RUSAGE_CHILDREN inside the pinned python container"
+    }
+  },
+  "step6_strengthened_verifier_rerun": {
+    "sha": "393d3258b09c0418debf08ac6f19e32f6ea2551e",
+    "inputs": "the step-4 enabled artifacts and the unchanged PASS VCF",
+    "adds": "every column of variant and sample metadata; accounting header, cohort on every row, no duplicate/missing/unexpected metric, contractual order, values",
+    "verification": {
+      "verified_variant_records": "9746661",
+      "verified_genotype_cells": "497079711",
+      "quality_masked_calls": "210915559",
+      "rows_with_masked_calls": "9743049",
+      "verification_status": "consistent"
+    },
+    "verification_tsv_sha256": "2c4dd444dd671c06900096614d9f64aacdb804ead8215e0324b62c8c313f55d7",
+    "verification_summary_sha256": "4d3302f40ebb522caa2852e60366dfdcdefdc26030c54a45fd6acd6eca965b1f",
+    "identical_to_step4_verification_outputs": true,
+    "inputs_sha256_unchanged": true,
+    "resources": {
+      "wall_seconds": 2055.4,
+      "peak_rss_mib": 24.7,
+      "exit_code": 0,
+      "measurement": "RUSAGE_CHILDREN inside the pinned python container"
+    },
+    "production_masking_code_unchanged_since_measurement": "git diff 2f5ca34 393d325 -- bin/gs_genotype_quality.py bin/build_gs_panel.py is empty"
+  }
+}

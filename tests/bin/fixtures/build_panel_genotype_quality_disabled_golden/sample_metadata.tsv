@@ -1,0 +1,5 @@
+cohort_id	sample_index	sample_id	missing_genotype_count	missing_genotype_rate	non_standard_genotype_count
+cohort	0	s1	0	0.000000	0
+cohort	1	s2	0	0.000000	0
+cohort	2	s3	2	0.250000	1
+cohort	3	s4	2	0.250000	1

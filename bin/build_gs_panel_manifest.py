@@ -79,9 +79,13 @@ contradictory provenance record.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
+# Issue #64: the genotype quality policy's own parser and canonical form, so
+# the manifest records exactly the policy document the panel was built with.
+import gs_genotype_quality as quality
 from manifest_utils import _json_default as _json_default
 
 # Issue #42: the hashing/serialization mechanics this manifest and
@@ -100,7 +104,24 @@ from manifest_utils import (
 )
 from manifest_utils import sha256_file as sha256_file
 
+#: Schema of a manifest for an unmasked panel -- the default, and exactly the
+#: shape published before Issue #64.
 SCHEMA_VERSION = 2
+
+#: Issue #64: schema of a manifest for a panel built with the genotype quality
+#: mask. Only such a panel can hold a `nan` that the policy masked, so only its
+#: manifest moves to v3 and carries `genotype_quality_mask`; a strict v2 reader
+#: refuses it rather than misreading those cells, while every unmasked panel
+#: keeps the v2 shape its existing consumers already read.
+QUALITY_MASK_SCHEMA_VERSION = 3
+
+#: Issue #64: processes that exist only when the genotype quality mask is
+#: enabled. Their containers are recorded exactly like the eight above, and
+#: are refused when the mask is off rather than silently accepted.
+QUALITY_MASK_CONTAINER_PROCESS_NAMES: tuple[str, ...] = (
+    "gs_index_quality_masked_vcf",
+    "verify_gs_genotype_quality_mask",
+)
 
 SNP_FILTER_PARAM_NAMES: tuple[str, ...] = (
     "snp_filter_qd_min",
@@ -182,6 +203,24 @@ def read_panel_status(path: Path) -> str:
     raise MalformedAccountingError(f"{path}: missing required metric: panel_status")
 
 
+def genotype_quality_mask_block(
+    policy: quality.GenotypeQualityPolicy, quality_masked_vcf: str
+) -> dict[str, object]:
+    """Issue #64: what a reader needs before trusting a `nan` in a masked matrix.
+
+    Only a schema v3 manifest -- one for a masked panel -- carries this. An
+    unmasked panel's manifest stays schema v2, with no such field, exactly as
+    before the mask existed.
+    """
+    return {
+        "enabled": True,
+        "policy": policy.document(),
+        "policy_hash": policy.policy_hash(),
+        "matrix_nan_includes_quality_masked_calls": True,
+        "quality_masked_vcf": quality_masked_vcf,
+    }
+
+
 def build_manifest(
     *,
     cohort_id: str,
@@ -194,12 +233,20 @@ def build_manifest(
     checksums: dict[str, str],
     run_id: str,
     generated_at: str,
+    genotype_quality_mask: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    """Build the manifest document, including its own content hash."""
+    """Build the manifest document, including its own content hash.
+
+    Without `genotype_quality_mask` this is the schema v2 document, field for
+    field and in the same order as before Issue #64. With it, the document is
+    schema v3 and the block follows `genotype_encoding`.
+    """
     parameters: dict[str, object] = {"sample_ploidy": sample_ploidy, **snp_filter_params}
 
     manifest: dict[str, object] = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": (
+            SCHEMA_VERSION if genotype_quality_mask is None else QUALITY_MASK_SCHEMA_VERSION
+        ),
         "run_id": run_id,
         "generated_at": generated_at,
         "cohort_id": cohort_id,
@@ -208,9 +255,11 @@ def build_manifest(
         "containers": containers,
         "parameters": parameters,
         "genotype_encoding": GENOTYPE_ENCODING_SCHEMA,
-        "panel_status": panel_status,
-        "checksums": checksums,
     }
+    if genotype_quality_mask is not None:
+        manifest["genotype_quality_mask"] = genotype_quality_mask
+    manifest["panel_status"] = panel_status
+    manifest["checksums"] = checksums
     manifest["manifest_hash"] = canonical_json_hash(manifest)
     return manifest
 
@@ -254,6 +303,34 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         parser.add_argument(f"--{name.replace('_', '-')}", required=True, type=float)
 
     parser.add_argument(
+        "--genotype-quality-mask",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="The GS panel was built with a genotype quality policy (Issue #64): write "
+        "schema v3 with the policy. Off by default, so the historical invocation still "
+        "writes the historical schema v2 manifest.",
+    )
+    parser.add_argument(
+        "--genotype-quality-policy",
+        type=Path,
+        default=None,
+        help="The policy JSON build_gs_panel.py wrote; required with --genotype-quality-mask "
+        "and refused without it.",
+    )
+    parser.add_argument(
+        "--quality-masked-vcf",
+        type=Path,
+        default=None,
+        help="The quality-masked VCF; required with --genotype-quality-mask and checksummed.",
+    )
+    for name in QUALITY_MASK_CONTAINER_PROCESS_NAMES:
+        parser.add_argument(
+            f"--container-{name.replace('_', '-')}",
+            default=None,
+            help=f"{name.upper()}'s effective container; required with --genotype-quality-mask.",
+        )
+
+    parser.add_argument(
         "--record-accounting",
         required=True,
         type=Path,
@@ -271,6 +348,40 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
 
     return parser.parse_args(argv)
+
+
+def _resolve_genotype_quality_mask(
+    args: argparse.Namespace,
+) -> tuple[quality.GenotypeQualityPolicy | None, str | None]:
+    """Read the policy that actually ran, refusing a flag that contradicts the files."""
+    quality_inputs = {
+        "--genotype-quality-policy": args.genotype_quality_policy,
+        "--quality-masked-vcf": args.quality_masked_vcf,
+        **{
+            f"--container-{name.replace('_', '-')}": getattr(args, f"container_{name}")
+            for name in QUALITY_MASK_CONTAINER_PROCESS_NAMES
+        },
+    }
+    if not args.genotype_quality_mask:
+        given = [name for name, value in quality_inputs.items() if value is not None]
+        if given:
+            raise ValueError(
+                f"{', '.join(given)} given with --no-genotype-quality-mask; a manifest "
+                "for an unmasked panel must not record mask artifacts"
+            )
+        return None, None
+
+    missing = [name for name, value in quality_inputs.items() if value is None]
+    if missing:
+        raise ValueError(f"--genotype-quality-mask needs {', '.join(missing)}")
+    policy = quality.policy_from_document(
+        json.loads(args.genotype_quality_policy.read_text(encoding="utf-8"))
+    )
+    if policy is None:
+        raise ValueError(
+            "--genotype-quality-mask was given, but the policy document is the disabled policy"
+        )
+    return policy, args.quality_masked_vcf.name
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -292,16 +403,23 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
+        policy, quality_masked_vcf = _resolve_genotype_quality_mask(args)
         panel_status = read_panel_status(args.record_accounting)
-        checksums = checksum_files(args.checksum_file)
+        checksum_paths = list(args.checksum_file)
+        if policy is not None:
+            checksum_paths.extend([args.genotype_quality_policy, args.quality_masked_vcf])
+        checksums = checksum_files(checksum_paths)
+        container_names = CONTAINER_PROCESS_NAMES + (
+            QUALITY_MASK_CONTAINER_PROCESS_NAMES if policy is not None else ()
+        )
         containers = {
             name: validate_container_identity(name, getattr(args, f"container_{name}"))
-            for name in CONTAINER_PROCESS_NAMES
+            for name in container_names
         }
     except OSError as error:
         print(f"build_gs_panel_manifest.py: error: {error}", file=sys.stderr)
         return 1
-    except (MalformedAccountingError, ValueError) as error:
+    except (MalformedAccountingError, ValueError, json.JSONDecodeError) as error:
         print(f"build_gs_panel_manifest.py: error: {error}", file=sys.stderr)
         return 1
 
@@ -318,6 +436,9 @@ def main(argv: list[str] | None = None) -> int:
         checksums=checksums,
         run_id=new_run_id(),
         generated_at=utc_now_iso(),
+        genotype_quality_mask=(
+            genotype_quality_mask_block(policy, quality_masked_vcf) if policy is not None else None
+        ),
     )
 
     write_json_atomic(args.output, manifest)

@@ -73,6 +73,35 @@
       "type": "boolean",
       "description": "Whether to run the GS (genomic selection) SNP panel lineage; its genotype encoding (diploid_additive_dosage_v1) is diploid-only, so this must be false whenever sample_ploidy is not 2"
     },
+    "gs_genotype_quality_mask": {
+      "type": "boolean",
+      "description": "Issue #64: enable genotype-level DP/GQ masking in the GS panel (default false). Requires enable_gs_panel and at least one of gs_genotype_min_dp / gs_genotype_min_gq; no threshold is recommended or defaulted"
+    },
+    "gs_genotype_min_dp": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "With gs_genotype_quality_mask, mask a GS call whose FORMAT/DP is below this value (the value itself passes). No default; refused when the mask is off"
+    },
+    "gs_genotype_min_gq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "With gs_genotype_quality_mask, mask a GS call whose FORMAT/GQ is below this value (the value itself passes). No default; refused when the mask is off"
+    },
+    "gs_genotype_missing_format_field": {
+      "type": "string",
+      "enum": ["reject", "unevaluated", "mask"],
+      "description": "With gs_genotype_quality_mask, what to do when a configured field is absent from a row's FORMAT: reject (fail), unevaluated (keep and count), or mask; a value other than reject is refused when the mask is off"
+    },
+    "gs_genotype_missing_value": {
+      "type": "string",
+      "enum": ["reject", "unevaluated", "mask"],
+      "description": "With gs_genotype_quality_mask, what to do when a configured field's value is '.' or the sample's subfields stop before it; a value other than reject is refused when the mask is off"
+    },
+    "gs_genotype_malformed_value": {
+      "type": "string",
+      "enum": ["reject", "unevaluated", "mask"],
+      "description": "With gs_genotype_quality_mask, what to do when a configured field's value is not a non-negative decimal integer; a value other than reject is refused when the mask is off"
+    },
     "optical_duplicate_pixel_distance": {
       "type": "integer",
       "minimum": 0,

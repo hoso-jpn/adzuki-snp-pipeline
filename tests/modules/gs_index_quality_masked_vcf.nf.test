@@ -1,0 +1,38 @@
+nextflow_process {
+
+    name "GS_INDEX_QUALITY_MASKED_VCF indexes the builder's own BGZF bytes without rewriting them"
+    script "modules/local/gs_index_quality_masked_vcf.nf"
+    process "GS_INDEX_QUALITY_MASKED_VCF"
+
+    tag "issue64_genotype_quality_mask"
+
+    // Issue #64: BUILD_GS_PANEL writes the masked VCF as BGZF itself. This
+    // proves, inside the pinned bcftools container, that htslib accepts that
+    // BGZF well enough to index it, and that the step emits the very same
+    // bytes rather than a re-serialized copy.
+    def FIXTURES = 'tests/modules/fixtures/gs_panel_quality_masked'
+
+    test("the masked VCF is indexed in place and passed through byte for byte") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cohort' ],
+                    file("${projectDir}/${FIXTURES}/cohort.gs_panel.quality_masked.vcf.gz"),
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def vcf = file(process.out.vcf[0][1])
+            def index = file(process.out.vcf[0][2])
+            assert vcf.name == 'cohort.gs_panel.quality_masked.vcf.gz'
+            assert index.name == 'cohort.gs_panel.quality_masked.vcf.gz.tbi'
+            assert index.size() > 0
+            assert vcf.bytes == file("${projectDir}/${FIXTURES}/cohort.gs_panel.quality_masked.vcf.gz").bytes
+        }
+    }
+}

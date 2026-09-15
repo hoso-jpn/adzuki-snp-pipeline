@@ -16,7 +16,8 @@ class PublishedOutputContract {
     }
 
     static void verify(String outputDir, boolean gsEnabled = true,
-                       boolean generatedBwa = true, boolean generatedFaiDict = true) {
+                       boolean generatedBwa = true, boolean generatedFaiDict = true,
+                       boolean gsQualityMask = false) {
         def root = new File(outputDir)
         def groups = ['sample_a_L001', 'sample_a_L002', 'sample_b_L001']
         def samples = ['sample_a', 'sample_b']
@@ -63,10 +64,16 @@ class PublishedOutputContract {
         gsFiles.each { directory, expected ->
             names(root, "variants/${directory}", gsEnabled ? expected : [])
         }
-        names(root, 'gs_panel', gsEnabled ? [
+        def gsPanelFiles = [
             'genotype_encoding_accounting.summary.txt', 'genotype_encoding_accounting.tsv',
             'genotype_matrix.tsv.gz', 'manifest.json', 'record_accounting.summary.txt',
             'record_accounting.tsv', 'sample_metadata.tsv', 'variant_metadata.tsv'
-        ].collect { "cohort.gs_panel.${it}".toString() } : [])
+        ]
+        // Issue #64: published only with params.gs_genotype_quality_mask.
+        if (gsQualityMask) gsPanelFiles.addAll([
+            'genotype_quality_policy.json', 'quality_masked.vcf.gz', 'quality_masked.vcf.gz.tbi',
+            'genotype_quality_mask_verification.tsv', 'genotype_quality_mask_verification.summary.txt'
+        ])
+        names(root, 'gs_panel', gsEnabled ? gsPanelFiles.collect { "cohort.gs_panel.${it}".toString() } : [])
     }
 }

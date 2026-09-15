@@ -696,3 +696,253 @@ class ContainerIdentityRedactionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ==========================================================================
+# Issue #64: genotype quality mask (schema v3 only when the mask ran)
+# ==========================================================================
+
+import gs_genotype_quality as quality  # noqa: E402
+
+MASK_POLICY = quality.GenotypeQualityPolicy(
+    min_dp=10, min_gq=None, missing_format_field="unevaluated", missing_value="mask"
+)
+MASK_CONTAINER_CLI_ARGS = [
+    "--container-gs-index-quality-masked-vcf",
+    "bcftools:1.24-mask",
+    "--container-verify-gs-genotype-quality-mask",
+    "python:3.12-verify",
+]
+
+
+class GenotypeQualityMaskManifestTests(unittest.TestCase):
+    def _run(
+        self, extra: list[str], policy_document: object | None = MASK_POLICY
+    ) -> tuple[int, dict | None, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            accounting_path = tmp_path / "accounting.tsv"
+            _write_record_accounting(accounting_path, "populated")
+            policy_path = tmp_path / "cohort.gs_panel.genotype_quality_policy.json"
+            if policy_document is not None:
+                document = (
+                    policy_document.document()
+                    if isinstance(policy_document, quality.GenotypeQualityPolicy)
+                    else policy_document
+                )
+                policy_path.write_text(json.dumps(document), encoding="utf-8")
+            vcf_path = tmp_path / "cohort.gs_panel.quality_masked.vcf.gz"
+            vcf_path.write_bytes(b"masked")
+            output_path = tmp_path / "manifest.json"
+            argv = [
+                "--cohort-id",
+                "cohort",
+                "--pipeline-version",
+                "0.2.0",
+                *CONTAINER_CLI_ARGS,
+                *PLOIDY_CLI_ARGS,
+                *SNP_FILTER_CLI_ARGS,
+                "--record-accounting",
+                str(accounting_path),
+                "--output",
+                str(output_path),
+            ]
+            argv += [
+                token.replace("@POLICY@", str(policy_path)).replace("@VCF@", str(vcf_path))
+                for token in extra
+            ]
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                exit_code = manifest_module.main(argv)
+            manifest = (
+                json.loads(output_path.read_text(encoding="utf-8"))
+                if output_path.exists()
+                else None
+            )
+            return exit_code, manifest, stderr.getvalue()
+
+    ENABLED = [
+        "--genotype-quality-mask",
+        "--genotype-quality-policy",
+        "@POLICY@",
+        "--quality-masked-vcf",
+        "@VCF@",
+        *MASK_CONTAINER_CLI_ARGS,
+    ]
+
+    def test_an_unmasked_manifest_stays_schema_v2_with_no_mask_field(self) -> None:
+        # With the flag omitted (main's own invocation) and with it explicitly
+        # off, the manifest is the pre-Issue #64 shape: schema v2, no
+        # genotype_quality_mask key, no mask checksums or containers.
+        for extra in ([], ["--no-genotype-quality-mask"]):
+            with self.subTest(extra=extra):
+                exit_code, manifest, stderr = self._run(extra)
+                self.assertEqual(exit_code, 0, stderr)
+                self.assertEqual(manifest["schema_version"], 2)
+                self.assertNotIn("genotype_quality_mask", manifest)
+                self.assertEqual(len(manifest["containers"]), 8)
+                self.assertNotIn("cohort.gs_panel.quality_masked.vcf.gz", manifest["checksums"])
+
+    def test_enabled_manifest_records_policy_hash_checksums_and_containers(self) -> None:
+        exit_code, manifest, stderr = self._run(self.ENABLED)
+        self.assertEqual(exit_code, 0, stderr)
+        block = manifest["genotype_quality_mask"]
+        self.assertIs(block["enabled"], True)
+        self.assertEqual(block["policy"], MASK_POLICY.document())
+        self.assertEqual(block["policy_hash"], MASK_POLICY.policy_hash())
+        self.assertIs(block["matrix_nan_includes_quality_masked_calls"], True)
+        self.assertEqual(block["quality_masked_vcf"], "cohort.gs_panel.quality_masked.vcf.gz")
+        self.assertIn("cohort.gs_panel.quality_masked.vcf.gz", manifest["checksums"])
+        self.assertIn("cohort.gs_panel.genotype_quality_policy.json", manifest["checksums"])
+        self.assertEqual(
+            manifest["containers"]["gs_index_quality_masked_vcf"], "bcftools:1.24-mask"
+        )
+        self.assertEqual(
+            manifest["containers"]["verify_gs_genotype_quality_mask"], "python:3.12-verify"
+        )
+        self.assertEqual(manifest["schema_version"], 3)
+
+    def test_contradictory_or_incomplete_mask_inputs_write_no_manifest(self) -> None:
+        cases = {
+            "enabled without policy": (
+                [
+                    "--genotype-quality-mask",
+                    "--quality-masked-vcf",
+                    "@VCF@",
+                    *MASK_CONTAINER_CLI_ARGS,
+                ],
+                MASK_POLICY,
+                "needs --genotype-quality-policy",
+            ),
+            "enabled without containers": (
+                [
+                    "--genotype-quality-mask",
+                    "--genotype-quality-policy",
+                    "@POLICY@",
+                    "--quality-masked-vcf",
+                    "@VCF@",
+                ],
+                MASK_POLICY,
+                "needs --container-gs-index-quality-masked-vcf",
+            ),
+            "disabled with policy": (
+                ["--no-genotype-quality-mask", "--genotype-quality-policy", "@POLICY@"],
+                MASK_POLICY,
+                "given with --no-genotype-quality-mask",
+            ),
+            "enabled with disabled document": (
+                self.ENABLED,
+                quality.DISABLED_POLICY_DOCUMENT,
+                "disabled policy",
+            ),
+            "enabled with tampered document": (
+                self.ENABLED,
+                MASK_POLICY.document() | {"comparison": "a value > its threshold passes"},
+                "canonical form",
+            ),
+        }
+        for label, (extra, document, expected) in cases.items():
+            with self.subTest(case=label):
+                exit_code, manifest, stderr = self._run(extra, document)
+                self.assertEqual(exit_code, 1)
+                self.assertIsNone(manifest)
+                self.assertIn(expected, stderr)
+
+
+# ==========================================================================
+# Issue #64: default-off backward compatibility with main@7ef04cb
+# ==========================================================================
+#
+# The goldens under fixtures/gs_panel_manifest_v2_main_7ef04cb/ were written by
+# bin/build_gs_panel_manifest.py and bin/manifest_utils.py taken verbatim from
+# main@7ef04cb1dfe38fca6d7f100123f4fc7b8ddc0b6c, over exactly the inputs below,
+# before this branch changed the manifest builder. They pin the unmasked
+# manifest to the shape published before the genotype quality mask existed.
+
+MAIN_GOLDEN_DIR = Path(__file__).resolve().parent / "fixtures" / "gs_panel_manifest_v2_main_7ef04cb"
+COMPAT_CONTAINERS = {
+    "gs_normalize_variants": "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:" + "a" * 64,
+    "classify_normalized_variants": "python:3.12@sha256:" + "b" * 64,
+    "gs_index_classified_variants": "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:"
+    + "c" * 64,
+    "gatk_variantfiltration_gs": "broadinstitute/gatk:4.6.2.0@sha256:" + "d" * 64,
+    "gatk_selectpassvariants_gs": "broadinstitute/gatk:4.6.2.0@sha256:" + "e" * 64,
+    "build_gs_panel": "python:3.12@sha256:" + "f" * 64,
+    "reconcile_gs_panel_accounting": "python:3.12@sha256:" + "1" * 64,
+    "build_gs_panel_manifest": "python:3.12@sha256:" + "2" * 64,
+}
+COMPAT_SNP = {
+    "snp_filter_qd_min": 2.0,
+    "snp_filter_qual_min": 30.0,
+    "snp_filter_sor_max": 3.0,
+    "snp_filter_fs_max": 60.0,
+    "snp_filter_mq_min": 40.0,
+    "snp_filter_mq_rank_sum_min": -12.5,
+    "snp_filter_read_pos_rank_sum_min": -8.0,
+}
+COMPAT_FUNCTION_KWARGS = dict(
+    cohort_id="cohort",
+    pipeline_version="0.2.0",
+    git_commit="",
+    containers=COMPAT_CONTAINERS,
+    sample_ploidy=2,
+    snp_filter_params=COMPAT_SNP,
+    panel_status="populated",
+    checksums={
+        "cohort.gs_panel.genotype_matrix.tsv.gz": "sha256:" + "3" * 64,
+        "cohort.raw.vcf.gz": "sha256:" + "4" * 64,
+    },
+    run_id="20260914T000000Z-deadbeef",
+    generated_at="2026-09-14T00:00:00Z",
+)
+COMPAT_FILES = {
+    "cohort.gs_panel.record_accounting.tsv": "cohort_id\tmetric\tvalue\ncohort\tgs_pass_records\t3\ncohort\tpanel_status\tpopulated\n",
+    "cohort.gs_panel.genotype_matrix.tsv.gz": "not really gzip, only checksummed\n",
+    "cohort.gs_panel.sample_metadata.tsv": "cohort_id\tsample_index\tsample_id\n",
+    "cohort_gs.snp.pass.vcf.gz": "pass vcf bytes\n",
+}
+COMPAT_VOLATILE = ("run_id", "generated_at", "manifest_hash")
+
+
+def _main_cli_argv(directory: Path) -> list[str]:
+    """Exactly the argument list BUILD_GS_PANEL_MANIFEST passed at main@7ef04cb."""
+    argv = ["--cohort-id", "cohort", "--pipeline-version", "0.2.0", "--git-commit", ""]
+    for name, value in COMPAT_CONTAINERS.items():
+        argv += [f"--container-{name.replace('_', '-')}", value]
+    argv += ["--sample-ploidy", "2"]
+    for name, value in COMPAT_SNP.items():
+        argv += [f"--{name.replace('_', '-')}", str(value)]
+    argv += ["--record-accounting", str(directory / "cohort.gs_panel.record_accounting.tsv")]
+    for name in COMPAT_FILES:
+        if name != "cohort.gs_panel.record_accounting.tsv":
+            argv += ["--checksum-file", str(directory / name)]
+    argv += ["--checksum-file", str(directory / "cohort.gs_panel.record_accounting.tsv")]
+    return argv + ["--output", str(directory / "manifest.json")]
+
+
+class MainSchemaV2CompatibilityTests(unittest.TestCase):
+    def test_build_manifest_reproduces_mains_v2_document_including_its_hash(self) -> None:
+        golden = json.loads((MAIN_GOLDEN_DIR / "build_manifest.json").read_text(encoding="utf-8"))
+        document = manifest_module.build_manifest(**COMPAT_FUNCTION_KWARGS)
+        self.assertEqual(list(document), list(golden))
+        self.assertEqual(document, golden)
+        self.assertEqual(document["manifest_hash"], golden["manifest_hash"])
+
+    def test_mains_exact_cli_invocation_writes_mains_v2_manifest(self) -> None:
+        golden = json.loads(
+            (MAIN_GOLDEN_DIR / "cli_manifest_without_run_fields.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            for name, text in COMPAT_FILES.items():
+                (directory / name).write_text(text, encoding="utf-8")
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                exit_code = manifest_module.main(_main_cli_argv(directory))
+            self.assertEqual(exit_code, 0, stderr.getvalue())
+            manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+        # Only the intentionally per-run fields may differ.
+        without_run_fields = {k: v for k, v in manifest.items() if k not in COMPAT_VOLATILE}
+        self.assertEqual(list(without_run_fields), list(golden))
+        self.assertEqual(without_run_fields, golden)
+        self.assertEqual(sorted(set(manifest) - set(without_run_fields)), sorted(COMPAT_VOLATILE))
