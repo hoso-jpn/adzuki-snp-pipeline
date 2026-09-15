@@ -1,0 +1,35 @@
+{
+  "reads_aligned": 8967010,
+  "reads_high": 7474743,
+  "parameters": {
+    "read_length": 150,
+    "step": 50,
+    "min_mapq": 30,
+    "reads": "error-free, single-end, forward strand, skipped when they contain N",
+    "rule": "primary alignment at its own origin with MAPQ >= min_mapq"
+  },
+  "reference_fai_sha256": "c5db64484f1c2e8a14368ca68b51e3d4ce8a5afefd277b3780085bd9128ddde5",
+  "assets": {
+    "high_mappability": {
+      "file": "high_mappability.bed",
+      "bases": 373737150,
+      "fraction_of_reference": 0.83356,
+      "sha256": "616353312d16179108d18ef9ebf18adf5973c7b232042123d6b4cbc90da9371a",
+      "kind": "partition:mappability"
+    },
+    "low_mappability": {
+      "file": "low_mappability.bed",
+      "bases": 74613350,
+      "fraction_of_reference": 0.166413,
+      "sha256": "7de58e5ce28dbf4d3ff2bb407a8ffe1e2d00439cfdc323028ab0689cfc60957a",
+      "kind": "partition:mappability"
+    },
+    "mappability_undefined": {
+      "file": "mappability_undefined.bed",
+      "bases": 12142,
+      "fraction_of_reference": 2.7e-05,
+      "sha256": "7d1dc874437de87353e227c6ce12784892be572c1061e8f515a4c82159129d93",
+      "kind": "partition:mappability"
+    }
+  }
+}

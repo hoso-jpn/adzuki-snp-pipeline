@@ -1,0 +1,712 @@
+{
+  "region": "NC_068975.1:1-20000000",
+  "region_bases": 20000000,
+  "samples_in_depth_column_order": [
+    "SRR29908789",
+    "SRR29908790",
+    "SRR29908791",
+    "SRR29908792",
+    "SRR29908793",
+    "SRR29908794",
+    "SRR29908795",
+    "SRR29908796",
+    "SRR29908797",
+    "SRR29908798",
+    "SRR29908799",
+    "SRR29908800",
+    "SRR29908801",
+    "SRR29908802",
+    "SRR29908803",
+    "SRR29908804",
+    "SRR29908805",
+    "SRR29908806",
+    "SRR29908807",
+    "SRR29908808",
+    "SRR29908810",
+    "SRR29908814",
+    "SRR29908818",
+    "SRR29908822",
+    "SRR29908823",
+    "SRR29908824",
+    "SRR29908825",
+    "SRR29908826",
+    "SRR29908827",
+    "SRR29908828",
+    "SRR29908829",
+    "SRR29908836",
+    "SRR29908888",
+    "SRR29908965",
+    "SRR29909067",
+    "SRR29909068",
+    "SRR29909069",
+    "SRR29909070",
+    "SRR29909072",
+    "SRR29909073",
+    "SRR29909074",
+    "SRR29909124",
+    "SRR29909135",
+    "SRR29909171",
+    "SRR29909330",
+    "SRR29909372",
+    "SRR29909384",
+    "SRR29909418",
+    "SRR29909421",
+    "SRR29909423",
+    "SRR29909434"
+  ],
+  "rule": {
+    "depth_source": "samtools depth -a (default flag filter: UNMAP,SECONDARY,QCFAIL,DUP)",
+    "mapping_quality_min": 20,
+    "base_quality_min": 10,
+    "min_depth": 5,
+    "max_depth_factor": 2.5,
+    "max_depth": "max_depth_factor x the sample's median depth over this region",
+    "sample_level": "min_depth <= depth <= max_depth",
+    "cohort_level": "callable in at least 0.8 of the 51 samples",
+    "reference_n": "N bases have depth 0 and are never callable",
+    "median_depth_bins": [
+      "median_depth_00_03",
+      "median_depth_03_06",
+      "median_depth_06_10",
+      "median_depth_10_15",
+      "median_depth_15_25",
+      "median_depth_25_plus"
+    ],
+    "not_a_claim": "callable describes alignment depth and quality, not genotype accuracy",
+    "status": "benchmark stratification parameters; not pipeline defaults"
+  },
+  "bases": {
+    "cohort_callable": 15142446,
+    "cohort_non_callable": 4857554,
+    "median_depth_00_03": 880930,
+    "median_depth_03_06": 624774,
+    "median_depth_06_10": 3321020,
+    "median_depth_10_15": 13847094,
+    "median_depth_15_25": 1081320,
+    "median_depth_25_plus": 244862
+  },
+  "samples": {
+    "SRR29908789": {
+      "region_median_depth": 16,
+      "max_depth": 40.0,
+      "callable_bases": 18801111,
+      "callable_fraction": 0.940056,
+      "depth_q10_q50_q90": [
+        8,
+        16,
+        23
+      ],
+      "zero_depth_bases": 482941
+    },
+    "SRR29908790": {
+      "region_median_depth": 11,
+      "max_depth": 27.5,
+      "callable_bases": 18238223,
+      "callable_fraction": 0.911911,
+      "depth_q10_q50_q90": [
+        5,
+        11,
+        17
+      ],
+      "zero_depth_bases": 554405
+    },
+    "SRR29908791": {
+      "region_median_depth": 16,
+      "max_depth": 40.0,
+      "callable_bases": 18733687,
+      "callable_fraction": 0.936684,
+      "depth_q10_q50_q90": [
+        8,
+        16,
+        24
+      ],
+      "zero_depth_bases": 527450
+    },
+    "SRR29908792": {
+      "region_median_depth": 16,
+      "max_depth": 40.0,
+      "callable_bases": 18936299,
+      "callable_fraction": 0.946815,
+      "depth_q10_q50_q90": [
+        9,
+        16,
+        24
+      ],
+      "zero_depth_bases": 367378
+    },
+    "SRR29908793": {
+      "region_median_depth": 12,
+      "max_depth": 30.0,
+      "callable_bases": 17958400,
+      "callable_fraction": 0.89792,
+      "depth_q10_q50_q90": [
+        5,
+        12,
+        20
+      ],
+      "zero_depth_bases": 671789
+    },
+    "SRR29908794": {
+      "region_median_depth": 17,
+      "max_depth": 42.5,
+      "callable_bases": 18989423,
+      "callable_fraction": 0.949471,
+      "depth_q10_q50_q90": [
+        9,
+        17,
+        25
+      ],
+      "zero_depth_bases": 360168
+    },
+    "SRR29908795": {
+      "region_median_depth": 17,
+      "max_depth": 42.5,
+      "callable_bases": 18973804,
+      "callable_fraction": 0.94869,
+      "depth_q10_q50_q90": [
+        9,
+        17,
+        25
+      ],
+      "zero_depth_bases": 375722
+    },
+    "SRR29908796": {
+      "region_median_depth": 15,
+      "max_depth": 37.5,
+      "callable_bases": 18701552,
+      "callable_fraction": 0.935078,
+      "depth_q10_q50_q90": [
+        8,
+        15,
+        22
+      ],
+      "zero_depth_bases": 543727
+    },
+    "SRR29908797": {
+      "region_median_depth": 15,
+      "max_depth": 37.5,
+      "callable_bases": 18843083,
+      "callable_fraction": 0.942154,
+      "depth_q10_q50_q90": [
+        8,
+        15,
+        22
+      ],
+      "zero_depth_bases": 388930
+    },
+    "SRR29908798": {
+      "region_median_depth": 11,
+      "max_depth": 27.5,
+      "callable_bases": 18400013,
+      "callable_fraction": 0.920001,
+      "depth_q10_q50_q90": [
+        6,
+        11,
+        17
+      ],
+      "zero_depth_bases": 370561
+    },
+    "SRR29908799": {
+      "region_median_depth": 14,
+      "max_depth": 35.0,
+      "callable_bases": 18831418,
+      "callable_fraction": 0.941571,
+      "depth_q10_q50_q90": [
+        7,
+        14,
+        21
+      ],
+      "zero_depth_bases": 384121
+    },
+    "SRR29908800": {
+      "region_median_depth": 15,
+      "max_depth": 37.5,
+      "callable_bases": 18624155,
+      "callable_fraction": 0.931208,
+      "depth_q10_q50_q90": [
+        7,
+        15,
+        22
+      ],
+      "zero_depth_bases": 559211
+    },
+    "SRR29908801": {
+      "region_median_depth": 13,
+      "max_depth": 32.5,
+      "callable_bases": 18551949,
+      "callable_fraction": 0.927597,
+      "depth_q10_q50_q90": [
+        7,
+        13,
+        20
+      ],
+      "zero_depth_bases": 513021
+    },
+    "SRR29908802": {
+      "region_median_depth": 17,
+      "max_depth": 42.5,
+      "callable_bases": 18829077,
+      "callable_fraction": 0.941454,
+      "depth_q10_q50_q90": [
+        9,
+        17,
+        25
+      ],
+      "zero_depth_bases": 465847
+    },
+    "SRR29908803": {
+      "region_median_depth": 14,
+      "max_depth": 35.0,
+      "callable_bases": 18477292,
+      "callable_fraction": 0.923865,
+      "depth_q10_q50_q90": [
+        7,
+        14,
+        22
+      ],
+      "zero_depth_bases": 500771
+    },
+    "SRR29908804": {
+      "region_median_depth": 11,
+      "max_depth": 27.5,
+      "callable_bases": 17943819,
+      "callable_fraction": 0.897191,
+      "depth_q10_q50_q90": [
+        5,
+        11,
+        17
+      ],
+      "zero_depth_bases": 643914
+    },
+    "SRR29908805": {
+      "region_median_depth": 19,
+      "max_depth": 47.5,
+      "callable_bases": 18526157,
+      "callable_fraction": 0.926308,
+      "depth_q10_q50_q90": [
+        9,
+        19,
+        27
+      ],
+      "zero_depth_bases": 712040
+    },
+    "SRR29908806": {
+      "region_median_depth": 22,
+      "max_depth": 55.0,
+      "callable_bases": 18744841,
+      "callable_fraction": 0.937242,
+      "depth_q10_q50_q90": [
+        12,
+        22,
+        32
+      ],
+      "zero_depth_bases": 516095
+    },
+    "SRR29908807": {
+      "region_median_depth": 19,
+      "max_depth": 47.5,
+      "callable_bases": 18875709,
+      "callable_fraction": 0.943785,
+      "depth_q10_q50_q90": [
+        10,
+        19,
+        28
+      ],
+      "zero_depth_bases": 435190
+    },
+    "SRR29908808": {
+      "region_median_depth": 14,
+      "max_depth": 35.0,
+      "callable_bases": 18738225,
+      "callable_fraction": 0.936911,
+      "depth_q10_q50_q90": [
+        8,
+        14,
+        21
+      ],
+      "zero_depth_bases": 441301
+    },
+    "SRR29908810": {
+      "region_median_depth": 8,
+      "max_depth": 20.0,
+      "callable_bases": 16309023,
+      "callable_fraction": 0.815451,
+      "depth_q10_q50_q90": [
+        3,
+        8,
+        13
+      ],
+      "zero_depth_bases": 796316
+    },
+    "SRR29908814": {
+      "region_median_depth": 9,
+      "max_depth": 22.5,
+      "callable_bases": 17400585,
+      "callable_fraction": 0.870029,
+      "depth_q10_q50_q90": [
+        4,
+        9,
+        15
+      ],
+      "zero_depth_bases": 699081
+    },
+    "SRR29908818": {
+      "region_median_depth": 12,
+      "max_depth": 30.0,
+      "callable_bases": 18242029,
+      "callable_fraction": 0.912101,
+      "depth_q10_q50_q90": [
+        6,
+        12,
+        19
+      ],
+      "zero_depth_bases": 683766
+    },
+    "SRR29908822": {
+      "region_median_depth": 9,
+      "max_depth": 22.5,
+      "callable_bases": 17348703,
+      "callable_fraction": 0.867435,
+      "depth_q10_q50_q90": [
+        4,
+        9,
+        15
+      ],
+      "zero_depth_bases": 678802
+    },
+    "SRR29908823": {
+      "region_median_depth": 12,
+      "max_depth": 30.0,
+      "callable_bases": 18134934,
+      "callable_fraction": 0.906747,
+      "depth_q10_q50_q90": [
+        5,
+        12,
+        19
+      ],
+      "zero_depth_bases": 655584
+    },
+    "SRR29908824": {
+      "region_median_depth": 11,
+      "max_depth": 27.5,
+      "callable_bases": 18038051,
+      "callable_fraction": 0.901903,
+      "depth_q10_q50_q90": [
+        5,
+        11,
+        17
+      ],
+      "zero_depth_bases": 654315
+    },
+    "SRR29908825": {
+      "region_median_depth": 11,
+      "max_depth": 27.5,
+      "callable_bases": 18025885,
+      "callable_fraction": 0.901294,
+      "depth_q10_q50_q90": [
+        5,
+        11,
+        18
+      ],
+      "zero_depth_bases": 636184
+    },
+    "SRR29908826": {
+      "region_median_depth": 13,
+      "max_depth": 32.5,
+      "callable_bases": 18261729,
+      "callable_fraction": 0.913086,
+      "depth_q10_q50_q90": [
+        6,
+        13,
+        20
+      ],
+      "zero_depth_bases": 685388
+    },
+    "SRR29908827": {
+      "region_median_depth": 12,
+      "max_depth": 30.0,
+      "callable_bases": 18064990,
+      "callable_fraction": 0.90325,
+      "depth_q10_q50_q90": [
+        5,
+        12,
+        19
+      ],
+      "zero_depth_bases": 683224
+    },
+    "SRR29908828": {
+      "region_median_depth": 12,
+      "max_depth": 30.0,
+      "callable_bases": 18148066,
+      "callable_fraction": 0.907403,
+      "depth_q10_q50_q90": [
+        5,
+        12,
+        18
+      ],
+      "zero_depth_bases": 655743
+    },
+    "SRR29908829": {
+      "region_median_depth": 11,
+      "max_depth": 27.5,
+      "callable_bases": 17385378,
+      "callable_fraction": 0.869269,
+      "depth_q10_q50_q90": [
+        4,
+        11,
+        19
+      ],
+      "zero_depth_bases": 818494
+    },
+    "SRR29908836": {
+      "region_median_depth": 8,
+      "max_depth": 20.0,
+      "callable_bases": 16314947,
+      "callable_fraction": 0.815747,
+      "depth_q10_q50_q90": [
+        3,
+        8,
+        13
+      ],
+      "zero_depth_bases": 732325
+    },
+    "SRR29908888": {
+      "region_median_depth": 6,
+      "max_depth": 15.0,
+      "callable_bases": 11863947,
+      "callable_fraction": 0.593197,
+      "depth_q10_q50_q90": [
+        0,
+        6,
+        12
+      ],
+      "zero_depth_bases": 3378659
+    },
+    "SRR29908965": {
+      "region_median_depth": 8,
+      "max_depth": 20.0,
+      "callable_bases": 15651147,
+      "callable_fraction": 0.782557,
+      "depth_q10_q50_q90": [
+        3,
+        8,
+        13
+      ],
+      "zero_depth_bases": 862649
+    },
+    "SRR29909067": {
+      "region_median_depth": 4,
+      "max_depth": 10.0,
+      "callable_bases": 8062920,
+      "callable_fraction": 0.403146,
+      "depth_q10_q50_q90": [
+        1,
+        4,
+        8
+      ],
+      "zero_depth_bases": 1199772
+    },
+    "SRR29909068": {
+      "region_median_depth": 4,
+      "max_depth": 10.0,
+      "callable_bases": 7310029,
+      "callable_fraction": 0.365501,
+      "depth_q10_q50_q90": [
+        0,
+        4,
+        8
+      ],
+      "zero_depth_bases": 4482484
+    },
+    "SRR29909069": {
+      "region_median_depth": 4,
+      "max_depth": 10.0,
+      "callable_bases": 7154342,
+      "callable_fraction": 0.357717,
+      "depth_q10_q50_q90": [
+        1,
+        4,
+        8
+      ],
+      "zero_depth_bases": 1735007
+    },
+    "SRR29909070": {
+      "region_median_depth": 3,
+      "max_depth": 7.5,
+      "callable_bases": 4220522,
+      "callable_fraction": 0.211026,
+      "depth_q10_q50_q90": [
+        0,
+        3,
+        7
+      ],
+      "zero_depth_bases": 5347462
+    },
+    "SRR29909072": {
+      "region_median_depth": 3,
+      "max_depth": 7.5,
+      "callable_bases": 4701565,
+      "callable_fraction": 0.235078,
+      "depth_q10_q50_q90": [
+        0,
+        3,
+        8
+      ],
+      "zero_depth_bases": 4330133
+    },
+    "SRR29909073": {
+      "region_median_depth": 4,
+      "max_depth": 10.0,
+      "callable_bases": 7071432,
+      "callable_fraction": 0.353572,
+      "depth_q10_q50_q90": [
+        0,
+        4,
+        8
+      ],
+      "zero_depth_bases": 4020023
+    },
+    "SRR29909074": {
+      "region_median_depth": 3,
+      "max_depth": 7.5,
+      "callable_bases": 4033845,
+      "callable_fraction": 0.201692,
+      "depth_q10_q50_q90": [
+        0,
+        3,
+        7
+      ],
+      "zero_depth_bases": 5573035
+    },
+    "SRR29909124": {
+      "region_median_depth": 7,
+      "max_depth": 17.5,
+      "callable_bases": 15586470,
+      "callable_fraction": 0.779323,
+      "depth_q10_q50_q90": [
+        3,
+        7,
+        12
+      ],
+      "zero_depth_bases": 756967
+    },
+    "SRR29909135": {
+      "region_median_depth": 13,
+      "max_depth": 32.5,
+      "callable_bases": 18590685,
+      "callable_fraction": 0.929534,
+      "depth_q10_q50_q90": [
+        7,
+        13,
+        19
+      ],
+      "zero_depth_bases": 469636
+    },
+    "SRR29909171": {
+      "region_median_depth": 9,
+      "max_depth": 22.5,
+      "callable_bases": 16689214,
+      "callable_fraction": 0.834461,
+      "depth_q10_q50_q90": [
+        3,
+        9,
+        14
+      ],
+      "zero_depth_bases": 763015
+    },
+    "SRR29909330": {
+      "region_median_depth": 8,
+      "max_depth": 20.0,
+      "callable_bases": 16305085,
+      "callable_fraction": 0.815254,
+      "depth_q10_q50_q90": [
+        3,
+        8,
+        14
+      ],
+      "zero_depth_bases": 943667
+    },
+    "SRR29909372": {
+      "region_median_depth": 9,
+      "max_depth": 22.5,
+      "callable_bases": 16573139,
+      "callable_fraction": 0.828657,
+      "depth_q10_q50_q90": [
+        3,
+        9,
+        15
+      ],
+      "zero_depth_bases": 728838
+    },
+    "SRR29909384": {
+      "region_median_depth": 9,
+      "max_depth": 22.5,
+      "callable_bases": 16679191,
+      "callable_fraction": 0.83396,
+      "depth_q10_q50_q90": [
+        3,
+        9,
+        15
+      ],
+      "zero_depth_bases": 957276
+    },
+    "SRR29909418": {
+      "region_median_depth": 5,
+      "max_depth": 12.5,
+      "callable_bases": 11390815,
+      "callable_fraction": 0.569541,
+      "depth_q10_q50_q90": [
+        2,
+        5,
+        9
+      ],
+      "zero_depth_bases": 944821
+    },
+    "SRR29909421": {
+      "region_median_depth": 5,
+      "max_depth": 12.5,
+      "callable_bases": 11008608,
+      "callable_fraction": 0.55043,
+      "depth_q10_q50_q90": [
+        2,
+        5,
+        9
+      ],
+      "zero_depth_bases": 873058
+    },
+    "SRR29909423": {
+      "region_median_depth": 5,
+      "max_depth": 12.5,
+      "callable_bases": 10385080,
+      "callable_fraction": 0.519254,
+      "depth_q10_q50_q90": [
+        0,
+        5,
+        11
+      ],
+      "zero_depth_bases": 4008379
+    },
+    "SRR29909434": {
+      "region_median_depth": 10,
+      "max_depth": 25.0,
+      "callable_bases": 18030119,
+      "callable_fraction": 0.901506,
+      "depth_q10_q50_q90": [
+        5,
+        10,
+        16
+      ],
+      "zero_depth_bases": 523047
+    }
+  },
+  "files": {
+    "cohort_callable.bed": "7aff4c598f311c35eb49fffe1c5174cc7ec5ffab50ef55beaa74da594e0cd7df",
+    "cohort_non_callable.bed": "1fe5a2944ffe8fae2b5dfd786d750ab87830bf3ca2f11c2a092ed7936fd136e5",
+    "median_depth_00_03.bed": "b4beece7263138562ec42429055a2f764ebc5a858ac91434bb870d49960bdee7",
+    "median_depth_03_06.bed": "0a9a81356239f2191142241877254b886423342d5e33368ca66097175d74d121",
+    "median_depth_06_10.bed": "880f91177b0c0ee19c0b785d983f94795f4eeff801b99d5b0cded75dd16a52a1",
+    "median_depth_10_15.bed": "ccabfbcc445f696c30d168d36322fd33030e8fcca2d2e07022dbe77af47197d4",
+    "median_depth_15_25.bed": "cc827e48427855b3217cb79700638d71c5bcf46369665cfcb093b036c2e4de3b",
+    "median_depth_25_plus.bed": "5b52bc7c451b8c79b87bef47fc94fbfd287ff96696d9d5b3183ed94f6855492b"
+  }
+}

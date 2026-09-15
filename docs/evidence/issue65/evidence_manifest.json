@@ -1,0 +1,58 @@
+{
+  "evaluation_schema_version": 1,
+  "git_sha": "eea9eb3ef748b20119c37b56c8aff79c29d83bcd",
+  "reference": {
+    "accession": "GCF_016808095.1",
+    "assembly": "ASM1680809v1",
+    "fasta": "GCF_016808095.1_ASM1680809v1_genomic.fna",
+    "sha256": "e9838db1b048b54b21534285aaf95eae64cb3019d85af270b44e20b3d545f383"
+  },
+  "window": "NC_068975.1:1-20000000",
+  "containers": {
+    "bcftools": "quay.io/biocontainers/bcftools:1.24--h118bc1c_2@sha256:a3e0d3007ffe325c409b398f660840a3e7574d076219c6e82fc994ced87d47c3",
+    "gatk": "broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb",
+    "samtools": "quay.io/biocontainers/samtools:1.24--h9dcdb79_1@sha256:a130447589651ed09252aa95a5e4f4132942cdb54d835d81a04a9a930d656561",
+    "bwa_mem2_samtools": "community.wave.seqera.io/library/bwa-mem2_htslib_samtools:db98f81f55b64113@sha256:5ebd1290d9680195817ce75915b79ae2e608834c017824b7e2bc7b141509b242",
+    "fastp": "quay.io/biocontainers/fastp:1.3.6--h43da1c4_0@sha256:cbbe2402b6b6704df470d7d77dcb498eefd5bcd01f4c38be0ec69899e79ac134",
+    "python": "python:3.12@sha256:dd4fe98ab39f91e936f8e7e7a65a3ce59ecfb11e32f9a125b3132779920ba7f7"
+  },
+  "downsampling": {
+    "sample": "SRR29908806",
+    "subsamples": {
+      "f050_s65": {
+        "fraction": 0.5,
+        "seed": 65
+      },
+      "f050_s66": {
+        "fraction": 0.5,
+        "seed": 66
+      },
+      "f025_s65": {
+        "fraction": 0.25,
+        "seed": 65
+      },
+      "f025_s66": {
+        "fraction": 0.25,
+        "seed": 66
+      }
+    }
+  },
+  "input_manifests_sha256": {
+    "regions/region_assets.json": "7d19cbb506e4ea1b5c1fd909a16be7a2bb1c0f504facbdf71fd635d2f3f378cf",
+    "mappability/mappability.json": "30dea6e1c8687e96ddca26a70f34205d866cb656cae320b9d8acd2f713e1fc90",
+    "callable/callable_summary.json": "39589385d335773a69e964cc3c32ec4b088126f027f0b7ca2e194de226d25181",
+    "derived/derived_strata.json": "fdfa493c562bb4aa6f1e8f555c844901d881770cc868860071f7dd1e604eaa59",
+    "stratify/inputs.sha256": "fa98bfd770b055f860efc72491bf6298c13637d4700d6089297fa00a5b2b7fa4",
+    "stratify/outputs.sha256": "96f992280b719d8718b408c06eecff14cc4f5a50c8fa04aed1c1df4254ecb8a2",
+    "downsampling/inputs.sha256": "2f96e3ab88379d15edfc0cfa4456136f4f4492181e71b878d2dfe8b6a0f63698",
+    "downsampling/outputs.sha256": "deac12744a5ac5804f9c241c3b0ab4b1f559a119ca0cf748cad9b86344310f9c",
+    "crossplatform/partial.sha256": "c9032877e66a2072cea6706a629929dd261bb1a82ad4152e52f547724c459ae5",
+    "crossplatform/fastq_used.sha256": "178e6506f5c5107a93853fece1677f8f52d467e44c37c8fc63ef8100920df90b",
+    "crossplatform/outputs.sha256": "5bd57ad26d0a946c85088350f96999a73069fcfdcda7967b38c357189d26ea0f"
+  },
+  "outputs_sha256": {
+    "evaluations.json": "beece9d3508cb51b01a091171722185ee912932e5b837757e1bb7ebead6a8657",
+    "delivery_support_matrix.json": "bfc4ab292c3cf84a3645a672b4f9ff9de4d2828eca1d1b2617d3a19f31bcc07d",
+    "delivery_support_matrix.tsv": "610b349c4f61ee3f509c25a406ae785f7b9e8d7693431bc3be73941593c88670"
+  }
+}
