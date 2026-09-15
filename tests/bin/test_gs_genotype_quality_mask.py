@@ -1019,7 +1019,79 @@ class VerifierTamperTests(unittest.TestCase):
         fields[-1] = "3"
         lines[2] = "\t".join(fields)
         path.write_text("\n".join(lines) + "\n")
-        self._assert_refused("variant metadata row disagrees")
+        self._assert_refused("variant metadata quality_masked_genotype_count='3'")
+
+    def _edit_tsv_cell(self, name: str, row: int, column: str, value: str) -> None:
+        path = self.directory / name
+        lines = path.read_text().splitlines()
+        header = lines[0].split("\t")
+        fields = lines[row].split("\t")
+        fields[header.index(column)] = value
+        lines[row] = "\t".join(fields)
+        path.write_text("\n".join(lines) + "\n")
+
+    def test_sample_missing_rate(self) -> None:
+        self._edit_tsv_cell(OUTPUTS["sample_metadata"], 3, "missing_genotype_rate", "0.600000")
+        self._assert_refused("sample metadata row 2 ('s3'): missing_genotype_rate='0.600000'")
+
+    def test_sample_cohort_id(self) -> None:
+        self._edit_tsv_cell(OUTPUTS["sample_metadata"], 1, "cohort_id", "other")
+        self._assert_refused("sample metadata row 0 ('s1'): cohort_id='other'")
+
+    def test_variant_missing_rate(self) -> None:
+        self._edit_tsv_cell(OUTPUTS["variant_metadata"], 2, "missing_genotype_rate", "0.750000")
+        self._assert_refused("variant metadata missing_genotype_rate='0.750000'")
+
+    def test_variant_fixed_columns(self) -> None:
+        for column, value in (
+            ("chrom", "chrOther"),
+            ("pos", "201"),
+            ("ref", "G"),
+            ("alt", "A"),
+            ("qual", "99.0"),
+        ):
+            with self.subTest(column=column):
+                self.tearDown()
+                self.setUp()
+                self._edit_tsv_cell(OUTPUTS["variant_metadata"], 2, column, value)
+                self._assert_refused(f"variant metadata {column}={value!r}")
+
+    def test_variant_cohort_id(self) -> None:
+        self._edit_tsv_cell(OUTPUTS["variant_metadata"], 1, "cohort_id", "other")
+        self._assert_refused("variant metadata cohort_id='other'")
+
+    def test_accounting_wrong_cohort_id(self) -> None:
+        self._rewrite_text(
+            OUTPUTS["accounting"], "cohort\tphased_genotype_count", "other\tphased_genotype_count"
+        )
+        self._assert_refused("is for cohort 'other'")
+
+    def test_accounting_duplicate_metric(self) -> None:
+        path = self.directory / OUTPUTS["accounting"]
+        path.write_text(path.read_text() + "cohort\tquality_masked_calls\t14\n")
+        self._assert_refused("lists quality_masked_calls more than once")
+
+    def test_accounting_unexpected_metric(self) -> None:
+        path = self.directory / OUTPUTS["accounting"]
+        path.write_text(path.read_text() + "cohort\tquality_extra_calls\t0\n")
+        self._assert_refused("unexpected metric(s) quality_extra_calls")
+
+    def test_accounting_missing_metric(self) -> None:
+        self._rewrite_text(OUTPUTS["accounting"], "cohort\tgq_status.value_malformed\t1\n", "")
+        self._assert_refused("lacks gq_status.value_malformed")
+
+    def test_accounting_wrong_header(self) -> None:
+        self._rewrite_text(
+            OUTPUTS["accounting"], "cohort_id\tmetric\tvalue", "cohort\tmetric\tvalue"
+        )
+        self._assert_refused("genotype accounting header")
+
+    def test_accounting_rows_out_of_order(self) -> None:
+        path = self.directory / OUTPUTS["accounting"]
+        lines = path.read_text().splitlines()
+        lines[2], lines[3] = lines[3], lines[2]
+        path.write_text("\n".join(lines) + "\n")
+        self._assert_refused("not in the contractual order")
 
     def test_a_policy_document_that_differs_from_the_build(self) -> None:
         other = quality.GenotypeQualityPolicy(

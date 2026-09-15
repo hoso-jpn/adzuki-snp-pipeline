@@ -43,6 +43,7 @@ from pathlib import Path
 import gs_genotype_quality as quality
 from build_gs_panel import (
     FIXED_COLUMN_COUNT,
+    GENOTYPE_ACCOUNTING_HEADER,
     MISSING_CELL_TOKEN,
     SAMPLE_METADATA_HEADER_WITH_QUALITY,
     VARIANT_METADATA_HEADER_WITH_QUALITY,
@@ -66,6 +67,15 @@ _MASKED_BY_DOSAGE_METRIC = {
     "0": "quality_masked_het_calls",
     "1": "quality_masked_hom_alt_calls",
 }
+
+
+def _rate(numerator: int, denominator: int) -> str:
+    """The contract's rate format: six decimals, or NA when undefined.
+
+    Written out here rather than imported from the builder, so a change to the
+    builder's formatting is caught instead of being agreed with.
+    """
+    return "NA" if denominator <= 0 else f"{numerator / denominator:.6f}"
 
 
 class InconsistentQualityMaskError(Exception):
@@ -198,8 +208,8 @@ def verify(
             if next(stream, None) is not None:
                 _fail(f"{label} has more rows than the original VCF")
 
-    _verify_sample_metadata(tally, samples, sample_metadata)
-    _verify_accounting(tally, policy, genotype_accounting)
+    _verify_sample_metadata(tally, samples, sample_metadata, cohort_id)
+    _verify_accounting(tally, policy, genotype_accounting, cohort_id)
     return tally
 
 
@@ -310,22 +320,35 @@ def _verify_row(
     elif masked_fields[7] != fields[7]:
         _fail(f"{where}: INFO changed on a row with no masked call")
 
-    values = variant_line.split("\t")
+    # Every column, in the header's order, from the original VCF and this
+    # tool's own counts -- not only the columns the mask touches.
     expected_metadata = {
         "cohort_id": cohort_id,
         "variant_index": str(record_index),
         "variant_key": variant_key,
+        "chrom": fields[0],
+        "pos": fields[1],
+        "ref": fields[3],
+        "alt": fields[4],
+        "qual": fields[5],
         "missing_genotype_count": str(row_missing),
+        "missing_genotype_rate": _rate(row_missing, len(samples)),
         "quality_masked_genotype_count": str(row_masked),
     }
-    if len(values) != len(column) or any(
-        values[column[name]] != value for name, value in expected_metadata.items()
-    ):
-        _fail(f"{where}: variant metadata row disagrees with the masked state")
+    if list(expected_metadata) != list(column):
+        raise AssertionError("variant metadata expectations do not cover the header")
+    values = variant_line.split("\t")
+    if len(values) != len(column):
+        _fail(f"{where}: variant metadata row has {len(values)} columns, expected {len(column)}")
+    for name, value in expected_metadata.items():
+        if values[column[name]] != value:
+            _fail(f"{where}: variant metadata {name}={values[column[name]]!r}, expected {value!r}")
     tally.variant_records += 1
 
 
-def _verify_sample_metadata(tally: _Tally, samples: tuple[str, ...], path: Path) -> None:
+def _verify_sample_metadata(
+    tally: _Tally, samples: tuple[str, ...], path: Path, cohort_id: str
+) -> None:
     lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line]
     if not lines or lines[0] != "\t".join(SAMPLE_METADATA_HEADER_WITH_QUALITY):
         _fail("sample metadata header is not the quality-policy header")
@@ -334,27 +357,45 @@ def _verify_sample_metadata(tally: _Tally, samples: tuple[str, ...], path: Path)
         _fail("sample metadata does not have one row per sample")
     for position, line in enumerate(lines[1:]):
         values = line.split("\t")
+        where = f"sample metadata row {position} ('{samples[position]}')"
+        if len(values) != len(column):
+            _fail(f"{where}: {len(values)} columns, expected {len(column)}")
         expected = {
+            "cohort_id": cohort_id,
             "sample_index": str(position),
             "sample_id": samples[position],
             "missing_genotype_count": str(tally.sample_missing[position]),
+            "missing_genotype_rate": _rate(tally.sample_missing[position], tally.variant_records),
             "non_standard_genotype_count": str(tally.sample_non_standard[position]),
             "quality_masked_genotype_count": str(tally.sample_masked[position]),
         }
-        if len(values) != len(column) or any(
-            values[column[name]] != value for name, value in expected.items()
-        ):
-            _fail(
-                f"sample metadata row {position} ('{samples[position]}') disagrees with the masked state"
-            )
+        if list(expected) != list(column):
+            raise AssertionError("sample metadata expectations do not cover the header")
+        for name, value in expected.items():
+            if values[column[name]] != value:
+                _fail(f"{where}: {name}={values[column[name]]!r}, expected {value!r}")
 
 
-def _verify_accounting(tally: _Tally, policy: quality.GenotypeQualityPolicy, path: Path) -> None:
+def _verify_accounting(
+    tally: _Tally, policy: quality.GenotypeQualityPolicy, path: Path, cohort_id: str
+) -> None:
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line]
+    if not lines or lines[0] != "\t".join(GENOTYPE_ACCOUNTING_HEADER):
+        _fail("genotype accounting header is not cohort_id/metric/value")
     reported: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines()[1:]:
-        if line:
-            parts = line.split("\t")
-            reported[parts[1]] = parts[2]
+    order: list[str] = []
+    for number, line in enumerate(lines[1:], start=2):
+        parts = line.split("\t")
+        if len(parts) != 3:
+            _fail(f"genotype accounting line {number} has {len(parts)} columns, expected 3")
+        if parts[0] != cohort_id:
+            _fail(
+                f"genotype accounting line {number} is for cohort {parts[0]!r}, not {cohort_id!r}"
+            )
+        if parts[1] in reported:
+            _fail(f"genotype accounting lists {parts[1]} more than once")
+        reported[parts[1]] = parts[2]
+        order.append(parts[1])
 
     derived = dict(tally.metrics)
     counts = derived.get
@@ -364,12 +405,15 @@ def _verify_accounting(tally: _Tally, policy: quality.GenotypeQualityPolicy, pat
         + counts("non_biallelic_index_calls_treated_as_missing", 0)
         + counts("quality_masked_calls", 0)
     )
-    expected_metrics = [
+    # The contract fixes both the metric set and its order: the historical
+    # rows first, exactly as before the mask, then the quality rows.
+    expected_order = [
         "total_genotype_cells",
         *_DOSAGE_METRIC.values(),
         *_SHAPE_METRIC.values(),
         "total_treated_as_missing",
         "phased_genotype_count",
+        "genotype_quality_policy_hash",
         "quality_evaluated_calls",
         "quality_passed_calls",
         "quality_kept_unevaluated_calls",
@@ -378,13 +422,24 @@ def _verify_accounting(tally: _Tally, policy: quality.GenotypeQualityPolicy, pat
         *quality.reason_metrics(policy),
         *quality.status_metrics(policy),
     ]
-    for metric in expected_metrics:
-        if reported.get(metric) != str(derived.get(metric, 0)):
+    missing = [metric for metric in expected_order if metric not in reported]
+    if missing:
+        _fail(f"genotype accounting lacks {', '.join(missing)}")
+    unexpected = [metric for metric in order if metric not in expected_order]
+    if unexpected:
+        _fail(f"genotype accounting has unexpected metric(s) {', '.join(unexpected)}")
+    if order != expected_order:
+        _fail("genotype accounting metrics are not in the contractual order")
+    for metric in expected_order:
+        expected_value = (
+            policy.policy_hash()
+            if metric == "genotype_quality_policy_hash"
+            else str(derived.get(metric, 0))
+        )
+        if reported[metric] != expected_value:
             _fail(
-                f"genotype accounting {metric}={reported.get(metric)!r}, re-derived {derived.get(metric, 0)}"
+                f"genotype accounting {metric}={reported[metric]!r}, re-derived {expected_value!r}"
             )
-    if reported.get("genotype_quality_policy_hash") != policy.policy_hash():
-        _fail("genotype accounting records a different policy hash")
 
     # The partitions, stated explicitly rather than left implied by equal counts.
     encoded = sum(derived.get(metric, 0) for metric in _DOSAGE_METRIC.values())
