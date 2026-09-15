@@ -1,0 +1,95 @@
+{
+  "evaluation_id": "gs_snp_pass_51.genome_wide.descriptive",
+  "universe": "whole_reference",
+  "query_dataset": {
+    "name": "cohort_gs.snp.pass.vcf.gz (Issue #64 gs-lineage-e1)",
+    "masked": "cohort.gs_panel.quality_masked.vcf.gz (Issue #64 real-checks-2f5ca34/enabled, min_dp=10 min_gq=20)"
+  },
+  "strata": [
+    {
+      "name": "repeat_windowmasker",
+      "kind": "tag",
+      "group": "repeat",
+      "bed": "../regions/repeat_windowmasker.bed"
+    },
+    {
+      "name": "homopolymer_ge10",
+      "kind": "tag",
+      "group": "low_complexity",
+      "bed": "../regions/homopolymer_ge10.bed"
+    },
+    {
+      "name": "n_regions",
+      "kind": "tag",
+      "group": "assembly_gap",
+      "bed": "../regions/n_regions.bed"
+    },
+    {
+      "name": "high_mappability",
+      "kind": "partition",
+      "group": "mappability",
+      "bed": "../mappability/high_mappability.bed"
+    },
+    {
+      "name": "low_mappability",
+      "kind": "partition",
+      "group": "mappability",
+      "bed": "../mappability/low_mappability.bed"
+    },
+    {
+      "name": "mappability_undefined",
+      "kind": "partition",
+      "group": "mappability",
+      "bed": "../mappability/mappability_undefined.bed"
+    },
+    {
+      "name": "gc_00_25",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_00_25.bed"
+    },
+    {
+      "name": "gc_25_30",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_25_30.bed"
+    },
+    {
+      "name": "gc_30_35",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_30_35.bed"
+    },
+    {
+      "name": "gc_35_40",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_35_40.bed"
+    },
+    {
+      "name": "gc_40_45",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_40_45.bed"
+    },
+    {
+      "name": "gc_45_100",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_45_100.bed"
+    },
+    {
+      "name": "gc_undefined",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_undefined.bed"
+    }
+  ],
+  "limitations": [
+    "descriptive only: counts and rates by stratum, not accuracy; no truth set exists for this reference",
+    "the callset is the Issue #64 GS SNP PASS panel of 51 samples (PRJNA1138464 WGS subset); GS panel is SNP-only, so no indel stratum is evaluated here",
+    "masked_genotype_cells come from the illustrative Issue #64 policy min_dp=10, min_gq=20, which is not a default and was not calibrated",
+    "differences between strata reflect sequence context, depth and this cohort's composition together; they are not separable here",
+    "records straddling a stratum edge are not counted in that stratum (see strata[].records_straddling_edge_not_counted)"
+  ]
+}
