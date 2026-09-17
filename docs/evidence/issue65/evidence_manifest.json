@@ -1,6 +1,6 @@
 {
   "evaluation_schema_version": 1,
-  "git_sha": "eea9eb3ef748b20119c37b56c8aff79c29d83bcd",
+  "git_sha": "130a77a83a84e95a9fd7ebeab2fee978615d3224",
   "reference": {
     "accession": "GCF_016808095.1",
     "assembly": "ASM1680809v1",
@@ -43,7 +43,7 @@
     "callable/callable_summary.json": "39589385d335773a69e964cc3c32ec4b088126f027f0b7ca2e194de226d25181",
     "derived/derived_strata.json": "fdfa493c562bb4aa6f1e8f555c844901d881770cc868860071f7dd1e604eaa59",
     "stratify/inputs.sha256": "fa98bfd770b055f860efc72491bf6298c13637d4700d6089297fa00a5b2b7fa4",
-    "stratify/outputs.sha256": "96f992280b719d8718b408c06eecff14cc4f5a50c8fa04aed1c1df4254ecb8a2",
+    "stratify/outputs.sha256": "d422e31b5f3a1a7ed8569900a1a8233375c5241b71d1d69a110f63fe3f2c1ead",
     "downsampling/inputs.sha256": "2f96e3ab88379d15edfc0cfa4456136f4f4492181e71b878d2dfe8b6a0f63698",
     "downsampling/outputs.sha256": "deac12744a5ac5804f9c241c3b0ab4b1f559a119ca0cf748cad9b86344310f9c",
     "crossplatform/partial.sha256": "c9032877e66a2072cea6706a629929dd261bb1a82ad4152e52f547724c459ae5",
@@ -51,8 +51,8 @@
     "crossplatform/outputs.sha256": "5bd57ad26d0a946c85088350f96999a73069fcfdcda7967b38c357189d26ea0f"
   },
   "outputs_sha256": {
-    "evaluations.json": "beece9d3508cb51b01a091171722185ee912932e5b837757e1bb7ebead6a8657",
-    "delivery_support_matrix.json": "bfc4ab292c3cf84a3645a672b4f9ff9de4d2828eca1d1b2617d3a19f31bcc07d",
-    "delivery_support_matrix.tsv": "610b349c4f61ee3f509c25a406ae785f7b9e8d7693431bc3be73941593c88670"
+    "evaluations.json": "f9ba1e295ff70c87b4956da68e9cae306ac60b672bc6ade9c80f03bea9428e65",
+    "delivery_support_matrix.json": "7cab61371eda83460c75f65aee23561e8f8f2e8f384f9d9f74545f73750c0c20",
+    "delivery_support_matrix.tsv": "eb30889705b63fcafbec10813d5b3c4af0be87ed42dfc8f20942d5eff9b86762"
   }
 }

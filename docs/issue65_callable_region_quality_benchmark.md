@@ -25,7 +25,8 @@ truth and to the synthetic fixture that tests the harness.
 |---|---|---|---|
 | `independent_truth` | TP/FP/FN, precision, recall, F1, GT concordance | `supported` | accuracy against that truth, in its region |
 | `technical_replicate_concordance` | shared / only-in-one / no-call, `site_agreement_rate`, GT concordance | `supported_with_caveat` | reproducibility; not accuracy |
-| `cross_platform_concordance` | concordance and descriptive metrics | `supported_with_caveat` | agreement with another platform on the same sample; not accuracy |
+| `cross_platform_concordance` | concordance and descriptive metrics | `supported_with_caveat` | agreement with another platform's callset on the same sample; not accuracy |
+| `reference_sample_self_consistency` | descriptive metrics | `supported_with_caveat` | where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset concordance |
 | `caller_concordance` | concordance metrics | `supported_with_caveat` | agreement between callers on the same reads; not accuracy |
 | `downsampling_stability` | shared / only-in-full / only-in-downsampled, `call_retention`, `new_call_fraction`, GT concordance | `supported_with_caveat` | how calls change as depth falls; not accuracy |
 | `descriptive_stratification` | counts, rates, missing / masked / heterozygous fractions | `supported_with_caveat` | counts by stratum; no quality claim |
@@ -51,10 +52,21 @@ sum to the excluded denominator), `not_evaluated_reason`, `metrics` and
   multi-allelic splitting, trimming and left-alignment. That is the rule
   `bcftools norm -f ref -m -any` implements, and the unit tests pin the Python
   implementation against output from the pinned bcftools 1.24 container.
-- **Exclusions are counted, never folded into a metric.** The reasons are
-  `outside_region`, `region_boundary` (the span only partly overlaps the
-  region), and, per side, `coordinate_mismatch`, `ref_mismatch` and
-  `symbolic_allele`.
+- **Exclusions are counted per unit, never folded into a metric and never
+  double counted.** An excluded unit is one `(contig, pos, ref, alt)` as
+  written; if both callsets carry it, it is still one unit. Each takes the
+  first applicable reason of the declared precedence `coordinate_mismatch` >
+  `ref_mismatch` > `symbolic_allele` > `outside_region` > `region_boundary`, so
+  the reasons always sum to `excluded_denominator`. Which sides carried a unit
+  is reported separately, under `definitions`.
+- **Symbolic alleles are judged per ALT, the site per record.** Coordinate and
+  REF mismatches belong to the record; `<DEL>`, `*` and similar belong to the
+  one allele. A record such as `ALT=G,*` keeps `G` as a comparison unit and
+  excludes only `*`, and only when a GT actually calls it.
+- **A class that compares two callsets must name both datasets.** An evaluated
+  `independent_truth`, replicate, cross-platform, caller or downsampling record
+  with no comparator is rejected: a description of one callset belongs to a
+  descriptive class.
 - **True negatives are not counted.** A VCF does not enumerate confident
   reference positions. A rate whose denominator is zero is `null`.
 - **Coordinates.** BED is 0-based half-open and VCF is 1-based. The only
@@ -130,13 +142,22 @@ were counted by hand from the case comments, not by running the engine.
 | `chrZ` | contig not in reference | excluded (coordinate mismatch) |
 | 4 bp deletion across region end | boundary | excluded |
 | chrT:250 | outside region | excluded |
+| chrT:200 | query `ALT=C,*`, GT calls the sequence allele | TP; nothing excluded |
+| chrT:205 | query `ALT=C,*`, GT `0/2` calls only `*` | FN, plus one symbolic exclusion |
+| chrT:210 | truth `ALT=T,*` with GT `1/2` | TP on `T`, plus one symbolic exclusion |
+| chrT:215 | both sides `ALT=T,*` with GT `1/2` | TP on `T`; the shared `*` is one exclusion |
+| chrT:220 | both sides write the same wrong REF | one exclusion, not two |
+| chrZ:5 | both sides write the unknown contig | one exclusion, not two |
 
-The harness gives TP 8, FP 2, FN 2, query no-call 2 and truth no-call 1.
-Precision is 8/10 and recall is 8/12, where recall's denominator includes
-query no-calls. There are 15 eligible units and 5 exclusions (one per reason).
+The harness gives TP 11, FP 2, FN 3, query no-call 2 and truth no-call 1.
+Precision is 11/13 and recall is 11/16, where recall's denominator includes
+query no-calls. There are 19 eligible units and 9 exclusions: coordinate
+mismatch 1, REF mismatch 2, symbolic allele 4, outside region 1 and boundary 1.
+Two of those units were written by both callsets and are still counted once.
 Partition strata add up, tags do not, and the output is deterministic. With the
-same records, `caller_concordance` reports `site_agreement_rate` 8/15 and
-`downsampling_stability` reports `call_retention` 8/12, with no accuracy words.
+same records, `caller_concordance` reports `site_agreement_rate` 11/19 and
+`downsampling_stability` reports `call_retention` 11/16, with no accuracy
+words.
 
 ## 5. Region assets on GCF_016808095.1 (Phase 4)
 
@@ -198,6 +219,10 @@ The mask policy is illustrative, not calibrated, and not a default.
 Differences between strata mix sequence context, depth and cohort composition,
 and cannot be separated here.
 
+FILTER is counted in three buckets, because a VCF distinguishes them: `PASS`,
+a named filter code, and `.` for "no filter applied". All 9,746,661 GS panel
+records are `PASS`; the raw cross-platform callset of §10 is entirely `.`.
+
 Genome-wide (9,746,661 records, 497,079,711 genotype cells):
 
 | stratum | records/Mb | missing (site filter only) | masked by DP/GQ | het share of non-ref calls |
@@ -256,10 +281,10 @@ streams into one Python process.
 
 | subsample | reads | mean depth | SNP retention | SNP new-call fraction | SNP GT concordance | indel retention |
 |---|---|---|---|---|---|---|
-| 0.5, seed 65 | 2,546,657 | 11.54 | 0.710 | 0.145 | 0.975 | 0.716 |
+| 0.5, seed 65 | 2,546,657 | 11.54 | 0.711 | 0.145 | 0.975 | 0.717 |
 | 0.5, seed 66 | 2,548,214 | 11.54 | 0.711 | 0.146 | 0.975 | 0.724 |
-| 0.25, seed 65 | 1,273,146 | 5.76 | 0.488 | 0.131 | 0.961 | 0.499 |
-| 0.25, seed 66 | 1,273,115 | 5.77 | 0.485 | 0.133 | 0.961 | 0.505 |
+| 0.25, seed 65 | 1,273,146 | 5.76 | 0.488 | 0.131 | 0.961 | 0.501 |
+| 0.25, seed 66 | 1,273,115 | 5.77 | 0.485 | 0.133 | 0.961 | 0.506 |
 
 (the full-depth set has 5,095,926 reads, mean depth 23.09)
 
@@ -267,10 +292,10 @@ Split by the full-depth call's ALT dosage (SNP and indel together):
 
 | subsample | het retention | het new-call fraction | hom-alt retention | hom-alt new-call fraction | core hom-alt retention |
 |---|---|---|---|---|---|
-| 0.5, seed 65 | 0.660 | 0.179 | 0.939 | 0.006 | 0.977 |
-| 0.5, seed 66 | 0.660 | 0.180 | 0.946 | 0.006 | 0.976 |
-| 0.25, seed 65 | 0.409 | 0.173 | 0.850 | 0.012 | 0.928 |
-| 0.25, seed 66 | 0.407 | 0.177 | 0.849 | 0.010 | 0.919 |
+| 0.5, seed 65 | 0.661 | 0.179 | 0.939 | 0.005 | 0.977 |
+| 0.5, seed 66 | 0.661 | 0.180 | 0.946 | 0.005 | 0.976 |
+| 0.25, seed 65 | 0.410 | 0.174 | 0.850 | 0.010 | 0.928 |
+| 0.25, seed 66 | 0.407 | 0.177 | 0.850 | 0.009 | 0.919 |
 
 Every stratum × SNP/indel/het/hom-alt figure is in
 `delivery_support_matrix.tsv` and `evaluations.json`.
@@ -302,12 +327,12 @@ this is agreement, not accuracy.
 
 | split | shared | only bcftools | only HaplotypeCaller | site agreement | GT concordance |
 |---|---|---|---|---|---|
-| all | 45,023 | 13,896 | 22,032 | 0.556 | 0.978 |
-| SNP | 42,338 | 13,527 | 17,840 | 0.574 | 0.985 |
-| het (by HaplotypeCaller dosage) | 33,385 | 12,972 | 21,465 | 0.492 | 0.988 |
-| hom-alt | 11,638 | 924 | 567 | 0.886 | 0.946 |
-| core, hom-alt | 4,536 | 119 | 96 | 0.955 | 0.986 |
-| core, het | 11,077 | 4,614 | 7,190 | 0.484 | 0.991 |
+| all | 45,076 | 13,843 | 22,046 | 0.557 | 0.977 |
+| SNP | 42,373 | 13,492 | 17,847 | 0.575 | 0.985 |
+| het (by HaplotypeCaller dosage) | 33,438 | 12,944 | 21,479 | 0.493 | 0.988 |
+| hom-alt | 11,638 | 899 | 567 | 0.888 | 0.946 |
+| core, hom-alt | 4,536 | 116 | 96 | 0.955 | 0.986 |
+| core, het | 11,081 | 4,613 | 7,192 | 0.484 | 0.991 |
 
 bcftools took 42.9 s at 92 MiB.
 
@@ -325,6 +350,13 @@ accession.
 MarkDuplicates and HaplotypeCaller arguments on the window, then single-sample
 GenotypeGVCFs. Duplication was 16.1%, window mean depth 10.6x (MAPQ>=20,
 BQ>=10), and 17.47 Mb of the window had depth >= 5.
+
+**Evidence class.** These records carry `reference_sample_self_consistency`,
+not `cross_platform_concordance`: the comparator is the reference *sequence*,
+not another callset, so the record names no comparator dataset and reports
+descriptive metrics only. All 46,458 records are `FILTER='.'` -- a raw
+single-sample callset with no filter applied, counted as `unfiltered_records`
+and never as failed.
 
 **Interpretation.** Neither side is truth.
 
@@ -384,17 +416,21 @@ and introduces no numeric threshold:
   usable asset exists.
 - **A comparison or descriptive cell** is `supported_with_caveat` when its
   evaluation has at least one unit in the scope, and `not_evaluated` otherwise.
-- **A scope** is `unsupported` when it lies outside the callable definition
-  (`cohort_non_callable`), `supported_with_caveat` when any of its cells is,
-  and `not_evaluated` otherwise.
+- **A scope** is `supported_with_caveat` when any of its cells is, and
+  `not_evaluated` otherwise. No benchmark parameter downgrades a scope; a scope
+  that fails the benchmark callable rule is flagged on its row instead.
 
 **Result.** 85 rows:
 
-- 80 `supported_with_caveat`;
-- 4 `unsupported` (cohort non-callable × SNP/indel/het/hom-alt);
-- 1 `not_evaluated` (the genome outside the window, as a whole).
-- **No row is `supported`**: that would need an independent truth cell, and
-  none exists.
+- 84 `supported_with_caveat`;
+- 1 `not_evaluated` (the genome outside the window, as a whole);
+- **no row is `supported`**: that would need an independent truth cell, and
+  none exists;
+- 4 rows (cohort non-callable × SNP/indel/het/hom-alt) carry
+  `fails_benchmark_callable_rule` with a caveat. They are **flagged, not
+  downgraded**: the callable rule stratifies this benchmark and was never
+  calibrated as a delivery gate, so marking them `unsupported` would adopt it
+  as a threshold, which this issue does not do.
 
 `supported_with_caveat` is the *ceiling* this evidence can reach. It is not an
 endorsement, and within it the evidence differs widely:
@@ -403,12 +439,12 @@ endorsement, and within it the evidence differs widely:
 |---|---|---|---|---|---|
 | core, hom-alt | 0.977 | 0.928 | 0.955 | 0 hom-alt calls in 8.26 Mb | |
 | core, het | 0.634 | 0.368 | 0.484 | 15,506 het calls (1,877/Mb) | 54.1% |
-| difficult, hom-alt | 0.915 | 0.801 | 0.848 | 47 hom-alt calls | |
-| difficult, het | 0.673 | 0.429 | 0.498 | 30,725 het calls | 72.8% |
+| difficult, hom-alt | 0.915 | 0.801 | 0.850 | 47 hom-alt calls | |
+| difficult, het | 0.673 | 0.430 | 0.498 | 30,725 het calls | 72.8% |
 | cohort median depth 15-25x, SNP | 0.713 | 0.470 | 0.604 | 20,668 records/Mb, 99.99% het | 95.3% |
-| cohort median depth 25x+, SNP | 0.784 | 0.601 | 0.532 | 29,245 records/Mb, 99.99% het | 97.2% |
-| cohort non-callable, SNP | 0.773 | 0.574 | 0.590 | 2,735 records/Mb | 79.2% (`unsupported` by definition) |
-| indel, window | 0.716 | 0.499 | 0.371 | | not in GS panel |
+| cohort median depth 25x+, SNP | 0.784 | 0.601 | 0.533 | 29,245 records/Mb, 99.99% het | 97.2% |
+| cohort non-callable, SNP | 0.773 | 0.574 | 0.590 | 2,735 records/Mb | 79.2% (flagged: fails the benchmark callable rule) |
+| indel, window | 0.717 | 0.501 | 0.373 | | not in GS panel |
 
 **Conclusion for delivery**, stated as evidence and not as accuracy:
 
@@ -422,8 +458,8 @@ endorsement, and within it the evidence differs widely:
   Mb in core and 20,000-29,000 per Mb in excess-depth strata. A heterozygous
   genotype in this cohort should not be delivered as an assured call in any
   stratum.
-- **Indels** agree between callers far less than SNPs, and the GS panel does
-  not deliver them.
+- **Indels** agree between callers far less than SNPs (0.373 against 0.575),
+  and the GS panel does not deliver them.
 - **Outside the window** only sequence-derived strata and genome-wide GS panel
   counts exist. Callable status there is `not_evaluated`.
 
@@ -473,6 +509,10 @@ Determinism checks:
 - `assemble_evidence.py assemble` was run twice on the final inputs and gave
   byte-identical `evaluations.json`, `delivery_support_matrix.json/.tsv` (see
   `evidence_manifest.json`).
+- After the PR #67 review fixes, the stratification, comparison and assembly
+  steps were re-run from the same stored VCFs and BEDs -- no read processing,
+  alignment, calling or subsampling was repeated -- and the second assembly run
+  was again byte-identical.
 - After the code was committed (`eea9eb3`), the region, mappability, callable
   and derived-strata steps were re-run with it. The BEDs and manifests were
   byte-identical to the first run, and the stratification records were equal

@@ -1,5 +1,5 @@
 {
-  "rule": "(no numeric threshold is introduced):\n\n* a cell for `independent_truth` or `technical_replicate_concordance` is\n  `not_evaluated` -- the audit found no usable asset for either;\n* a comparison or descriptive cell is `supported_with_caveat` when its\n  evaluation has at least one unit in the scope, and `not_evaluated` otherwise;\n* a scope's overall status is `unsupported` when the scope is outside the\n  callable definition itself (cohort_non_callable), `supported_with_caveat`\n  when any cell is, and `not_evaluated` otherwise. No scope can be `supported`\n  without an independent truth cell.",
+  "rule": "(no numeric threshold is introduced):\n\n* a cell for `independent_truth` or `technical_replicate_concordance` is\n  `not_evaluated` -- the audit found no usable asset for either;\n* a comparison or descriptive cell is `supported_with_caveat` when its\n  evaluation has at least one unit in the scope, and `not_evaluated` otherwise;\n* a scope's overall status is `supported_with_caveat` when any cell is, and\n  `not_evaluated` otherwise. No scope can be `supported` without an independent\n  truth cell.\n\nNo benchmark stratification parameter becomes a delivery gate here. The\ncallable rule of `callable_regions.py` was chosen to stratify this benchmark and\nwas never calibrated against an outcome, so a scope that fails it is *flagged* --\nthe row carries `fails_benchmark_callable_rule` and a caveat naming the rule --\nand not marked `unsupported`, which would adopt that rule as a threshold.",
   "rows": [
     {
       "scope": "window:snp",
@@ -7,25 +7,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.710459,
-        "genotype_concordance.f050_s65": 0.974856,
-        "call_retention.f050_s66": 0.711041,
-        "genotype_concordance.f050_s66": 0.975181,
-        "call_retention.f025_s65": 0.488335,
-        "genotype_concordance.f025_s65": 0.961343,
-        "call_retention.f025_s66": 0.485078,
-        "genotype_concordance.f025_s66": 0.961187,
-        "caller_site_agreement_rate": 0.574425,
-        "caller_genotype_concordance": 0.985096,
-        "caller_shared_units": 42338,
+        "call_retention.f050_s65": 0.710545,
+        "genotype_concordance.f050_s65": 0.974713,
+        "call_retention.f050_s66": 0.711126,
+        "genotype_concordance.f050_s66": 0.975061,
+        "call_retention.f025_s65": 0.488426,
+        "genotype_concordance.f025_s65": 0.961174,
+        "call_retention.f025_s66": 0.485221,
+        "genotype_concordance.f025_s66": 0.961054,
+        "caller_site_agreement_rate": 0.574845,
+        "caller_genotype_concordance": 0.984731,
+        "caller_shared_units": 42373,
         "reference_sample_illumina_non_reference_records_per_mb": 2322.9,
         "reference_sample_illumina_heterozygous_fraction": 0.998988,
         "gs_panel_bases": 20000000,
@@ -47,18 +49,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.716446,
-        "genotype_concordance.f050_s65": 0.955145,
-        "call_retention.f050_s66": 0.723862,
-        "genotype_concordance.f050_s66": 0.958618,
-        "call_retention.f025_s65": 0.499491,
-        "genotype_concordance.f025_s65": 0.935662,
-        "call_retention.f025_s66": 0.505453,
-        "genotype_concordance.f025_s66": 0.933832,
-        "caller_site_agreement_rate": 0.370549,
-        "caller_genotype_concordance": 0.858101,
-        "caller_shared_units": 2685
+        "call_retention.f050_s65": 0.717328,
+        "genotype_concordance.f050_s65": 0.954757,
+        "call_retention.f050_s66": 0.724283,
+        "genotype_concordance.f050_s66": 0.957592,
+        "call_retention.f025_s65": 0.50058,
+        "genotype_concordance.f025_s65": 0.93343,
+        "call_retention.f025_s66": 0.506085,
+        "genotype_concordance.f025_s66": 0.931864,
+        "caller_site_agreement_rate": 0.372673,
+        "caller_genotype_concordance": 0.855716,
+        "caller_shared_units": 2703
       }
     },
     {
@@ -72,18 +76,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.660383,
-        "genotype_concordance.f050_s65": 0.983932,
-        "call_retention.f050_s66": 0.660401,
-        "genotype_concordance.f050_s66": 0.986638,
-        "call_retention.f025_s65": 0.409225,
-        "genotype_concordance.f025_s65": 0.961018,
-        "call_retention.f025_s66": 0.406545,
-        "genotype_concordance.f025_s66": 0.960267,
-        "caller_site_agreement_rate": 0.492244,
-        "caller_genotype_concordance": 0.988438,
-        "caller_shared_units": 33385
+        "call_retention.f050_s65": 0.660615,
+        "genotype_concordance.f050_s65": 0.983737,
+        "call_retention.f050_s66": 0.660524,
+        "genotype_concordance.f050_s66": 0.986464,
+        "call_retention.f025_s65": 0.409545,
+        "genotype_concordance.f025_s65": 0.960473,
+        "call_retention.f025_s66": 0.40685,
+        "genotype_concordance.f025_s66": 0.959853,
+        "caller_site_agreement_rate": 0.492743,
+        "caller_genotype_concordance": 0.987709,
+        "caller_shared_units": 33438
       }
     },
     {
@@ -97,16 +103,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.938878,
-        "genotype_concordance.f050_s65": 0.937691,
-        "call_retention.f050_s66": 0.945842,
-        "genotype_concordance.f050_s66": 0.932086,
-        "call_retention.f025_s65": 0.850143,
-        "genotype_concordance.f025_s65": 0.953547,
-        "call_retention.f025_s66": 0.849488,
-        "genotype_concordance.f025_s66": 0.953993,
-        "caller_site_agreement_rate": 0.886435,
+        "call_retention.f050_s65": 0.939041,
+        "genotype_concordance.f050_s65": 0.937527,
+        "call_retention.f050_s66": 0.946252,
+        "genotype_concordance.f050_s66": 0.931682,
+        "call_retention.f025_s65": 0.850225,
+        "genotype_concordance.f025_s65": 0.953455,
+        "call_retention.f025_s66": 0.849652,
+        "genotype_concordance.f025_s66": 0.953809,
+        "caller_site_agreement_rate": 0.888126,
         "caller_genotype_concordance": 0.946211,
         "caller_shared_units": 11638
       }
@@ -117,25 +125,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.70775,
-        "genotype_concordance.f050_s65": 0.97595,
-        "call_retention.f050_s66": 0.710921,
-        "genotype_concordance.f050_s66": 0.97468,
-        "call_retention.f025_s65": 0.487596,
-        "genotype_concordance.f025_s65": 0.963466,
-        "call_retention.f025_s66": 0.478735,
-        "genotype_concordance.f025_s66": 0.966004,
-        "caller_site_agreement_rate": 0.58819,
-        "caller_genotype_concordance": 0.990513,
-        "caller_shared_units": 15390,
+        "call_retention.f050_s65": 0.707758,
+        "genotype_concordance.f050_s65": 0.975955,
+        "call_retention.f050_s66": 0.710975,
+        "genotype_concordance.f050_s66": 0.974621,
+        "call_retention.f025_s65": 0.487598,
+        "genotype_concordance.f025_s65": 0.963377,
+        "call_retention.f025_s66": 0.478739,
+        "genotype_concordance.f025_s66": 0.966011,
+        "caller_site_agreement_rate": 0.588283,
+        "caller_genotype_concordance": 0.990385,
+        "caller_shared_units": 15393,
         "reference_sample_illumina_non_reference_records_per_mb": 1876.616,
         "reference_sample_illumina_heterozygous_fraction": 1.0,
         "gs_panel_bases": 8262745,
@@ -157,18 +167,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.64055,
-        "genotype_concordance.f050_s65": 0.98927,
-        "call_retention.f050_s66": 0.645361,
-        "genotype_concordance.f050_s66": 0.988285,
-        "call_retention.f025_s65": 0.384192,
-        "genotype_concordance.f025_s65": 0.982111,
-        "call_retention.f025_s66": 0.414433,
-        "genotype_concordance.f025_s66": 0.970149,
-        "caller_site_agreement_rate": 0.152011,
-        "caller_genotype_concordance": 0.928251,
-        "caller_shared_units": 223
+        "call_retention.f050_s65": 0.640357,
+        "genotype_concordance.f050_s65": 0.989282,
+        "call_retention.f050_s66": 0.645161,
+        "genotype_concordance.f050_s66": 0.988298,
+        "call_retention.f025_s65": 0.384351,
+        "genotype_concordance.f025_s65": 0.982143,
+        "call_retention.f025_s66": 0.41455,
+        "genotype_concordance.f025_s66": 0.970199,
+        "caller_site_agreement_rate": 0.152589,
+        "caller_genotype_concordance": 0.924107,
+        "caller_shared_units": 224
       }
     },
     {
@@ -182,18 +194,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.634149,
-        "genotype_concordance.f050_s65": 0.989296,
-        "call_retention.f050_s66": 0.638528,
-        "genotype_concordance.f050_s66": 0.992884,
-        "call_retention.f025_s65": 0.367712,
-        "genotype_concordance.f025_s65": 0.968289,
-        "call_retention.f025_s66": 0.361964,
-        "genotype_concordance.f025_s66": 0.972021,
-        "caller_site_agreement_rate": 0.484113,
-        "caller_genotype_concordance": 0.991063,
-        "caller_shared_units": 11077
+        "call_retention.f050_s65": 0.63416,
+        "genotype_concordance.f050_s65": 0.989299,
+        "call_retention.f050_s66": 0.638538,
+        "genotype_concordance.f050_s66": 0.992887,
+        "call_retention.f025_s65": 0.367756,
+        "genotype_concordance.f025_s65": 0.968155,
+        "call_retention.f025_s66": 0.36201,
+        "genotype_concordance.f025_s66": 0.972033,
+        "caller_site_agreement_rate": 0.484182,
+        "caller_genotype_concordance": 0.990795,
+        "caller_shared_units": 11081
       }
     },
     {
@@ -207,16 +221,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.9769,
         "genotype_concordance.f050_s65": 0.94453,
-        "call_retention.f050_s66": 0.97582,
-        "genotype_concordance.f050_s66": 0.930531,
+        "call_retention.f050_s66": 0.976036,
+        "genotype_concordance.f050_s66": 0.930325,
         "call_retention.f025_s65": 0.927893,
         "genotype_concordance.f025_s65": 0.958353,
         "call_retention.f025_s66": 0.919041,
         "genotype_concordance.f025_s66": 0.957247,
-        "caller_site_agreement_rate": 0.954746,
+        "caller_site_agreement_rate": 0.95535,
         "caller_genotype_concordance": 0.986111,
         "caller_shared_units": 4536
       }
@@ -227,25 +243,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.711958,
-        "genotype_concordance.f050_s65": 0.974254,
-        "call_retention.f050_s66": 0.711107,
-        "genotype_concordance.f050_s66": 0.975457,
-        "call_retention.f025_s65": 0.488744,
-        "genotype_concordance.f025_s65": 0.960171,
-        "call_retention.f025_s66": 0.488589,
-        "genotype_concordance.f025_s66": 0.958573,
-        "caller_site_agreement_rate": 0.566849,
-        "caller_genotype_concordance": 0.982002,
-        "caller_shared_units": 26948,
+        "call_retention.f050_s65": 0.712086,
+        "genotype_concordance.f050_s65": 0.97403,
+        "call_retention.f050_s66": 0.711209,
+        "genotype_concordance.f050_s66": 0.975304,
+        "call_retention.f025_s65": 0.488884,
+        "genotype_concordance.f025_s65": 0.959958,
+        "call_retention.f025_s66": 0.488806,
+        "genotype_concordance.f025_s66": 0.958369,
+        "caller_site_agreement_rate": 0.56745,
+        "caller_genotype_concordance": 0.981505,
+        "caller_shared_units": 26980,
         "reference_sample_illumina_non_reference_records_per_mb": 2621.737,
         "reference_sample_illumina_heterozygous_fraction": 0.998473,
         "gs_panel_bases": 11737255,
@@ -267,18 +285,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.732613,
-        "genotype_concordance.f050_s65": 0.946098,
-        "call_retention.f050_s66": 0.742436,
-        "genotype_concordance.f050_s66": 0.950251,
-        "call_retention.f025_s65": 0.52279,
-        "genotype_concordance.f025_s65": 0.924464,
-        "call_retention.f025_s66": 0.523183,
-        "genotype_concordance.f025_s66": 0.923395,
-        "caller_site_agreement_rate": 0.4266,
-        "caller_genotype_concordance": 0.84821,
-        "caller_shared_units": 2319
+        "call_retention.f050_s65": 0.73362,
+        "genotype_concordance.f050_s65": 0.945615,
+        "call_retention.f050_s66": 0.743008,
+        "genotype_concordance.f050_s66": 0.948934,
+        "call_retention.f025_s65": 0.524154,
+        "genotype_concordance.f025_s65": 0.921642,
+        "call_retention.f025_s66": 0.523959,
+        "genotype_concordance.f025_s66": 0.920866,
+        "caller_site_agreement_rate": 0.429254,
+        "caller_genotype_concordance": 0.84589,
+        "caller_shared_units": 2336
       }
     },
     {
@@ -292,18 +312,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.673258,
-        "genotype_concordance.f050_s65": 0.981413,
-        "call_retention.f050_s66": 0.671251,
-        "genotype_concordance.f050_s66": 0.983652,
-        "call_retention.f025_s65": 0.42944,
-        "genotype_concordance.f025_s65": 0.957858,
-        "call_retention.f025_s66": 0.428422,
-        "genotype_concordance.f025_s66": 0.95519,
-        "caller_site_agreement_rate": 0.497763,
-        "caller_genotype_concordance": 0.987239,
-        "caller_shared_units": 22256
+        "call_retention.f050_s65": 0.673558,
+        "genotype_concordance.f050_s65": 0.981126,
+        "call_retention.f050_s66": 0.671417,
+        "genotype_concordance.f050_s66": 0.983397,
+        "call_retention.f025_s65": 0.429874,
+        "genotype_concordance.f025_s65": 0.957141,
+        "call_retention.f025_s66": 0.42883,
+        "genotype_concordance.f025_s66": 0.954604,
+        "caller_site_agreement_rate": 0.49848,
+        "caller_genotype_concordance": 0.986281,
+        "caller_shared_units": 22305
       }
     },
     {
@@ -317,16 +339,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.914534,
-        "genotype_concordance.f050_s65": 0.933206,
-        "call_retention.f050_s66": 0.926591,
-        "genotype_concordance.f050_s66": 0.932774,
-        "call_retention.f025_s65": 0.800804,
-        "genotype_concordance.f025_s65": 0.950318,
-        "call_retention.f025_s66": 0.805224,
-        "genotype_concordance.f025_s66": 0.951755,
-        "caller_site_agreement_rate": 0.848379,
+        "call_retention.f050_s65": 0.914802,
+        "genotype_concordance.f050_s65": 0.932933,
+        "call_retention.f050_s66": 0.927127,
+        "genotype_concordance.f050_s66": 0.932235,
+        "call_retention.f025_s65": 0.800938,
+        "genotype_concordance.f025_s65": 0.950159,
+        "call_retention.f025_s66": 0.805492,
+        "genotype_concordance.f025_s66": 0.951439,
+        "caller_site_agreement_rate": 0.850643,
         "caller_genotype_concordance": 0.921124,
         "caller_shared_units": 7011
       }
@@ -337,25 +361,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.685027,
-        "genotype_concordance.f050_s65": 0.974962,
-        "call_retention.f050_s66": 0.68601,
-        "genotype_concordance.f050_s66": 0.974725,
-        "call_retention.f025_s65": 0.453518,
-        "genotype_concordance.f025_s65": 0.958983,
-        "call_retention.f025_s66": 0.448136,
-        "genotype_concordance.f025_s66": 0.958855,
-        "caller_site_agreement_rate": 0.567658,
-        "caller_genotype_concordance": 0.985958,
-        "caller_shared_units": 29055,
+        "call_retention.f050_s65": 0.685104,
+        "genotype_concordance.f050_s65": 0.974772,
+        "call_retention.f050_s66": 0.686063,
+        "genotype_concordance.f050_s66": 0.974569,
+        "call_retention.f025_s65": 0.45361,
+        "genotype_concordance.f025_s65": 0.958701,
+        "call_retention.f025_s66": 0.448207,
+        "genotype_concordance.f025_s66": 0.958673,
+        "caller_site_agreement_rate": 0.567987,
+        "caller_genotype_concordance": 0.985588,
+        "caller_shared_units": 29073,
         "reference_sample_illumina_non_reference_records_per_mb": 2168.738,
         "reference_sample_illumina_heterozygous_fraction": 0.999695,
         "gs_panel_bases": 15142446,
@@ -377,18 +403,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.655596,
-        "genotype_concordance.f050_s65": 0.966369,
-        "call_retention.f050_s66": 0.66062,
-        "genotype_concordance.f050_s66": 0.970004,
-        "call_retention.f025_s65": 0.411666,
-        "genotype_concordance.f025_s65": 0.947797,
-        "call_retention.f025_s66": 0.427854,
-        "genotype_concordance.f025_s66": 0.94651,
-        "caller_site_agreement_rate": 0.245825,
-        "caller_genotype_concordance": 0.886414,
-        "caller_shared_units": 898
+        "call_retention.f050_s65": 0.655998,
+        "genotype_concordance.f050_s65": 0.966059,
+        "call_retention.f050_s66": 0.661286,
+        "genotype_concordance.f050_s66": 0.968855,
+        "call_retention.f025_s65": 0.41219,
+        "genotype_concordance.f025_s65": 0.945307,
+        "call_retention.f025_s66": 0.42889,
+        "genotype_concordance.f025_s66": 0.944192,
+        "caller_site_agreement_rate": 0.24788,
+        "caller_genotype_concordance": 0.883002,
+        "caller_shared_units": 906
       }
     },
     {
@@ -402,18 +430,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.622724,
-        "genotype_concordance.f050_s65": 0.987281,
-        "call_retention.f050_s66": 0.623948,
-        "genotype_concordance.f050_s66": 0.990438,
-        "call_retention.f025_s65": 0.353125,
-        "genotype_concordance.f025_s65": 0.961856,
-        "call_retention.f025_s66": 0.34979,
-        "genotype_concordance.f025_s66": 0.961865,
-        "caller_site_agreement_rate": 0.475499,
-        "caller_genotype_concordance": 0.989181,
-        "caller_shared_units": 22183
+        "call_retention.f050_s65": 0.622836,
+        "genotype_concordance.f050_s65": 0.987085,
+        "call_retention.f050_s66": 0.624034,
+        "genotype_concordance.f050_s66": 0.990238,
+        "call_retention.f025_s65": 0.353318,
+        "genotype_concordance.f025_s65": 0.961244,
+        "call_retention.f025_s66": 0.350012,
+        "genotype_concordance.f025_s66": 0.961398,
+        "caller_site_agreement_rate": 0.475863,
+        "caller_genotype_concordance": 0.988518,
+        "caller_shared_units": 22209
       }
     },
     {
@@ -427,16 +457,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.973038,
-        "genotype_concordance.f050_s65": 0.934222,
-        "call_retention.f050_s66": 0.974676,
-        "genotype_concordance.f050_s66": 0.924638,
-        "call_retention.f025_s65": 0.920121,
-        "genotype_concordance.f025_s65": 0.95139,
-        "call_retention.f025_s66": 0.914577,
-        "genotype_concordance.f025_s66": 0.950682,
-        "caller_site_agreement_rate": 0.949297,
+        "call_retention.f050_s65": 0.97329,
+        "genotype_concordance.f050_s65": 0.933981,
+        "call_retention.f050_s66": 0.975054,
+        "genotype_concordance.f050_s66": 0.92428,
+        "call_retention.f025_s65": 0.920247,
+        "genotype_concordance.f025_s65": 0.95126,
+        "call_retention.f025_s66": 0.914703,
+        "genotype_concordance.f025_s66": 0.950551,
+        "caller_site_agreement_rate": 0.95104,
         "caller_genotype_concordance": 0.965251,
         "caller_shared_units": 7770
       }
@@ -445,27 +477,31 @@
       "scope": "cohort_non_callable:snp",
       "region": "cohort_non_callable within NC_068975.1:1-20000000",
       "split": "snp",
-      "overall_status": "unsupported",
-      "claim_allowed": "no delivery claim; evidence shows this scope is not supported",
-      "overall_rationale": "fails the benchmark callable rule in more than 20% of the 51 samples",
+      "overall_status": "supported_with_caveat",
+      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
+      ],
+      "fails_benchmark_callable_rule": true,
+      "caveats": [
+        "fails the benchmark callable rule (depth 5 to 2.5x the sample's median, in at least 80% of the 51 samples); that rule stratifies this benchmark and is not calibrated as a delivery threshold"
       ],
       "key_metrics": {
-        "call_retention.f050_s65": 0.772777,
-        "genotype_concordance.f050_s65": 0.974625,
-        "call_retention.f050_s66": 0.772375,
-        "genotype_concordance.f050_s66": 0.976171,
-        "call_retention.f025_s65": 0.573648,
-        "genotype_concordance.f025_s65": 0.965917,
-        "call_retention.f025_s66": 0.575598,
-        "genotype_concordance.f025_s66": 0.965634,
-        "caller_site_agreement_rate": 0.589805,
-        "caller_genotype_concordance": 0.983212,
-        "caller_shared_units": 13283,
+        "call_retention.f050_s65": 0.772834,
+        "genotype_concordance.f050_s65": 0.974585,
+        "call_retention.f050_s66": 0.77249,
+        "genotype_concordance.f050_s66": 0.97613,
+        "call_retention.f025_s65": 0.57367,
+        "genotype_concordance.f025_s65": 0.965961,
+        "call_retention.f025_s66": 0.575846,
+        "genotype_concordance.f025_s66": 0.965593,
+        "caller_site_agreement_rate": 0.590429,
+        "caller_genotype_concordance": 0.982857,
+        "caller_shared_units": 13300,
         "reference_sample_illumina_non_reference_records_per_mb": 2734.71,
         "reference_sample_illumina_heterozygous_fraction": 0.997365,
         "gs_panel_bases": 4857554,
@@ -480,73 +516,85 @@
       "scope": "cohort_non_callable:indel",
       "region": "cohort_non_callable within NC_068975.1:1-20000000",
       "split": "indel",
-      "overall_status": "unsupported",
-      "claim_allowed": "no delivery claim; evidence shows this scope is not supported",
-      "overall_rationale": "fails the benchmark callable rule in more than 20% of the 51 samples",
+      "overall_status": "supported_with_caveat",
+      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": true,
+      "caveats": [
+        "fails the benchmark callable rule (depth 5 to 2.5x the sample's median, in at least 80% of the 51 samples); that rule stratifies this benchmark and is not calibrated as a delivery threshold"
+      ],
       "key_metrics": {
-        "call_retention.f050_s65": 0.75213,
-        "genotype_concordance.f050_s65": 0.947681,
-        "call_retention.f050_s66": 0.765923,
-        "genotype_concordance.f050_s66": 0.947564,
-        "call_retention.f025_s65": 0.551318,
-        "genotype_concordance.f025_s65": 0.924209,
-        "call_retention.f025_s66": 0.548073,
-        "genotype_concordance.f025_s66": 0.916358,
-        "caller_site_agreement_rate": 0.455877,
-        "caller_genotype_concordance": 0.830522,
-        "caller_shared_units": 1245
+        "call_retention.f050_s65": 0.75343,
+        "genotype_concordance.f050_s65": 0.947509,
+        "call_retention.f050_s66": 0.766344,
+        "genotype_concordance.f050_s66": 0.946288,
+        "call_retention.f025_s65": 0.553269,
+        "genotype_concordance.f025_s65": 0.921955,
+        "call_retention.f025_s66": 0.548426,
+        "genotype_concordance.f025_s66": 0.914643,
+        "caller_site_agreement_rate": 0.457968,
+        "caller_genotype_concordance": 0.828412,
+        "caller_shared_units": 1253
       }
     },
     {
       "scope": "cohort_non_callable:het",
       "region": "cohort_non_callable within NC_068975.1:1-20000000",
       "split": "het",
-      "overall_status": "unsupported",
-      "claim_allowed": "no delivery claim; evidence shows this scope is not supported",
-      "overall_rationale": "fails the benchmark callable rule in more than 20% of the 51 samples",
+      "overall_status": "supported_with_caveat",
+      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": true,
+      "caveats": [
+        "fails the benchmark callable rule (depth 5 to 2.5x the sample's median, in at least 80% of the 51 samples); that rule stratifies this benchmark and is not calibrated as a delivery threshold"
+      ],
       "key_metrics": {
-        "call_retention.f050_s65": 0.747144,
-        "genotype_concordance.f050_s65": 0.978028,
-        "call_retention.f050_s66": 0.744523,
-        "genotype_concordance.f050_s66": 0.979544,
-        "call_retention.f025_s65": 0.53898,
-        "genotype_concordance.f025_s65": 0.96132,
-        "call_retention.f025_s66": 0.538169,
-        "genotype_concordance.f025_s66": 0.958362,
-        "caller_site_agreement_rate": 0.531781,
-        "caller_genotype_concordance": 0.988374,
-        "caller_shared_units": 11010
+        "call_retention.f050_s65": 0.747446,
+        "genotype_concordance.f050_s65": 0.977919,
+        "call_retention.f050_s66": 0.744644,
+        "genotype_concordance.f050_s66": 0.979425,
+        "call_retention.f025_s65": 0.539362,
+        "genotype_concordance.f025_s65": 0.96097,
+        "call_retention.f025_s66": 0.53849,
+        "genotype_concordance.f025_s66": 0.958131,
+        "caller_site_agreement_rate": 0.5325,
+        "caller_genotype_concordance": 0.987585,
+        "caller_shared_units": 11035
       }
     },
     {
       "scope": "cohort_non_callable:hom_alt",
       "region": "cohort_non_callable within NC_068975.1:1-20000000",
       "split": "hom_alt",
-      "overall_status": "unsupported",
-      "claim_allowed": "no delivery claim; evidence shows this scope is not supported",
-      "overall_rationale": "fails the benchmark callable rule in more than 20% of the 51 samples",
+      "overall_status": "supported_with_caveat",
+      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": true,
+      "caveats": [
+        "fails the benchmark callable rule (depth 5 to 2.5x the sample's median, in at least 80% of the 51 samples); that rule stratifies this benchmark and is not calibrated as a delivery threshold"
+      ],
       "key_metrics": {
         "call_retention.f050_s65": 0.86538,
         "genotype_concordance.f050_s65": 0.94765,
-        "call_retention.f050_s66": 0.88314,
-        "genotype_concordance.f050_s66": 0.948703,
+        "call_retention.f050_s66": 0.883655,
+        "genotype_concordance.f050_s66": 0.94815,
         "call_retention.f025_s65": 0.702445,
         "genotype_concordance.f025_s65": 0.959692,
-        "call_retention.f025_s66": 0.712484,
-        "genotype_concordance.f025_s66": 0.964234,
-        "caller_site_agreement_rate": 0.773527,
+        "call_retention.f025_s66": 0.712741,
+        "genotype_concordance.f025_s66": 0.963886,
+        "caller_site_agreement_rate": 0.775061,
         "caller_genotype_concordance": 0.913019,
         "caller_shared_units": 3518
       }
@@ -557,25 +605,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.718368,
-        "genotype_concordance.f050_s65": 0.976068,
-        "call_retention.f050_s66": 0.721094,
-        "genotype_concordance.f050_s66": 0.975577,
-        "call_retention.f025_s65": 0.500514,
-        "genotype_concordance.f025_s65": 0.96406,
-        "call_retention.f025_s66": 0.496908,
-        "genotype_concordance.f025_s66": 0.962786,
-        "caller_site_agreement_rate": 0.577623,
-        "caller_genotype_concordance": 0.985564,
-        "caller_shared_units": 34290,
+        "call_retention.f050_s65": 0.718449,
+        "genotype_concordance.f050_s65": 0.975943,
+        "call_retention.f050_s66": 0.721193,
+        "genotype_concordance.f050_s66": 0.975424,
+        "call_retention.f025_s65": 0.500629,
+        "genotype_concordance.f025_s65": 0.963843,
+        "call_retention.f025_s66": 0.497067,
+        "genotype_concordance.f025_s66": 0.962615,
+        "caller_site_agreement_rate": 0.578053,
+        "caller_genotype_concordance": 0.985198,
+        "caller_shared_units": 34319,
         "reference_sample_illumina_non_reference_records_per_mb": 2438.541,
         "reference_sample_illumina_heterozygous_fraction": 0.999389,
         "gs_panel_bases": 15443250,
@@ -597,18 +647,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.72802,
-        "genotype_concordance.f050_s65": 0.955582,
-        "call_retention.f050_s66": 0.735885,
-        "genotype_concordance.f050_s66": 0.957957,
-        "call_retention.f025_s65": 0.515994,
-        "genotype_concordance.f025_s65": 0.936653,
-        "call_retention.f025_s66": 0.522112,
-        "genotype_concordance.f025_s66": 0.938735,
-        "caller_site_agreement_rate": 0.37069,
-        "caller_genotype_concordance": 0.846601,
-        "caller_shared_units": 2236
+        "call_retention.f050_s65": 0.72884,
+        "genotype_concordance.f050_s65": 0.955078,
+        "call_retention.f050_s66": 0.736329,
+        "genotype_concordance.f050_s66": 0.956954,
+        "call_retention.f025_s65": 0.517241,
+        "genotype_concordance.f025_s65": 0.93468,
+        "call_retention.f025_s66": 0.522989,
+        "genotype_concordance.f025_s66": 0.93673,
+        "caller_site_agreement_rate": 0.372806,
+        "caller_genotype_concordance": 0.844069,
+        "caller_shared_units": 2251
       }
     },
     {
@@ -622,18 +674,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.662888,
-        "genotype_concordance.f050_s65": 0.986066,
-        "call_retention.f050_s66": 0.665174,
-        "genotype_concordance.f050_s66": 0.988288,
-        "call_retention.f025_s65": 0.411891,
-        "genotype_concordance.f025_s65": 0.964947,
-        "call_retention.f025_s66": 0.409209,
-        "genotype_concordance.f025_s66": 0.963121,
-        "caller_site_agreement_rate": 0.489289,
-        "caller_genotype_concordance": 0.988753,
-        "caller_shared_units": 26496
+        "call_retention.f050_s65": 0.663165,
+        "genotype_concordance.f050_s65": 0.985809,
+        "call_retention.f050_s66": 0.665308,
+        "genotype_concordance.f050_s66": 0.988096,
+        "call_retention.f025_s65": 0.412285,
+        "genotype_concordance.f025_s65": 0.964348,
+        "call_retention.f025_s66": 0.409583,
+        "genotype_concordance.f025_s66": 0.962634,
+        "caller_site_agreement_rate": 0.489803,
+        "caller_genotype_concordance": 0.98798,
+        "caller_shared_units": 26540
       }
     },
     {
@@ -647,16 +701,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.94917,
         "genotype_concordance.f050_s65": 0.939155,
-        "call_retention.f050_s66": 0.956472,
-        "genotype_concordance.f050_s66": 0.932282,
-        "call_retention.f025_s65": 0.869227,
-        "genotype_concordance.f025_s65": 0.953524,
-        "call_retention.f025_s66": 0.867141,
-        "genotype_concordance.f025_s66": 0.954287,
-        "caller_site_agreement_rate": 0.892031,
+        "call_retention.f050_s66": 0.956946,
+        "genotype_concordance.f050_s66": 0.93182,
+        "call_retention.f025_s65": 0.869322,
+        "genotype_concordance.f025_s65": 0.95342,
+        "call_retention.f025_s66": 0.86733,
+        "genotype_concordance.f025_s66": 0.954078,
+        "caller_site_agreement_rate": 0.8937,
         "caller_genotype_concordance": 0.946162,
         "caller_shared_units": 10030
       }
@@ -667,25 +723,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.680234,
-        "genotype_concordance.f050_s65": 0.969965,
-        "call_retention.f050_s66": 0.672622,
-        "genotype_concordance.f050_s66": 0.973556,
-        "call_retention.f025_s65": 0.441792,
-        "genotype_concordance.f025_s65": 0.949583,
-        "call_retention.f025_s66": 0.439869,
-        "genotype_concordance.f025_s66": 0.954281,
-        "caller_site_agreement_rate": 0.561227,
-        "caller_genotype_concordance": 0.983101,
-        "caller_shared_units": 8048,
+        "call_retention.f050_s65": 0.680333,
+        "genotype_concordance.f050_s65": 0.96975,
+        "call_retention.f050_s66": 0.672646,
+        "genotype_concordance.f050_s66": 0.973571,
+        "call_retention.f025_s65": 0.441784,
+        "genotype_concordance.f025_s65": 0.94961,
+        "call_retention.f025_s66": 0.439942,
+        "genotype_concordance.f025_s66": 0.954314,
+        "caller_site_agreement_rate": 0.561607,
+        "caller_genotype_concordance": 0.982741,
+        "caller_shared_units": 8054,
         "reference_sample_illumina_non_reference_records_per_mb": 1926.019,
         "reference_sample_illumina_heterozygous_fraction": 0.997265,
         "gs_panel_bases": 4556550,
@@ -707,18 +765,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.656335,
-        "genotype_concordance.f050_s65": 0.951389,
-        "call_retention.f050_s66": 0.65907,
-        "genotype_concordance.f050_s66": 0.964039,
-        "call_retention.f025_s65": 0.416591,
-        "genotype_concordance.f025_s65": 0.92779,
-        "call_retention.f025_s66": 0.423883,
-        "genotype_concordance.f025_s66": 0.905376,
-        "caller_site_agreement_rate": 0.377391,
-        "caller_genotype_concordance": 0.912442,
-        "caller_shared_units": 434
+        "call_retention.f050_s65": 0.657584,
+        "genotype_concordance.f050_s65": 0.951657,
+        "call_retention.f050_s66": 0.659401,
+        "genotype_concordance.f050_s66": 0.96281,
+        "call_retention.f025_s65": 0.416894,
+        "genotype_concordance.f025_s65": 0.923747,
+        "call_retention.f025_s66": 0.423252,
+        "genotype_concordance.f025_s66": 0.903433,
+        "caller_site_agreement_rate": 0.37967,
+        "caller_genotype_concordance": 0.910755,
+        "caller_shared_units": 437
       }
     },
     {
@@ -732,18 +792,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.651132,
-        "genotype_concordance.f050_s65": 0.976184,
-        "call_retention.f050_s66": 0.642749,
-        "genotype_concordance.f050_s66": 0.980829,
-        "call_retention.f025_s65": 0.399581,
-        "genotype_concordance.f025_s65": 0.946297,
-        "call_retention.f025_s66": 0.397066,
-        "genotype_concordance.f025_s66": 0.949968,
-        "caller_site_agreement_rate": 0.50492,
-        "caller_genotype_concordance": 0.987202,
-        "caller_shared_units": 6876
+        "call_retention.f050_s65": 0.651202,
+        "genotype_concordance.f050_s65": 0.976209,
+        "call_retention.f050_s66": 0.642827,
+        "genotype_concordance.f050_s66": 0.980719,
+        "call_retention.f025_s65": 0.399632,
+        "genotype_concordance.f025_s65": 0.945935,
+        "call_retention.f025_s66": 0.397119,
+        "genotype_concordance.f025_s66": 0.94981,
+        "caller_site_agreement_rate": 0.505358,
+        "caller_genotype_concordance": 0.986638,
+        "caller_shared_units": 6885
       }
     },
     {
@@ -757,16 +819,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.875,
-        "genotype_concordance.f050_s65": 0.927184,
+        "call_retention.f050_s65": 0.876214,
+        "genotype_concordance.f050_s65": 0.9259,
         "call_retention.f050_s66": 0.879854,
         "genotype_concordance.f050_s66": 0.930345,
         "call_retention.f025_s65": 0.730583,
         "genotype_concordance.f025_s65": 0.954319,
         "call_retention.f025_s66": 0.739078,
         "genotype_concordance.f025_s66": 0.952381,
-        "caller_site_agreement_rate": 0.857906,
+        "caller_site_agreement_rate": 0.859743,
         "caller_genotype_concordance": 0.946451,
         "caller_shared_units": 1606
       }
@@ -777,25 +841,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.681665,
-        "genotype_concordance.f050_s65": 0.971196,
-        "call_retention.f050_s66": 0.682509,
-        "genotype_concordance.f050_s66": 0.971501,
-        "call_retention.f025_s65": 0.450418,
-        "genotype_concordance.f025_s65": 0.954371,
-        "call_retention.f025_s66": 0.453024,
-        "genotype_concordance.f025_s66": 0.95115,
-        "caller_site_agreement_rate": 0.523273,
-        "caller_genotype_concordance": 0.978359,
-        "caller_shared_units": 18021,
+        "call_retention.f050_s65": 0.681842,
+        "genotype_concordance.f050_s65": 0.970971,
+        "call_retention.f050_s66": 0.682648,
+        "genotype_concordance.f050_s66": 0.971274,
+        "call_retention.f025_s65": 0.450517,
+        "genotype_concordance.f025_s65": 0.954031,
+        "call_retention.f025_s66": 0.453339,
+        "genotype_concordance.f025_s66": 0.950841,
+        "caller_site_agreement_rate": 0.523995,
+        "caller_genotype_concordance": 0.977672,
+        "caller_shared_units": 18049,
         "reference_sample_illumina_non_reference_records_per_mb": 2501.676,
         "reference_sample_illumina_heterozygous_fraction": 0.998583,
         "gs_panel_bases": 9029947,
@@ -817,18 +883,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.736047,
-        "genotype_concordance.f050_s65": 0.942812,
-        "call_retention.f050_s66": 0.743488,
-        "genotype_concordance.f050_s66": 0.946512,
-        "call_retention.f025_s65": 0.528372,
-        "genotype_concordance.f025_s65": 0.919014,
-        "call_retention.f025_s66": 0.53,
-        "genotype_concordance.f025_s66": 0.918824,
-        "caller_site_agreement_rate": 0.450878,
-        "caller_genotype_concordance": 0.83646,
-        "caller_shared_units": 2079
+        "call_retention.f050_s65": 0.73722,
+        "genotype_concordance.f050_s65": 0.942265,
+        "call_retention.f050_s66": 0.743928,
+        "genotype_concordance.f050_s66": 0.944963,
+        "call_retention.f025_s65": 0.529956,
+        "genotype_concordance.f025_s65": 0.915757,
+        "call_retention.f025_s66": 0.530881,
+        "genotype_concordance.f025_s66": 0.915904,
+        "caller_site_agreement_rate": 0.453974,
+        "caller_genotype_concordance": 0.833969,
+        "caller_shared_units": 2096
       }
     },
     {
@@ -842,18 +910,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.639798,
-        "genotype_concordance.f050_s65": 0.978328,
-        "call_retention.f050_s66": 0.639141,
-        "genotype_concordance.f050_s66": 0.980239,
-        "call_retention.f025_s65": 0.386196,
-        "genotype_concordance.f025_s65": 0.949295,
-        "call_retention.f025_s66": 0.386582,
-        "genotype_concordance.f025_s66": 0.945949,
-        "caller_site_agreement_rate": 0.449787,
-        "caller_genotype_concordance": 0.9853,
-        "caller_shared_units": 14762
+        "call_retention.f050_s65": 0.640281,
+        "genotype_concordance.f050_s65": 0.97797,
+        "call_retention.f050_s66": 0.639356,
+        "genotype_concordance.f050_s66": 0.979867,
+        "call_retention.f025_s65": 0.386735,
+        "genotype_concordance.f025_s65": 0.948181,
+        "call_retention.f025_s66": 0.387197,
+        "genotype_concordance.f025_s66": 0.945058,
+        "caller_site_agreement_rate": 0.450705,
+        "caller_genotype_concordance": 0.983927,
+        "caller_shared_units": 14807
       }
     },
     {
@@ -867,16 +937,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.914619,
-        "genotype_concordance.f050_s65": 0.931001,
-        "call_retention.f050_s66": 0.927347,
-        "genotype_concordance.f050_s66": 0.928708,
-        "call_retention.f025_s65": 0.803606,
-        "genotype_concordance.f025_s65": 0.947866,
-        "call_retention.f025_s66": 0.815627,
-        "genotype_concordance.f025_s66": 0.946467,
-        "caller_site_agreement_rate": 0.856822,
+        "call_retention.f050_s65": 0.914796,
+        "genotype_concordance.f050_s65": 0.930821,
+        "call_retention.f050_s66": 0.928054,
+        "genotype_concordance.f050_s66": 0.928,
+        "call_retention.f025_s65": 0.803783,
+        "genotype_concordance.f025_s65": 0.947658,
+        "call_retention.f025_s66": 0.81598,
+        "genotype_concordance.f025_s66": 0.946057,
+        "caller_site_agreement_rate": 0.85972,
         "caller_genotype_concordance": 0.903897,
         "caller_shared_units": 5338
       }
@@ -887,25 +959,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.792208,
-        "genotype_concordance.f050_s65": 0.983607,
-        "call_retention.f050_s66": 0.753247,
-        "genotype_concordance.f050_s66": 0.931034,
-        "call_retention.f025_s65": 0.532468,
-        "genotype_concordance.f025_s65": 0.97561,
-        "call_retention.f025_s66": 0.584416,
-        "genotype_concordance.f025_s66": 0.955556,
-        "caller_site_agreement_rate": 0.44086,
-        "caller_genotype_concordance": 0.926829,
-        "caller_shared_units": 41,
+        "call_retention.f050_s65": 0.802469,
+        "genotype_concordance.f050_s65": 0.984615,
+        "call_retention.f050_s66": 0.765432,
+        "genotype_concordance.f050_s66": 0.935484,
+        "call_retention.f025_s65": 0.518519,
+        "genotype_concordance.f025_s65": 0.97619,
+        "call_retention.f025_s66": 0.567901,
+        "genotype_concordance.f025_s66": 0.956522,
+        "caller_site_agreement_rate": 0.4375,
+        "caller_genotype_concordance": 0.904762,
+        "caller_shared_units": 42,
         "reference_sample_illumina_non_reference_records_per_mb": 1572.232,
         "reference_sample_illumina_heterozygous_fraction": 0.980769,
         "gs_panel_bases": 33074,
@@ -927,18 +1001,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.722222,
+        "call_retention.f050_s65": 0.702703,
         "genotype_concordance.f050_s65": 1.0,
-        "call_retention.f050_s66": 0.805556,
-        "genotype_concordance.f050_s66": 0.965517,
-        "call_retention.f025_s65": 0.472222,
+        "call_retention.f050_s66": 0.810811,
+        "genotype_concordance.f050_s66": 0.966667,
+        "call_retention.f025_s65": 0.459459,
         "genotype_concordance.f025_s65": 1.0,
-        "call_retention.f025_s66": 0.416667,
+        "call_retention.f025_s66": 0.432432,
         "genotype_concordance.f025_s66": 1.0,
-        "caller_site_agreement_rate": 0.282051,
-        "caller_genotype_concordance": 0.909091,
-        "caller_shared_units": 11
+        "caller_site_agreement_rate": 0.307692,
+        "caller_genotype_concordance": 0.916667,
+        "caller_shared_units": 12
       }
     },
     {
@@ -952,18 +1028,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.717949,
+        "call_retention.f050_s65": 0.722892,
         "genotype_concordance.f050_s65": 1.0,
-        "call_retention.f050_s66": 0.74359,
-        "genotype_concordance.f050_s66": 0.982759,
-        "call_retention.f025_s65": 0.410256,
+        "call_retention.f050_s66": 0.759036,
+        "genotype_concordance.f050_s66": 0.984127,
+        "call_retention.f025_s65": 0.39759,
         "genotype_concordance.f025_s65": 1.0,
-        "call_retention.f025_s66": 0.410256,
+        "call_retention.f025_s66": 0.409639,
         "genotype_concordance.f025_s66": 1.0,
-        "caller_site_agreement_rate": 0.266667,
-        "caller_genotype_concordance": 0.958333,
-        "caller_shared_units": 24
+        "caller_site_agreement_rate": 0.276596,
+        "caller_genotype_concordance": 0.923077,
+        "caller_shared_units": 26
       }
     },
     {
@@ -977,6 +1055,8 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.885714,
         "genotype_concordance.f050_s65": 0.967742,
@@ -986,7 +1066,7 @@
         "genotype_concordance.f025_s65": 0.961538,
         "call_retention.f025_s66": 0.8,
         "genotype_concordance.f025_s66": 0.928571,
-        "caller_site_agreement_rate": 0.666667,
+        "caller_site_agreement_rate": 0.682927,
         "caller_genotype_concordance": 0.892857,
         "caller_shared_units": 28
       }
@@ -997,13 +1077,15 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.550633,
         "genotype_concordance.f050_s65": 0.850575,
@@ -1037,18 +1119,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.543478,
+        "call_retention.f050_s65": 0.540541,
         "genotype_concordance.f050_s65": 0.96,
-        "call_retention.f050_s66": 0.586957,
-        "genotype_concordance.f050_s66": 0.953704,
-        "call_retention.f025_s65": 0.233696,
+        "call_retention.f050_s66": 0.589189,
+        "genotype_concordance.f050_s66": 0.944954,
+        "call_retention.f025_s65": 0.232432,
         "genotype_concordance.f025_s65": 0.906977,
-        "call_retention.f025_s66": 0.25,
+        "call_retention.f025_s66": 0.248649,
         "genotype_concordance.f025_s66": 0.913043,
-        "caller_site_agreement_rate": 0.425197,
-        "caller_genotype_concordance": 0.648148,
-        "caller_shared_units": 108
+        "caller_site_agreement_rate": 0.429134,
+        "caller_genotype_concordance": 0.642202,
+        "caller_shared_units": 109
       }
     },
     {
@@ -1062,18 +1146,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.576923,
+        "call_retention.f050_s65": 0.573248,
         "genotype_concordance.f050_s65": 0.677778,
-        "call_retention.f050_s66": 0.474359,
-        "genotype_concordance.f050_s66": 0.783784,
-        "call_retention.f025_s65": 0.301282,
+        "call_retention.f050_s66": 0.477707,
+        "genotype_concordance.f050_s66": 0.773333,
+        "call_retention.f025_s65": 0.299363,
         "genotype_concordance.f025_s65": 0.553191,
-        "call_retention.f025_s66": 0.115385,
+        "call_retention.f025_s66": 0.11465,
         "genotype_concordance.f025_s66": 0.444444,
-        "caller_site_agreement_rate": 0.378788,
-        "caller_genotype_concordance": 0.95,
-        "caller_shared_units": 100
+        "caller_site_agreement_rate": 0.381132,
+        "caller_genotype_concordance": 0.940594,
+        "caller_shared_units": 101
       }
     },
     {
@@ -1087,6 +1173,8 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.534884,
         "genotype_concordance.f050_s65": 0.994565,
@@ -1096,7 +1184,7 @@
         "genotype_concordance.f025_s65": 1.0,
         "call_retention.f025_s66": 0.252907,
         "genotype_concordance.f025_s66": 1.0,
-        "caller_site_agreement_rate": 0.446097,
+        "caller_site_agreement_rate": 0.446927,
         "caller_genotype_concordance": 0.8375,
         "caller_shared_units": 240
       }
@@ -1107,23 +1195,25 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.709902,
-        "genotype_concordance.f050_s65": 0.915521,
-        "call_retention.f050_s66": 0.677824,
-        "genotype_concordance.f050_s66": 0.917695,
-        "call_retention.f025_s65": 0.408647,
+        "call_retention.f050_s65": 0.709318,
+        "genotype_concordance.f050_s65": 0.915686,
+        "call_retention.f050_s66": 0.680111,
+        "genotype_concordance.f050_s66": 0.916155,
+        "call_retention.f025_s65": 0.40751,
         "genotype_concordance.f025_s65": 0.897611,
-        "call_retention.f025_s66": 0.419805,
+        "call_retention.f025_s66": 0.418637,
         "genotype_concordance.f025_s66": 0.873754,
-        "caller_site_agreement_rate": 0.583333,
+        "caller_site_agreement_rate": 0.582105,
         "caller_genotype_concordance": 0.9566,
         "caller_shared_units": 553,
         "reference_sample_illumina_non_reference_records_per_mb": 196.871,
@@ -1147,6 +1237,8 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.647059,
         "genotype_concordance.f050_s65": 0.937063,
@@ -1172,16 +1264,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.606965,
-        "genotype_concordance.f050_s65": 0.807377,
-        "call_retention.f050_s66": 0.5199,
-        "genotype_concordance.f050_s66": 0.813397,
-        "call_retention.f025_s65": 0.325871,
+        "call_retention.f050_s65": 0.606436,
+        "genotype_concordance.f050_s65": 0.808163,
+        "call_retention.f050_s66": 0.522277,
+        "genotype_concordance.f050_s66": 0.815166,
+        "call_retention.f025_s65": 0.324257,
         "genotype_concordance.f025_s65": 0.70229,
-        "call_retention.f025_s66": 0.251244,
+        "call_retention.f025_s66": 0.25,
         "genotype_concordance.f025_s66": 0.60396,
-        "caller_site_agreement_rate": 0.418149,
+        "caller_site_agreement_rate": 0.416667,
         "caller_genotype_concordance": 0.92766,
         "caller_shared_units": 235
       }
@@ -1197,11 +1291,13 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.761194,
         "genotype_concordance.f050_s65": 0.987745,
-        "call_retention.f050_s66": 0.798507,
-        "genotype_concordance.f050_s66": 0.978972,
+        "call_retention.f050_s66": 0.800373,
+        "genotype_concordance.f050_s66": 0.97669,
         "call_retention.f025_s65": 0.490672,
         "genotype_concordance.f025_s65": 0.996198,
         "call_retention.f025_s66": 0.570896,
@@ -1217,25 +1313,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.814159,
-        "genotype_concordance.f050_s65": 0.932405,
-        "call_retention.f050_s66": 0.80365,
-        "genotype_concordance.f050_s66": 0.927047,
-        "call_retention.f025_s65": 0.639104,
+        "call_retention.f050_s65": 0.81414,
+        "genotype_concordance.f050_s65": 0.932497,
+        "call_retention.f050_s66": 0.803645,
+        "genotype_concordance.f050_s66": 0.927148,
+        "call_retention.f025_s65": 0.638221,
         "genotype_concordance.f025_s65": 0.919515,
-        "call_retention.f025_s66": 0.633573,
-        "genotype_concordance.f025_s66": 0.930598,
-        "caller_site_agreement_rate": 0.703721,
-        "caller_genotype_concordance": 0.962088,
-        "caller_shared_units": 3007,
+        "call_retention.f025_s66": 0.632974,
+        "genotype_concordance.f025_s66": 0.930628,
+        "caller_site_agreement_rate": 0.704094,
+        "caller_genotype_concordance": 0.962126,
+        "caller_shared_units": 3010,
         "reference_sample_illumina_non_reference_records_per_mb": 187.292,
         "reference_sample_illumina_heterozygous_fraction": 0.982315,
         "gs_panel_bases": 3321020,
@@ -1257,18 +1355,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.827109,
-        "genotype_concordance.f050_s65": 0.928094,
-        "call_retention.f050_s66": 0.821577,
+        "call_retention.f050_s65": 0.827586,
+        "genotype_concordance.f050_s65": 0.928333,
+        "call_retention.f050_s66": 0.81931,
         "genotype_concordance.f050_s66": 0.927609,
-        "call_retention.f025_s65": 0.659751,
-        "genotype_concordance.f025_s65": 0.907757,
-        "call_retention.f025_s66": 0.625173,
+        "call_retention.f025_s65": 0.66069,
+        "genotype_concordance.f025_s65": 0.906054,
+        "call_retention.f025_s66": 0.623448,
         "genotype_concordance.f025_s66": 0.904867,
-        "caller_site_agreement_rate": 0.594839,
-        "caller_genotype_concordance": 0.863341,
-        "caller_shared_units": 461
+        "caller_site_agreement_rate": 0.595361,
+        "caller_genotype_concordance": 0.863636,
+        "caller_shared_units": 462
       }
     },
     {
@@ -1282,18 +1382,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.604884,
-        "genotype_concordance.f050_s65": 0.898551,
-        "call_retention.f050_s66": 0.564809,
-        "genotype_concordance.f050_s66": 0.880266,
-        "call_retention.f025_s65": 0.335629,
-        "genotype_concordance.f025_s65": 0.759328,
-        "call_retention.f025_s66": 0.314966,
-        "genotype_concordance.f025_s66": 0.735586,
-        "caller_site_agreement_rate": 0.421699,
-        "caller_genotype_concordance": 0.910361,
-        "caller_shared_units": 859
+        "call_retention.f050_s65": 0.605985,
+        "genotype_concordance.f050_s65": 0.899177,
+        "call_retention.f050_s66": 0.564838,
+        "genotype_concordance.f050_s66": 0.880795,
+        "call_retention.f025_s65": 0.335411,
+        "genotype_concordance.f025_s65": 0.758364,
+        "call_retention.f025_s66": 0.314214,
+        "genotype_concordance.f025_s66": 0.736111,
+        "caller_site_agreement_rate": 0.423039,
+        "caller_genotype_concordance": 0.910776,
+        "caller_shared_units": 863
       }
     },
     {
@@ -1307,6 +1409,8 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.93946,
         "genotype_concordance.f050_s65": 0.944099,
@@ -1327,25 +1431,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.675871,
-        "genotype_concordance.f050_s65": 0.959846,
-        "call_retention.f050_s66": 0.672794,
-        "genotype_concordance.f050_s66": 0.958548,
-        "call_retention.f025_s65": 0.458522,
-        "genotype_concordance.f025_s65": 0.943995,
-        "call_retention.f025_s66": 0.461717,
-        "genotype_concordance.f025_s66": 0.940795,
-        "caller_site_agreement_rate": 0.543553,
-        "caller_genotype_concordance": 0.977567,
-        "caller_shared_units": 16449,
+        "call_retention.f050_s65": 0.676089,
+        "genotype_concordance.f050_s65": 0.959531,
+        "call_retention.f050_s66": 0.672896,
+        "genotype_concordance.f050_s66": 0.958343,
+        "call_retention.f025_s65": 0.458664,
+        "genotype_concordance.f025_s65": 0.943528,
+        "call_retention.f025_s66": 0.461778,
+        "genotype_concordance.f025_s66": 0.940493,
+        "caller_site_agreement_rate": 0.543914,
+        "caller_genotype_concordance": 0.977037,
+        "caller_shared_units": 16461,
         "reference_sample_illumina_non_reference_records_per_mb": 1113.591,
         "reference_sample_illumina_heterozygous_fraction": 0.999546,
         "gs_panel_bases": 13847094,
@@ -1367,18 +1473,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.656767,
-        "genotype_concordance.f050_s65": 0.945736,
-        "call_retention.f050_s66": 0.654221,
-        "genotype_concordance.f050_s66": 0.955253,
-        "call_retention.f025_s65": 0.428935,
-        "genotype_concordance.f025_s65": 0.929773,
-        "call_retention.f025_s66": 0.445906,
-        "genotype_concordance.f025_s66": 0.926736,
-        "caller_site_agreement_rate": 0.306518,
-        "caller_genotype_concordance": 0.850606,
-        "caller_shared_units": 743
+        "call_retention.f050_s65": 0.657372,
+        "genotype_concordance.f050_s65": 0.945373,
+        "call_retention.f050_s66": 0.65526,
+        "genotype_concordance.f050_s66": 0.953578,
+        "call_retention.f025_s65": 0.429658,
+        "genotype_concordance.f025_s65": 0.926254,
+        "call_retention.f025_s66": 0.447402,
+        "genotype_concordance.f025_s66": 0.922568,
+        "caller_site_agreement_rate": 0.309563,
+        "caller_genotype_concordance": 0.846871,
+        "caller_shared_units": 751
       }
     },
     {
@@ -1392,18 +1500,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.564848,
-        "genotype_concordance.f050_s65": 0.974536,
-        "call_retention.f050_s66": 0.559707,
-        "genotype_concordance.f050_s66": 0.980042,
-        "call_retention.f025_s65": 0.285488,
-        "genotype_concordance.f025_s65": 0.929536,
-        "call_retention.f025_s66": 0.29226,
-        "genotype_concordance.f025_s66": 0.92711,
-        "caller_site_agreement_rate": 0.396836,
-        "caller_genotype_concordance": 0.976831,
-        "caller_shared_units": 9884
+        "call_retention.f050_s65": 0.565215,
+        "genotype_concordance.f050_s65": 0.974146,
+        "call_retention.f050_s66": 0.559982,
+        "genotype_concordance.f050_s66": 0.979635,
+        "call_retention.f025_s65": 0.285891,
+        "genotype_concordance.f025_s65": 0.928164,
+        "call_retention.f025_s66": 0.292654,
+        "genotype_concordance.f025_s66": 0.925945,
+        "caller_site_agreement_rate": 0.397368,
+        "caller_genotype_concordance": 0.975565,
+        "caller_shared_units": 9904
       }
     },
     {
@@ -1417,16 +1527,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.970305,
-        "genotype_concordance.f050_s65": 0.933692,
-        "call_retention.f050_s66": 0.97298,
-        "genotype_concordance.f050_s66": 0.924388,
-        "call_retention.f025_s65": 0.917469,
-        "genotype_concordance.f025_s65": 0.954075,
-        "call_retention.f025_s66": 0.915329,
-        "genotype_concordance.f025_s66": 0.95046,
-        "caller_site_agreement_rate": 0.939452,
+        "call_retention.f050_s65": 0.970572,
+        "genotype_concordance.f050_s65": 0.933434,
+        "call_retention.f050_s66": 0.973248,
+        "genotype_concordance.f050_s66": 0.924134,
+        "call_retention.f025_s65": 0.917603,
+        "genotype_concordance.f025_s65": 0.953936,
+        "call_retention.f025_s66": 0.915463,
+        "genotype_concordance.f025_s66": 0.950321,
+        "caller_site_agreement_rate": 0.941025,
         "caller_genotype_concordance": 0.965654,
         "caller_shared_units": 7308
       }
@@ -1437,25 +1549,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.71303,
-        "genotype_concordance.f050_s65": 0.993898,
-        "call_retention.f050_s66": 0.720793,
-        "genotype_concordance.f050_s66": 0.99568,
-        "call_retention.f025_s65": 0.470036,
-        "genotype_concordance.f025_s65": 0.981488,
-        "call_retention.f025_s66": 0.461122,
-        "genotype_concordance.f025_s66": 0.98261,
-        "caller_site_agreement_rate": 0.603836,
-        "caller_genotype_concordance": 0.994552,
-        "caller_shared_units": 17254,
+        "call_retention.f050_s65": 0.713122,
+        "genotype_concordance.f050_s65": 0.993902,
+        "call_retention.f050_s66": 0.720754,
+        "genotype_concordance.f050_s66": 0.995623,
+        "call_retention.f025_s65": 0.470114,
+        "genotype_concordance.f025_s65": 0.9815,
+        "call_retention.f025_s66": 0.461289,
+        "genotype_concordance.f025_s66": 0.982532,
+        "caller_site_agreement_rate": 0.604164,
+        "caller_genotype_concordance": 0.994323,
+        "caller_shared_units": 17264,
         "reference_sample_illumina_non_reference_records_per_mb": 20668.257,
         "reference_sample_illumina_heterozygous_fraction": 0.999866,
         "gs_panel_bases": 1081320,
@@ -1477,18 +1591,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.685268,
-        "genotype_concordance.f050_s65": 0.981542,
-        "call_retention.f050_s66": 0.707589,
-        "genotype_concordance.f050_s66": 0.984227,
-        "call_retention.f025_s65": 0.422619,
-        "genotype_concordance.f025_s65": 0.955986,
-        "call_retention.f025_s66": 0.466518,
-        "genotype_concordance.f025_s66": 0.950558,
-        "caller_site_agreement_rate": 0.212518,
-        "caller_genotype_concordance": 0.883562,
-        "caller_shared_units": 292
+        "call_retention.f050_s65": 0.686478,
+        "genotype_concordance.f050_s65": 0.980519,
+        "call_retention.f050_s66": 0.708767,
+        "genotype_concordance.f050_s66": 0.983229,
+        "call_retention.f025_s65": 0.423477,
+        "genotype_concordance.f025_s65": 0.954386,
+        "call_retention.f025_s66": 0.467311,
+        "genotype_concordance.f025_s66": 0.949126,
+        "caller_site_agreement_rate": 0.213974,
+        "caller_genotype_concordance": 0.880952,
+        "caller_shared_units": 294
       }
     },
     {
@@ -1502,18 +1618,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.707365,
-        "genotype_concordance.f050_s65": 0.995291,
-        "call_retention.f050_s66": 0.716248,
-        "genotype_concordance.f050_s66": 0.9969,
-        "call_retention.f025_s65": 0.460336,
-        "genotype_concordance.f025_s65": 0.982223,
-        "call_retention.f025_s66": 0.455114,
-        "genotype_concordance.f025_s66": 0.983103,
-        "caller_site_agreement_rate": 0.580109,
-        "caller_genotype_concordance": 0.998596,
-        "caller_shared_units": 17090
+        "call_retention.f050_s65": 0.707522,
+        "genotype_concordance.f050_s65": 0.995236,
+        "call_retention.f050_s66": 0.716235,
+        "genotype_concordance.f050_s66": 0.996844,
+        "call_retention.f025_s65": 0.46046,
+        "genotype_concordance.f025_s65": 0.982148,
+        "call_retention.f025_s66": 0.455282,
+        "genotype_concordance.f025_s66": 0.983028,
+        "caller_site_agreement_rate": 0.580398,
+        "caller_genotype_concordance": 0.998304,
+        "caller_shared_units": 17102
       }
     },
     {
@@ -1527,16 +1645,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.925847,
         "genotype_concordance.f050_s65": 0.913043,
-        "call_retention.f050_s66": 0.917373,
-        "genotype_concordance.f050_s66": 0.921478,
+        "call_retention.f050_s66": 0.919492,
+        "genotype_concordance.f050_s66": 0.919355,
         "call_retention.f025_s65": 0.834746,
         "genotype_concordance.f025_s65": 0.923858,
-        "call_retention.f025_s66": 0.786017,
-        "genotype_concordance.f025_s66": 0.913747,
-        "caller_site_agreement_rate": 0.934426,
+        "call_retention.f025_s66": 0.788136,
+        "genotype_concordance.f025_s66": 0.91129,
+        "caller_site_agreement_rate": 0.944099,
         "caller_genotype_concordance": 0.77193,
         "caller_shared_units": 456
       }
@@ -1547,25 +1667,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.783603,
-        "genotype_concordance.f050_s65": 0.996778,
-        "call_retention.f050_s66": 0.783752,
-        "genotype_concordance.f050_s66": 0.996778,
-        "call_retention.f025_s65": 0.601069,
-        "genotype_concordance.f025_s65": 0.988139,
-        "call_retention.f025_s66": 0.597653,
-        "genotype_concordance.f025_s66": 0.987823,
-        "caller_site_agreement_rate": 0.532198,
-        "caller_genotype_concordance": 0.995044,
-        "caller_shared_units": 4843,
+        "call_retention.f050_s65": 0.783183,
+        "genotype_concordance.f050_s65": 0.996592,
+        "call_retention.f050_s66": 0.783924,
+        "genotype_concordance.f050_s66": 0.996784,
+        "call_retention.f025_s65": 0.601513,
+        "genotype_concordance.f025_s65": 0.988166,
+        "call_retention.f025_s66": 0.598398,
+        "genotype_concordance.f025_s66": 0.987856,
+        "caller_site_agreement_rate": 0.533297,
+        "caller_genotype_concordance": 0.994436,
+        "caller_shared_units": 4853,
         "reference_sample_illumina_non_reference_records_per_mb": 29245.044,
         "reference_sample_illumina_heterozygous_fraction": 0.99986,
         "gs_panel_bases": 244862,
@@ -1587,18 +1709,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.734483,
-        "genotype_concordance.f050_s65": 0.978873,
-        "call_retention.f050_s66": 0.737931,
-        "genotype_concordance.f050_s66": 0.981308,
-        "call_retention.f025_s65": 0.560345,
-        "genotype_concordance.f025_s65": 0.956923,
-        "call_retention.f025_s66": 0.536207,
-        "genotype_concordance.f025_s66": 0.945338,
-        "caller_site_agreement_rate": 0.231908,
-        "caller_genotype_concordance": 0.907801,
-        "caller_shared_units": 141
+        "call_retention.f050_s65": 0.737201,
+        "genotype_concordance.f050_s65": 0.979167,
+        "call_retention.f050_s66": 0.738908,
+        "genotype_concordance.f050_s66": 0.979215,
+        "call_retention.f025_s65": 0.564846,
+        "genotype_concordance.f025_s65": 0.954683,
+        "call_retention.f025_s66": 0.537543,
+        "genotype_concordance.f025_s66": 0.946032,
+        "caller_site_agreement_rate": 0.23366,
+        "caller_genotype_concordance": 0.909091,
+        "caller_shared_units": 143
       }
     },
     {
@@ -1612,18 +1736,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.776977,
-        "genotype_concordance.f050_s65": 0.996969,
-        "call_retention.f050_s66": 0.777393,
-        "genotype_concordance.f050_s66": 0.997327,
-        "call_retention.f025_s65": 0.593295,
-        "genotype_concordance.f025_s65": 0.98926,
-        "call_retention.f025_s66": 0.588586,
-        "genotype_concordance.f025_s66": 0.987291,
-        "caller_site_agreement_rate": 0.509316,
-        "caller_genotype_concordance": 0.998161,
-        "caller_shared_units": 4893
+        "call_retention.f050_s65": 0.77678,
+        "genotype_concordance.f050_s65": 0.996797,
+        "call_retention.f050_s66": 0.777471,
+        "genotype_concordance.f050_s66": 0.997333,
+        "call_retention.f025_s65": 0.594057,
+        "genotype_concordance.f025_s65": 0.989065,
+        "call_retention.f025_s66": 0.589357,
+        "genotype_concordance.f025_s66": 0.987336,
+        "caller_site_agreement_rate": 0.510193,
+        "caller_genotype_concordance": 0.997554,
+        "caller_shared_units": 4905
       }
     },
     {
@@ -1637,16 +1763,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.989362,
         "genotype_concordance.f050_s65": 0.903226,
-        "call_retention.f050_s66": 0.989362,
-        "genotype_concordance.f050_s66": 0.892473,
+        "call_retention.f050_s66": 1.0,
+        "genotype_concordance.f050_s66": 0.882979,
         "call_retention.f025_s65": 0.946809,
         "genotype_concordance.f025_s65": 0.820225,
         "call_retention.f025_s66": 0.914894,
         "genotype_concordance.f025_s66": 0.860465,
-        "caller_site_agreement_rate": 0.90099,
+        "caller_site_agreement_rate": 0.928571,
         "caller_genotype_concordance": 0.692308,
         "caller_shared_units": 91
       }
@@ -1657,13 +1785,15 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.838196,
         "genotype_concordance.f050_s65": 0.906646,
@@ -1697,6 +1827,8 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.822917,
         "genotype_concordance.f050_s65": 0.911392,
@@ -1722,6 +1854,8 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.707865,
         "genotype_concordance.f050_s65": 0.888889,
@@ -1747,6 +1881,8 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.871412,
         "genotype_concordance.f050_s65": 0.913043,
@@ -1767,25 +1903,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.781129,
-        "genotype_concordance.f050_s65": 0.976733,
-        "call_retention.f050_s66": 0.740913,
+        "call_retention.f050_s65": 0.781214,
+        "genotype_concordance.f050_s65": 0.976744,
+        "call_retention.f050_s66": 0.740626,
         "genotype_concordance.f050_s66": 0.957203,
-        "call_retention.f025_s65": 0.589714,
+        "call_retention.f025_s65": 0.589486,
         "genotype_concordance.f025_s65": 0.965902,
-        "call_retention.f025_s66": 0.573859,
+        "call_retention.f025_s66": 0.573637,
         "genotype_concordance.f025_s66": 0.962938,
-        "caller_site_agreement_rate": 0.635868,
-        "caller_genotype_concordance": 0.981837,
-        "caller_shared_units": 1982,
+        "caller_site_agreement_rate": 0.636189,
+        "caller_genotype_concordance": 0.981846,
+        "caller_shared_units": 1983,
         "reference_sample_illumina_non_reference_records_per_mb": 617.46,
         "reference_sample_illumina_heterozygous_fraction": 0.997429,
         "gs_panel_bases": 1890000,
@@ -1807,18 +1945,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.795918,
-        "genotype_concordance.f050_s65": 0.961538,
-        "call_retention.f050_s66": 0.772109,
-        "genotype_concordance.f050_s66": 0.953744,
-        "call_retention.f025_s65": 0.617347,
-        "genotype_concordance.f025_s65": 0.953168,
-        "call_retention.f025_s66": 0.596939,
-        "genotype_concordance.f025_s66": 0.94302,
-        "caller_site_agreement_rate": 0.50546,
-        "caller_genotype_concordance": 0.882716,
-        "caller_shared_units": 324
+        "call_retention.f050_s65": 0.794915,
+        "genotype_concordance.f050_s65": 0.96162,
+        "call_retention.f050_s66": 0.772881,
+        "genotype_concordance.f050_s66": 0.951754,
+        "call_retention.f025_s65": 0.616949,
+        "genotype_concordance.f025_s65": 0.953297,
+        "call_retention.f025_s66": 0.59661,
+        "genotype_concordance.f025_s66": 0.940341,
+        "caller_site_agreement_rate": 0.50858,
+        "caller_genotype_concordance": 0.877301,
+        "caller_shared_units": 326
       }
     },
     {
@@ -1832,18 +1972,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.688854,
-        "genotype_concordance.f050_s65": 0.983521,
-        "call_retention.f050_s66": 0.622291,
-        "genotype_concordance.f050_s66": 0.970149,
-        "call_retention.f025_s65": 0.438596,
-        "genotype_concordance.f025_s65": 0.958824,
-        "call_retention.f025_s66": 0.407637,
-        "genotype_concordance.f025_s66": 0.950633,
-        "caller_site_agreement_rate": 0.487339,
-        "caller_genotype_concordance": 0.97615,
-        "caller_shared_units": 1174
+        "call_retention.f050_s65": 0.68882,
+        "genotype_concordance.f050_s65": 0.983545,
+        "call_retention.f050_s66": 0.62236,
+        "genotype_concordance.f050_s66": 0.969371,
+        "call_retention.f025_s65": 0.438434,
+        "genotype_concordance.f025_s65": 0.958872,
+        "call_retention.f025_s66": 0.407522,
+        "genotype_concordance.f025_s66": 0.949431,
+        "caller_site_agreement_rate": 0.488179,
+        "caller_genotype_concordance": 0.974511,
+        "caller_shared_units": 1177
       }
     },
     {
@@ -1857,6 +1999,8 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.932848,
         "genotype_concordance.f050_s65": 0.962706,
@@ -1866,7 +2010,7 @@
         "genotype_concordance.f025_s65": 0.967245,
         "call_retention.f025_s66": 0.845469,
         "genotype_concordance.f025_s66": 0.96555,
-        "caller_site_agreement_rate": 0.83914,
+        "caller_site_agreement_rate": 0.840386,
         "caller_genotype_concordance": 0.959364,
         "caller_shared_units": 1132
       }
@@ -1877,25 +2021,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.719887,
-        "genotype_concordance.f050_s65": 0.974236,
-        "call_retention.f050_s66": 0.71086,
-        "genotype_concordance.f050_s66": 0.975595,
-        "call_retention.f025_s65": 0.490339,
-        "genotype_concordance.f025_s65": 0.961168,
-        "call_retention.f025_s66": 0.473977,
-        "genotype_concordance.f025_s66": 0.96191,
-        "caller_site_agreement_rate": 0.598441,
-        "caller_genotype_concordance": 0.987075,
-        "caller_shared_units": 9903,
+        "call_retention.f050_s65": 0.719896,
+        "genotype_concordance.f050_s65": 0.974146,
+        "call_retention.f050_s66": 0.710942,
+        "genotype_concordance.f050_s66": 0.975506,
+        "call_retention.f025_s65": 0.490482,
+        "genotype_concordance.f025_s65": 0.961046,
+        "call_retention.f025_s66": 0.474055,
+        "genotype_concordance.f025_s66": 0.961779,
+        "caller_site_agreement_rate": 0.598683,
+        "caller_genotype_concordance": 0.986777,
+        "caller_shared_units": 9907,
         "reference_sample_illumina_non_reference_records_per_mb": 1907.051,
         "reference_sample_illumina_heterozygous_fraction": 0.999649,
         "gs_panel_bases": 5971000,
@@ -1917,18 +2063,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.724915,
-        "genotype_concordance.f050_s65": 0.962675,
-        "call_retention.f050_s66": 0.702931,
-        "genotype_concordance.f050_s66": 0.963913,
-        "call_retention.f025_s65": 0.507328,
-        "genotype_concordance.f025_s65": 0.938889,
-        "call_retention.f025_s66": 0.483653,
-        "genotype_concordance.f025_s66": 0.933566,
-        "caller_site_agreement_rate": 0.382829,
-        "caller_genotype_concordance": 0.864598,
-        "caller_shared_units": 709
+        "call_retention.f050_s65": 0.725788,
+        "genotype_concordance.f050_s65": 0.962762,
+        "call_retention.f050_s66": 0.702703,
+        "genotype_concordance.f050_s66": 0.963141,
+        "call_retention.f025_s65": 0.507883,
+        "genotype_concordance.f025_s65": 0.936807,
+        "call_retention.f025_s66": 0.483671,
+        "genotype_concordance.f025_s66": 0.93248,
+        "caller_site_agreement_rate": 0.383909,
+        "caller_genotype_concordance": 0.863572,
+        "caller_shared_units": 711
       }
     },
     {
@@ -1942,18 +2090,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.664819,
-        "genotype_concordance.f050_s65": 0.983785,
-        "call_retention.f050_s66": 0.651575,
-        "genotype_concordance.f050_s66": 0.985228,
-        "call_retention.f025_s65": 0.403018,
-        "genotype_concordance.f025_s65": 0.961406,
-        "call_retention.f025_s66": 0.385231,
-        "genotype_concordance.f025_s66": 0.959424,
-        "caller_site_agreement_rate": 0.506979,
-        "caller_genotype_concordance": 0.986815,
-        "caller_shared_units": 7736
+        "call_retention.f050_s65": 0.664973,
+        "genotype_concordance.f050_s65": 0.983681,
+        "call_retention.f050_s66": 0.651582,
+        "genotype_concordance.f050_s66": 0.985117,
+        "call_retention.f025_s65": 0.403294,
+        "genotype_concordance.f025_s65": 0.960878,
+        "call_retention.f025_s66": 0.385361,
+        "genotype_concordance.f025_s66": 0.959057,
+        "caller_site_agreement_rate": 0.50724,
+        "caller_genotype_concordance": 0.986308,
+        "caller_shared_units": 7742
       }
     },
     {
@@ -1967,16 +2117,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.963937,
         "genotype_concordance.f050_s65": 0.94021,
-        "call_retention.f050_s66": 0.965622,
-        "genotype_concordance.f050_s66": 0.942059,
+        "call_retention.f050_s66": 0.965959,
+        "genotype_concordance.f050_s66": 0.941731,
         "call_retention.f025_s65": 0.88271,
         "genotype_concordance.f025_s65": 0.953036,
         "call_retention.f025_s66": 0.868217,
         "genotype_concordance.f025_s66": 0.957298,
-        "caller_site_agreement_rate": 0.915632,
+        "caller_site_agreement_rate": 0.916799,
         "caller_genotype_concordance": 0.95758,
         "caller_shared_units": 2876
       }
@@ -1987,25 +2139,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.694489,
-        "genotype_concordance.f050_s65": 0.978113,
-        "call_retention.f050_s66": 0.696753,
-        "genotype_concordance.f050_s66": 0.978672,
-        "call_retention.f025_s65": 0.46762,
-        "genotype_concordance.f025_s65": 0.966204,
-        "call_retention.f025_s66": 0.468713,
-        "genotype_concordance.f025_s66": 0.963628,
-        "caller_site_agreement_rate": 0.591406,
-        "caller_genotype_concordance": 0.988519,
-        "caller_shared_units": 18291,
+        "call_retention.f050_s65": 0.694572,
+        "genotype_concordance.f050_s65": 0.977967,
+        "call_retention.f050_s66": 0.696947,
+        "genotype_concordance.f050_s66": 0.978583,
+        "call_retention.f025_s65": 0.467735,
+        "genotype_concordance.f025_s65": 0.965992,
+        "call_retention.f025_s66": 0.468865,
+        "genotype_concordance.f025_s66": 0.963502,
+        "caller_site_agreement_rate": 0.59175,
+        "caller_genotype_concordance": 0.98809,
+        "caller_shared_units": 18304,
         "reference_sample_illumina_non_reference_records_per_mb": 3136.211,
         "reference_sample_illumina_heterozygous_fraction": 0.99933,
         "gs_panel_bases": 7136000,
@@ -2027,18 +2181,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.677204,
-        "genotype_concordance.f050_s65": 0.964497,
-        "call_retention.f050_s66": 0.707035,
-        "genotype_concordance.f050_s66": 0.969773,
-        "call_retention.f025_s65": 0.445681,
-        "genotype_concordance.f025_s65": 0.943057,
-        "call_retention.f025_s66": 0.467498,
-        "genotype_concordance.f025_s66": 0.954286,
-        "caller_site_agreement_rate": 0.303863,
-        "caller_genotype_concordance": 0.90113,
-        "caller_shared_units": 708
+        "call_retention.f050_s65": 0.678477,
+        "genotype_concordance.f050_s65": 0.963446,
+        "call_retention.f050_s66": 0.708592,
+        "genotype_concordance.f050_s66": 0.96875,
+        "call_retention.f025_s65": 0.447298,
+        "genotype_concordance.f025_s65": 0.938614,
+        "call_retention.f025_s66": 0.469442,
+        "genotype_concordance.f025_s66": 0.95,
+        "caller_site_agreement_rate": 0.30733,
+        "caller_genotype_concordance": 0.894003,
+        "caller_shared_units": 717
       }
     },
     {
@@ -2052,18 +2208,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.652132,
-        "genotype_concordance.f050_s65": 0.988204,
-        "call_retention.f050_s66": 0.656342,
-        "genotype_concordance.f050_s66": 0.991302,
-        "call_retention.f025_s65": 0.400624,
-        "genotype_concordance.f025_s65": 0.968469,
-        "call_retention.f025_s66": 0.403701,
-        "genotype_concordance.f025_s66": 0.965901,
-        "caller_site_agreement_rate": 0.520043,
-        "caller_genotype_concordance": 0.991369,
-        "caller_shared_units": 15062
+        "call_retention.f050_s65": 0.652337,
+        "genotype_concordance.f050_s65": 0.987973,
+        "call_retention.f050_s66": 0.656705,
+        "genotype_concordance.f050_s66": 0.991132,
+        "call_retention.f025_s65": 0.400962,
+        "genotype_concordance.f025_s65": 0.967726,
+        "call_retention.f025_s66": 0.404117,
+        "genotype_concordance.f025_s66": 0.965276,
+        "caller_site_agreement_rate": 0.520425,
+        "caller_genotype_concordance": 0.990453,
+        "caller_shared_units": 15084
       }
     },
     {
@@ -2077,16 +2235,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.942611,
-        "genotype_concordance.f050_s65": 0.930233,
-        "call_retention.f050_s66": 0.948276,
-        "genotype_concordance.f050_s66": 0.921818,
+        "call_retention.f050_s65": 0.942857,
+        "genotype_concordance.f050_s65": 0.92999,
+        "call_retention.f050_s66": 0.948522,
+        "genotype_concordance.f050_s66": 0.921579,
         "call_retention.f025_s65": 0.863054,
         "genotype_concordance.f025_s65": 0.953196,
         "call_retention.f025_s66": 0.863547,
         "genotype_concordance.f025_s66": 0.954364,
-        "caller_site_agreement_rate": 0.916647,
+        "caller_site_agreement_rate": 0.919645,
         "caller_genotype_concordance": 0.9619,
         "caller_shared_units": 3937
       }
@@ -2097,25 +2257,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.686644,
-        "genotype_concordance.f050_s65": 0.976297,
-        "call_retention.f050_s66": 0.705026,
-        "genotype_concordance.f050_s66": 0.97868,
-        "call_retention.f025_s65": 0.469986,
-        "genotype_concordance.f025_s65": 0.960684,
-        "call_retention.f025_s66": 0.468645,
+        "call_retention.f050_s65": 0.686669,
+        "genotype_concordance.f050_s65": 0.976167,
+        "call_retention.f050_s66": 0.705044,
+        "genotype_concordance.f050_s66": 0.978553,
+        "call_retention.f025_s65": 0.469997,
+        "genotype_concordance.f025_s65": 0.9607,
+        "call_retention.f025_s66": 0.468466,
         "genotype_concordance.f025_s66": 0.969152,
-        "caller_site_agreement_rate": 0.583154,
-        "caller_genotype_concordance": 0.98769,
-        "caller_shared_units": 7311,
+        "caller_site_agreement_rate": 0.58322,
+        "caller_genotype_concordance": 0.987693,
+        "caller_shared_units": 7313,
         "reference_sample_illumina_non_reference_records_per_mb": 3008.989,
         "reference_sample_illumina_heterozygous_fraction": 0.99888,
         "gs_panel_bases": 2670000,
@@ -2137,16 +2299,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.671111,
-        "genotype_concordance.f050_s65": 0.981788,
-        "call_retention.f050_s66": 0.67,
+        "call_retention.f050_s65": 0.670732,
+        "genotype_concordance.f050_s65": 0.981818,
+        "call_retention.f050_s66": 0.668514,
         "genotype_concordance.f050_s66": 0.971808,
-        "call_retention.f025_s65": 0.434444,
-        "genotype_concordance.f025_s65": 0.969309,
-        "call_retention.f025_s66": 0.444444,
+        "call_retention.f025_s65": 0.43459,
+        "genotype_concordance.f025_s65": 0.969388,
+        "call_retention.f025_s66": 0.443459,
         "genotype_concordance.f025_s66": 0.9625,
-        "caller_site_agreement_rate": 0.269107,
+        "caller_site_agreement_rate": 0.268528,
         "caller_genotype_concordance": 0.896,
         "caller_shared_units": 250
       }
@@ -2162,18 +2326,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.64105,
-        "genotype_concordance.f050_s65": 0.985601,
-        "call_retention.f050_s66": 0.66117,
-        "genotype_concordance.f050_s66": 0.988078,
-        "call_retention.f025_s65": 0.398776,
-        "genotype_concordance.f025_s65": 0.963069,
-        "call_retention.f025_s66": 0.400539,
+        "call_retention.f050_s65": 0.641066,
+        "genotype_concordance.f050_s65": 0.985449,
+        "call_retention.f050_s66": 0.660966,
+        "genotype_concordance.f050_s66": 0.988082,
+        "call_retention.f025_s65": 0.398839,
+        "genotype_concordance.f025_s65": 0.963098,
+        "call_retention.f025_s66": 0.40029,
         "genotype_concordance.f025_s66": 0.971517,
-        "caller_site_agreement_rate": 0.509723,
-        "caller_genotype_concordance": 0.990885,
-        "caller_shared_units": 5924
+        "caller_site_agreement_rate": 0.50972,
+        "caller_genotype_concordance": 0.990888,
+        "caller_shared_units": 5926
       }
     },
     {
@@ -2187,11 +2353,13 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
         "call_retention.f050_s65": 0.936583,
         "genotype_concordance.f050_s65": 0.94232,
-        "call_retention.f050_s66": 0.934821,
-        "genotype_concordance.f050_s66": 0.938442,
+        "call_retention.f050_s66": 0.935408,
+        "genotype_concordance.f050_s66": 0.937853,
         "call_retention.f025_s65": 0.854375,
         "genotype_concordance.f025_s65": 0.956701,
         "call_retention.f025_s66": 0.841456,
@@ -2207,25 +2375,27 @@
       "split": "snp",
       "overall_status": "supported_with_caveat",
       "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, cross_platform_concordance, descriptive_stratification, downsampling_stability; no independent truth, so no accuracy claim",
+      "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "cross_platform_concordance",
         "descriptive_stratification",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.755965,
-        "genotype_concordance.f050_s65": 0.969134,
-        "call_retention.f050_s66": 0.749123,
-        "genotype_concordance.f050_s66": 0.968618,
-        "call_retention.f025_s65": 0.535965,
-        "genotype_concordance.f025_s65": 0.949918,
-        "call_retention.f025_s66": 0.541754,
-        "genotype_concordance.f025_s66": 0.943005,
-        "caller_site_agreement_rate": 0.440601,
-        "caller_genotype_concordance": 0.968027,
-        "caller_shared_units": 4191,
+        "call_retention.f050_s65": 0.756298,
+        "genotype_concordance.f050_s65": 0.968772,
+        "call_retention.f050_s66": 0.74895,
+        "genotype_concordance.f050_s66": 0.968232,
+        "call_retention.f025_s65": 0.536039,
+        "genotype_concordance.f025_s65": 0.949413,
+        "call_retention.f025_s66": 0.542687,
+        "genotype_concordance.f025_s66": 0.942618,
+        "caller_site_agreement_rate": 0.442132,
+        "caller_genotype_concordance": 0.966952,
+        "caller_shared_units": 4206,
         "reference_sample_illumina_non_reference_records_per_mb": 2434.074,
         "reference_sample_illumina_heterozygous_fraction": 0.99574,
         "gs_panel_bases": 1350000,
@@ -2247,18 +2417,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.743091,
-        "genotype_concordance.f050_s65": 0.915978,
-        "call_retention.f050_s66": 0.756397,
-        "genotype_concordance.f050_s66": 0.935047,
-        "call_retention.f025_s65": 0.532242,
-        "genotype_concordance.f025_s65": 0.886538,
-        "call_retention.f025_s66": 0.553736,
-        "genotype_concordance.f025_s66": 0.87061,
-        "caller_site_agreement_rate": 0.372512,
-        "caller_genotype_concordance": 0.73028,
-        "caller_shared_units": 393
+        "call_retention.f050_s65": 0.745935,
+        "genotype_concordance.f050_s65": 0.915531,
+        "call_retention.f050_s66": 0.757114,
+        "genotype_concordance.f050_s66": 0.932886,
+        "call_retention.f025_s65": 0.535569,
+        "genotype_concordance.f025_s65": 0.88425,
+        "call_retention.f025_s66": 0.554878,
+        "genotype_concordance.f025_s66": 0.869963,
+        "caller_site_agreement_rate": 0.376537,
+        "caller_genotype_concordance": 0.733668,
+        "caller_shared_units": 398
       }
     },
     {
@@ -2272,18 +2444,20 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.71009,
-        "genotype_concordance.f050_s65": 0.968452,
-        "call_retention.f050_s66": 0.706702,
-        "genotype_concordance.f050_s66": 0.977624,
-        "call_retention.f025_s65": 0.463855,
-        "genotype_concordance.f025_s65": 0.934659,
-        "call_retention.f025_s66": 0.474209,
-        "genotype_concordance.f025_s66": 0.934895,
-        "caller_site_agreement_rate": 0.367517,
-        "caller_genotype_concordance": 0.98371,
-        "caller_shared_units": 3315
+        "call_retention.f050_s65": 0.710965,
+        "genotype_concordance.f050_s65": 0.968099,
+        "call_retention.f050_s66": 0.706467,
+        "genotype_concordance.f050_s66": 0.977182,
+        "call_retention.f025_s65": 0.464667,
+        "genotype_concordance.f025_s65": 0.933844,
+        "call_retention.f025_s66": 0.475351,
+        "genotype_concordance.f025_s66": 0.934937,
+        "caller_site_agreement_rate": 0.369406,
+        "caller_genotype_concordance": 0.982309,
+        "caller_shared_units": 3335
       }
     },
     {
@@ -2297,16 +2471,18 @@
         "caller_concordance",
         "downsampling_stability"
       ],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {
-        "call_retention.f050_s65": 0.925275,
-        "genotype_concordance.f050_s65": 0.940618,
-        "call_retention.f050_s66": 0.919414,
-        "genotype_concordance.f050_s66": 0.921912,
-        "call_retention.f025_s65": 0.813919,
-        "genotype_concordance.f025_s65": 0.954095,
-        "call_retention.f025_s66": 0.813187,
-        "genotype_concordance.f025_s66": 0.926126,
-        "caller_site_agreement_rate": 0.820297,
+        "call_retention.f050_s65": 0.926007,
+        "genotype_concordance.f050_s65": 0.939873,
+        "call_retention.f050_s66": 0.920879,
+        "genotype_concordance.f050_s66": 0.920446,
+        "call_retention.f025_s65": 0.814652,
+        "genotype_concordance.f025_s65": 0.953237,
+        "call_retention.f025_s66": 0.814652,
+        "genotype_concordance.f025_s66": 0.92446,
+        "caller_site_agreement_rate": 0.822957,
         "caller_genotype_concordance": 0.853428,
         "caller_shared_units": 1269
       }
@@ -2319,6 +2495,8 @@
       "claim_allowed": "no claim; not evaluated",
       "overall_rationale": "callable.outside_window; downsampling.other_samples_and_genome (genome-wide GS panel descriptive counts exist in gs_snp_pass_51.genome_wide.descriptive)",
       "evidence_classes_evaluated": [],
+      "fails_benchmark_callable_rule": false,
+      "caveats": [],
       "key_metrics": {}
     }
   ],
@@ -2364,9 +2542,9 @@
     },
     {
       "scope": "window:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -2423,7 +2601,7 @@
     },
     {
       "scope": "window:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -2478,7 +2656,7 @@
     },
     {
       "scope": "window:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -2533,7 +2711,7 @@
     },
     {
       "scope": "window:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -2588,9 +2766,9 @@
     },
     {
       "scope": "core:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -2647,7 +2825,7 @@
     },
     {
       "scope": "core:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -2702,7 +2880,7 @@
     },
     {
       "scope": "core:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -2757,7 +2935,7 @@
     },
     {
       "scope": "core:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -2812,9 +2990,9 @@
     },
     {
       "scope": "difficult:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -2871,7 +3049,7 @@
     },
     {
       "scope": "difficult:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -2926,7 +3104,7 @@
     },
     {
       "scope": "difficult:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -2981,7 +3159,7 @@
     },
     {
       "scope": "difficult:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3036,9 +3214,9 @@
     },
     {
       "scope": "cohort_callable:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -3095,7 +3273,7 @@
     },
     {
       "scope": "cohort_callable:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3150,7 +3328,7 @@
     },
     {
       "scope": "cohort_callable:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3205,7 +3383,7 @@
     },
     {
       "scope": "cohort_callable:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3260,9 +3438,9 @@
     },
     {
       "scope": "cohort_non_callable:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -3319,7 +3497,7 @@
     },
     {
       "scope": "cohort_non_callable:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3374,7 +3552,7 @@
     },
     {
       "scope": "cohort_non_callable:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3429,7 +3607,7 @@
     },
     {
       "scope": "cohort_non_callable:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3484,9 +3662,9 @@
     },
     {
       "scope": "high_mappability:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -3543,7 +3721,7 @@
     },
     {
       "scope": "high_mappability:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3598,7 +3776,7 @@
     },
     {
       "scope": "high_mappability:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3653,7 +3831,7 @@
     },
     {
       "scope": "high_mappability:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3708,9 +3886,9 @@
     },
     {
       "scope": "low_mappability:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -3767,7 +3945,7 @@
     },
     {
       "scope": "low_mappability:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3822,7 +4000,7 @@
     },
     {
       "scope": "low_mappability:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3877,7 +4055,7 @@
     },
     {
       "scope": "low_mappability:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -3932,9 +4110,9 @@
     },
     {
       "scope": "repeat_windowmasker:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -3991,7 +4169,7 @@
     },
     {
       "scope": "repeat_windowmasker:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4046,7 +4224,7 @@
     },
     {
       "scope": "repeat_windowmasker:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4101,7 +4279,7 @@
     },
     {
       "scope": "repeat_windowmasker:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4156,9 +4334,9 @@
     },
     {
       "scope": "homopolymer_ge10:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -4215,7 +4393,7 @@
     },
     {
       "scope": "homopolymer_ge10:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4270,7 +4448,7 @@
     },
     {
       "scope": "homopolymer_ge10:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4325,7 +4503,7 @@
     },
     {
       "scope": "homopolymer_ge10:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4380,9 +4558,9 @@
     },
     {
       "scope": "median_depth_00_03:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -4439,7 +4617,7 @@
     },
     {
       "scope": "median_depth_00_03:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4494,7 +4672,7 @@
     },
     {
       "scope": "median_depth_00_03:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4549,7 +4727,7 @@
     },
     {
       "scope": "median_depth_00_03:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4604,9 +4782,9 @@
     },
     {
       "scope": "median_depth_03_06:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -4663,7 +4841,7 @@
     },
     {
       "scope": "median_depth_03_06:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4718,7 +4896,7 @@
     },
     {
       "scope": "median_depth_03_06:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4773,7 +4951,7 @@
     },
     {
       "scope": "median_depth_03_06:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4828,9 +5006,9 @@
     },
     {
       "scope": "median_depth_06_10:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -4887,7 +5065,7 @@
     },
     {
       "scope": "median_depth_06_10:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4942,7 +5120,7 @@
     },
     {
       "scope": "median_depth_06_10:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -4997,7 +5175,7 @@
     },
     {
       "scope": "median_depth_06_10:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5052,9 +5230,9 @@
     },
     {
       "scope": "median_depth_10_15:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -5111,7 +5289,7 @@
     },
     {
       "scope": "median_depth_10_15:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5166,7 +5344,7 @@
     },
     {
       "scope": "median_depth_10_15:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5221,7 +5399,7 @@
     },
     {
       "scope": "median_depth_10_15:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5276,9 +5454,9 @@
     },
     {
       "scope": "median_depth_15_25:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -5335,7 +5513,7 @@
     },
     {
       "scope": "median_depth_15_25:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5390,7 +5568,7 @@
     },
     {
       "scope": "median_depth_15_25:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5445,7 +5623,7 @@
     },
     {
       "scope": "median_depth_15_25:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5500,9 +5678,9 @@
     },
     {
       "scope": "median_depth_25_plus:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -5559,7 +5737,7 @@
     },
     {
       "scope": "median_depth_25_plus:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5614,7 +5792,7 @@
     },
     {
       "scope": "median_depth_25_plus:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5669,7 +5847,7 @@
     },
     {
       "scope": "median_depth_25_plus:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5724,9 +5902,9 @@
     },
     {
       "scope": "gc_00_25:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -5783,7 +5961,7 @@
     },
     {
       "scope": "gc_00_25:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5838,7 +6016,7 @@
     },
     {
       "scope": "gc_00_25:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5893,7 +6071,7 @@
     },
     {
       "scope": "gc_00_25:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -5948,9 +6126,9 @@
     },
     {
       "scope": "gc_25_30:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -6007,7 +6185,7 @@
     },
     {
       "scope": "gc_25_30:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6062,7 +6240,7 @@
     },
     {
       "scope": "gc_25_30:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6117,7 +6295,7 @@
     },
     {
       "scope": "gc_25_30:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6172,9 +6350,9 @@
     },
     {
       "scope": "gc_30_35:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -6231,7 +6409,7 @@
     },
     {
       "scope": "gc_30_35:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6286,7 +6464,7 @@
     },
     {
       "scope": "gc_30_35:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6341,7 +6519,7 @@
     },
     {
       "scope": "gc_30_35:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6396,9 +6574,9 @@
     },
     {
       "scope": "gc_35_40:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -6455,7 +6633,7 @@
     },
     {
       "scope": "gc_35_40:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6510,7 +6688,7 @@
     },
     {
       "scope": "gc_35_40:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6565,7 +6743,7 @@
     },
     {
       "scope": "gc_35_40:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6620,9 +6798,9 @@
     },
     {
       "scope": "gc_40_45:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -6679,7 +6857,7 @@
     },
     {
       "scope": "gc_40_45:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6734,7 +6912,7 @@
     },
     {
       "scope": "gc_40_45:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6789,7 +6967,7 @@
     },
     {
       "scope": "gc_40_45:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6844,9 +7022,9 @@
     },
     {
       "scope": "gc_45_100:snp",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "supported_with_caveat",
-      "claim_allowed": "agreement with another platform or method on the same sample; not accuracy",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
       "evidence": [
         "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
       ],
@@ -6903,7 +7081,7 @@
     },
     {
       "scope": "gc_45_100:indel",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -6958,7 +7136,7 @@
     },
     {
       "scope": "gc_45_100:het",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
@@ -7013,7 +7191,7 @@
     },
     {
       "scope": "gc_45_100:hom_alt",
-      "evidence_class": "cross_platform_concordance",
+      "evidence_class": "reference_sample_self_consistency",
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
