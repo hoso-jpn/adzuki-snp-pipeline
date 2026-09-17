@@ -102,7 +102,7 @@ by BioSample accession, never by cultivar name.
 | RefSeq `genomic_gaps.txt` (32 gaps) | usable | every gap lies inside an N run of the FASTA (checked) |
 | RefSeq lower-case bases (WindowMasker) | usable | NCBI README documents lower case as WindowMasker repeats |
 | RefSeq RepeatMasker output | unusable | not published for this assembly |
-| SRR11787767, Illumina NovaSeq WGS of SAMN14776547 | usable, cross-platform | same BioSample as the reference; not truth |
+| SRR11787767, Illumina NovaSeq WGS of SAMN14776547 | usable, reference-sample self-consistency | the same BioSample accession as the reference, on another platform; not truth |
 | SRR11787766, PacBio Sequel II of SAMN14776547 | not_evaluated | not independent of the reference; no pinned long-read caller |
 | SRR11787765, Hi-C of SAMN14776547 | unusable | proximity-ligation library |
 | PRJNA1138464 (327 WGS + 357 RAD, 684 BioSamples) | unusable for replicate or cross-method | one run per BioSample; no BioSample has both WGS and RAD |
@@ -114,8 +114,10 @@ by BioSample accession, never by cultivar name.
 **Truth candidates: none.**
 
 - **Technical replicates:** none that are identity-confirmed and usable.
-- **Cross-platform:** only the reference BioSample itself, which is
-  self-consistency evidence and not truth.
+- **Cross-platform callset concordance:** none. The only multi-platform
+  BioSample is the reference's own, and comparing its short reads against the
+  assembly built from its long reads is self-consistency within one BioSample,
+  not two callsets of one sample agreeing.
 
 ## 4. Synthetic truth fixture (Phase 3)
 
@@ -255,9 +257,8 @@ What this shows is descriptive only:
   low.
 - Strata with 1.5-2.5x the typical cohort depth carry 2.4-3.0x the record
   density, and 95-97% of their non-reference calls are heterozygous. Low
-  mappability shows the same pattern. In a self-pollinating crop this is the
-  signature expected of collapsed paralogs or mis-mapping, but that is an
-  interpretation and was not verified.
+  mappability shows the same pattern. Collapsed paralogs and mis-mapping are
+  candidate explanations; neither was tested here.
 - The mask removes *fewer* calls there, because depth is high. A DP/GQ mask
   therefore does not address this class of call.
 
@@ -365,27 +366,35 @@ and never as failed.
 - A **het** call in this plant's own reads can come from residual
   heterozygosity, collapsed paralogs or mis-mapping.
 
-| stratum | bases | non-ref records/Mb | het calls | hom-alt calls |
-|---|---|---|---|---|
-| window | 20,000,000 | 2,323 | 46,411 | 47 |
-| core | 8,262,745 | 1,877 | 15,506 | 0 |
-| difficult | 11,737,255 | 2,622 | 30,725 | 47 |
-| cohort callable | 15,142,446 | 2,169 | 32,830 | 10 |
-| low mappability | 4,556,550 | 1,926 | 8,752 | 24 |
-| median depth 10-15 | 13,847,094 | 1,114 | 15,413 | 7 |
-| median depth 15-25 | 1,081,320 | 20,668 | 22,346 | 3 |
-| median depth 25+ | 244,862 | 29,245 | 7,160 | 1 |
+Every stratum is also split by variant type, and the matrix of §11 quotes the
+split that matches its row, never a figure that mixes the two. SNP records
+below; the whole-callset figure is in brackets where it differs.
+
+| stratum | bases | SNP records/Mb | SNP het | SNP hom-alt | indel records/Mb |
+|---|---|---|---|---|---|
+| window | 20,000,000 | 2,145 | 42,870 | 33 | 178 |
+| core | 8,262,745 | 1,755 | 14,499 | 0 | 122 |
+| difficult | 11,737,255 | 2,420 | 28,371 | 33 | 202 |
+| cohort callable | 15,142,446 | 2,015 | 30,507 | 8 | 154 |
+| low mappability | 4,556,550 | 1,800 | 8,178 | 23 | 126 |
+| median depth 10-15 | 13,847,094 | 1,028 | 14,225 | 6 | 86 |
+| median depth 15-25 | 1,081,320 | 19,694 | 21,292 | 3 | 975 |
+| median depth 25+ | 244,862 | 27,391 | 6,706 | 1 | 1,854 |
+
+Over all 46,458 records of both types the window holds 46,411 het and 47
+hom-alt calls.
 
 Consensus disagreements are rare: 47 hom-alt calls in 20 Mb, none in core.
 99.9% of the reference plant's non-reference calls are heterozygous, and
 29,506 of its 46,411 hets (64%) fall in the 1.3 Mb whose *cohort* median depth
-is at least 15x. That is independent support, from a different sequencing run
-of a different plant, for the §7 reading: excess-depth regions of this
-reference attract heterozygous calls that do not behave like alleles. It
-remains an interpretation, not a verified cause.
+is at least 15x. The same concentration of heterozygous calls in this
+reference's excess-depth regions therefore appears in data from the reference's
+own BioSample, sequenced on a different platform and in a different run from
+the cohort's. Why it appears is not established here.
 
-The het density in core (1,877/Mb) is also far above what a selfed cultivar is
-expected to carry. So a heterozygous call is weak evidence even there.
+Het calls dominate in core as well: 1,877/Mb, with no hom-alt call at all.
+Together with their depth sensitivity (§8) and the callers' disagreement over
+them (§9), that makes a heterozygous call weak evidence even in core.
 
 Resources:
 
@@ -420,6 +429,10 @@ and introduces no numeric threshold:
   `not_evaluated` otherwise. No benchmark parameter downgrades a scope; a scope
   that fails the benchmark callable rule is flagged on its row instead.
 
+Each row also records `fails_benchmark_callable_rule` and any caveats, and a
+row supported by several classes carries a neutral combined claim, with each
+class's own claim on its cell.
+
 **Result.** 85 rows:
 
 - 84 `supported_with_caveat`;
@@ -435,29 +448,34 @@ and introduces no numeric threshold:
 `supported_with_caveat` is the *ceiling* this evidence can reach. It is not an
 endorsement, and within it the evidence differs widely:
 
+Each row's figures come from the split that row names: dosage rows carry no
+reference-sample or GS panel figure, because neither is split by dosage.
+
 | scope (window NC_068975.1:1-20000000) | half-depth retention | quarter-depth retention | caller agreement | reference plant's own Illumina calls | GS panel het share |
 |---|---|---|---|---|---|
-| core, hom-alt | 0.977 | 0.928 | 0.955 | 0 hom-alt calls in 8.26 Mb | |
-| core, het | 0.634 | 0.368 | 0.484 | 15,506 het calls (1,877/Mb) | 54.1% |
-| difficult, hom-alt | 0.915 | 0.801 | 0.850 | 47 hom-alt calls | |
-| difficult, het | 0.673 | 0.430 | 0.498 | 30,725 het calls | 72.8% |
-| cohort median depth 15-25x, SNP | 0.713 | 0.470 | 0.604 | 20,668 records/Mb, 99.99% het | 95.3% |
-| cohort median depth 25x+, SNP | 0.784 | 0.601 | 0.533 | 29,245 records/Mb, 99.99% het | 97.2% |
-| cohort non-callable, SNP | 0.773 | 0.574 | 0.590 | 2,735 records/Mb | 79.2% (flagged: fails the benchmark callable rule) |
-| indel, window | 0.717 | 0.501 | 0.373 | | not in GS panel |
+| core, hom-alt | 0.977 | 0.928 | 0.955 | not split by dosage | not split by dosage |
+| core, het | 0.634 | 0.368 | 0.484 | not split by dosage | not split by dosage |
+| core, SNP | 0.708 | 0.488 | 0.588 | 14,499 SNP records (1,755/Mb), 0 hom-alt | 54.1% |
+| core, indel | 0.641 | 0.384 | 0.153 | 1,007 indel records (122/Mb), 0 hom-alt | not in GS panel |
+| difficult, SNP | 0.712 | 0.489 | 0.567 | 28,404 SNP records (2,420/Mb), 33 hom-alt | 72.8% |
+| cohort median depth 15-25x, SNP | 0.713 | 0.470 | 0.604 | 19,694/Mb, 3 hom-alt | 95.3% |
+| cohort median depth 25x+, SNP | 0.784 | 0.601 | 0.533 | 27,391/Mb, 1 hom-alt | 97.2% |
+| cohort non-callable, SNP | 0.773 | 0.574 | 0.590 | 2,550/Mb | 79.2% (flagged: fails the benchmark callable rule) |
+| window, indel | 0.717 | 0.501 | 0.373 | 178/Mb | not in GS panel |
 
 **Conclusion for delivery**, stated as evidence and not as accuracy:
 
 - **Strongest evidence (caveated).** Homozygous-alternate SNP calls inside
   `core` (cohort-callable, high-mappability, non-repeat, non-homopolymer
   positions of the window) are stable under halving depth, agree across two
-  callers, and correspond to no consensus disagreement in the reference plant's
-  own reads.
-- **Weak evidence.** Heterozygous calls are depth-sensitive and split between
-  callers everywhere. The reference plant itself shows about 1,900 het calls per
-  Mb in core and 20,000-29,000 per Mb in excess-depth strata. A heterozygous
-  genotype in this cohort should not be delivered as an assured call in any
-  stratum.
+  callers, and fall in a region where the reference plant's own reads show no
+  consensus disagreement at all (0 hom-alt calls in core, SNP or indel).
+- **Weak evidence.** Heterozygous calls are depth-sensitive (retention 0.63 at
+  half depth in core) and the two callers disagree over half of them
+  (agreement 0.48 in core). The reference plant's own reads carry about 1,755
+  heterozygous SNP calls per Mb in core and 19,700-27,400 per Mb in
+  excess-depth strata. A heterozygous genotype in this cohort should not be
+  delivered as an assured call in any stratum.
 - **Indels** agree between callers far less than SNPs (0.373 against 0.575),
   and the GS panel does not deliver them.
 - **Outside the window** only sequence-derived strata and genome-wide GS panel
@@ -535,5 +553,6 @@ are identified by SHA256. Issue #45 and #64 evidence was read, never modified.
   errors, length and pairing.
 - The cross-platform reads are the leading records of the run, not a random
   sample.
-- The high heterozygous share in high-depth and low-mappability strata is
-  consistent with paralog collapse, but that was not verified.
+- Nothing here establishes why heterozygous calls concentrate in high-depth and
+  low-mappability strata. Paralog collapse and mis-mapping are candidate
+  explanations that this work did not test.

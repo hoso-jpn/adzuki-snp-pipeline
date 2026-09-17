@@ -6,7 +6,7 @@
       "region": "NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -28,8 +28,8 @@
         "caller_site_agreement_rate": 0.574845,
         "caller_genotype_concordance": 0.984731,
         "caller_shared_units": 42373,
-        "reference_sample_illumina_non_reference_records_per_mb": 2322.9,
-        "reference_sample_illumina_heterozygous_fraction": 0.998988,
+        "reference_sample_illumina_non_reference_records_per_mb": 2145.15,
+        "reference_sample_illumina_heterozygous_fraction": 0.999231,
         "gs_panel_bases": 20000000,
         "gs_panel_variant_records": 580258,
         "gs_panel_variant_records_per_mb": 29012.9,
@@ -43,11 +43,12 @@
       "region": "NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -62,7 +63,9 @@
         "genotype_concordance.f025_s66": 0.931864,
         "caller_site_agreement_rate": 0.372673,
         "caller_genotype_concordance": 0.855716,
-        "caller_shared_units": 2703
+        "caller_shared_units": 2703,
+        "reference_sample_illumina_non_reference_records_per_mb": 177.75,
+        "reference_sample_illumina_heterozygous_fraction": 0.996062
       }
     },
     {
@@ -70,7 +73,7 @@
       "region": "NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -97,7 +100,7 @@
       "region": "NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -124,7 +127,7 @@
       "region": "core within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -146,7 +149,7 @@
         "caller_site_agreement_rate": 0.588283,
         "caller_genotype_concordance": 0.990385,
         "caller_shared_units": 15393,
-        "reference_sample_illumina_non_reference_records_per_mb": 1876.616,
+        "reference_sample_illumina_non_reference_records_per_mb": 1754.744,
         "reference_sample_illumina_heterozygous_fraction": 1.0,
         "gs_panel_bases": 8262745,
         "gs_panel_variant_records": 284425,
@@ -161,11 +164,12 @@
       "region": "core within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -180,7 +184,9 @@
         "genotype_concordance.f025_s66": 0.970199,
         "caller_site_agreement_rate": 0.152589,
         "caller_genotype_concordance": 0.924107,
-        "caller_shared_units": 224
+        "caller_shared_units": 224,
+        "reference_sample_illumina_non_reference_records_per_mb": 121.872,
+        "reference_sample_illumina_heterozygous_fraction": 1.0
       }
     },
     {
@@ -188,7 +194,7 @@
       "region": "core within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -215,7 +221,7 @@
       "region": "core within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -242,7 +248,7 @@
       "region": "difficult within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -264,8 +270,8 @@
         "caller_site_agreement_rate": 0.56745,
         "caller_genotype_concordance": 0.981505,
         "caller_shared_units": 26980,
-        "reference_sample_illumina_non_reference_records_per_mb": 2621.737,
-        "reference_sample_illumina_heterozygous_fraction": 0.998473,
+        "reference_sample_illumina_non_reference_records_per_mb": 2419.987,
+        "reference_sample_illumina_heterozygous_fraction": 0.998838,
         "gs_panel_bases": 11737255,
         "gs_panel_variant_records": 295833,
         "gs_panel_variant_records_per_mb": 25204.616,
@@ -279,11 +285,12 @@
       "region": "difficult within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -298,7 +305,9 @@
         "genotype_concordance.f025_s66": 0.920866,
         "caller_site_agreement_rate": 0.429254,
         "caller_genotype_concordance": 0.84589,
-        "caller_shared_units": 2336
+        "caller_shared_units": 2336,
+        "reference_sample_illumina_non_reference_records_per_mb": 201.751,
+        "reference_sample_illumina_heterozygous_fraction": 0.994088
       }
     },
     {
@@ -306,7 +315,7 @@
       "region": "difficult within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -333,7 +342,7 @@
       "region": "difficult within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -360,7 +369,7 @@
       "region": "cohort_callable within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -382,8 +391,8 @@
         "caller_site_agreement_rate": 0.567987,
         "caller_genotype_concordance": 0.985588,
         "caller_shared_units": 29073,
-        "reference_sample_illumina_non_reference_records_per_mb": 2168.738,
-        "reference_sample_illumina_heterozygous_fraction": 0.999695,
+        "reference_sample_illumina_non_reference_records_per_mb": 2015.196,
+        "reference_sample_illumina_heterozygous_fraction": 0.999738,
         "gs_panel_bases": 15142446,
         "gs_panel_variant_records": 486418,
         "gs_panel_variant_records_per_mb": 32122.816,
@@ -397,11 +406,12 @@
       "region": "cohort_callable within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -416,7 +426,9 @@
         "genotype_concordance.f025_s66": 0.944192,
         "caller_site_agreement_rate": 0.24788,
         "caller_genotype_concordance": 0.883002,
-        "caller_shared_units": 906
+        "caller_shared_units": 906,
+        "reference_sample_illumina_non_reference_records_per_mb": 153.542,
+        "reference_sample_illumina_heterozygous_fraction": 0.99914
       }
     },
     {
@@ -424,7 +436,7 @@
       "region": "cohort_callable within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -451,7 +463,7 @@
       "region": "cohort_callable within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -478,7 +490,7 @@
       "region": "cohort_non_callable within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -502,8 +514,8 @@
         "caller_site_agreement_rate": 0.590429,
         "caller_genotype_concordance": 0.982857,
         "caller_shared_units": 13300,
-        "reference_sample_illumina_non_reference_records_per_mb": 2734.71,
-        "reference_sample_illumina_heterozygous_fraction": 0.997365,
+        "reference_sample_illumina_non_reference_records_per_mb": 2550.255,
+        "reference_sample_illumina_heterozygous_fraction": 0.997982,
         "gs_panel_bases": 4857554,
         "gs_panel_variant_records": 93840,
         "gs_panel_variant_records_per_mb": 19318.365,
@@ -517,11 +529,12 @@
       "region": "cohort_non_callable within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": true,
       "caveats": [
@@ -538,7 +551,9 @@
         "genotype_concordance.f025_s66": 0.914643,
         "caller_site_agreement_rate": 0.457968,
         "caller_genotype_concordance": 0.828412,
-        "caller_shared_units": 1253
+        "caller_shared_units": 1253,
+        "reference_sample_illumina_non_reference_records_per_mb": 184.455,
+        "reference_sample_illumina_heterozygous_fraction": 0.988839
       }
     },
     {
@@ -546,7 +561,7 @@
       "region": "cohort_non_callable within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -575,7 +590,7 @@
       "region": "cohort_non_callable within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -604,7 +619,7 @@
       "region": "high_mappability within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -626,8 +641,8 @@
         "caller_site_agreement_rate": 0.578053,
         "caller_genotype_concordance": 0.985198,
         "caller_shared_units": 34319,
-        "reference_sample_illumina_non_reference_records_per_mb": 2438.541,
-        "reference_sample_illumina_heterozygous_fraction": 0.999389,
+        "reference_sample_illumina_non_reference_records_per_mb": 2247.066,
+        "reference_sample_illumina_heterozygous_fraction": 0.999712,
         "gs_panel_bases": 15443250,
         "gs_panel_variant_records": 522015,
         "gs_panel_variant_records_per_mb": 33802.147,
@@ -641,11 +656,12 @@
       "region": "high_mappability within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -660,7 +676,9 @@
         "genotype_concordance.f025_s66": 0.93673,
         "caller_site_agreement_rate": 0.372806,
         "caller_genotype_concordance": 0.844069,
-        "caller_shared_units": 2251
+        "caller_shared_units": 2251,
+        "reference_sample_illumina_non_reference_records_per_mb": 191.475,
+        "reference_sample_illumina_heterozygous_fraction": 0.995604
       }
     },
     {
@@ -668,7 +686,7 @@
       "region": "high_mappability within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -695,7 +713,7 @@
       "region": "high_mappability within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -722,7 +740,7 @@
       "region": "low_mappability within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -744,8 +762,8 @@
         "caller_site_agreement_rate": 0.561607,
         "caller_genotype_concordance": 0.982741,
         "caller_shared_units": 8054,
-        "reference_sample_illumina_non_reference_records_per_mb": 1926.019,
-        "reference_sample_illumina_heterozygous_fraction": 0.997265,
+        "reference_sample_illumina_non_reference_records_per_mb": 1799.827,
+        "reference_sample_illumina_heterozygous_fraction": 0.997195,
         "gs_panel_bases": 4556550,
         "gs_panel_variant_records": 58243,
         "gs_panel_variant_records_per_mb": 12782.259,
@@ -759,11 +777,12 @@
       "region": "low_mappability within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -778,7 +797,9 @@
         "genotype_concordance.f025_s66": 0.903433,
         "caller_site_agreement_rate": 0.37967,
         "caller_genotype_concordance": 0.910755,
-        "caller_shared_units": 437
+        "caller_shared_units": 437,
+        "reference_sample_illumina_non_reference_records_per_mb": 126.192,
+        "reference_sample_illumina_heterozygous_fraction": 0.998261
       }
     },
     {
@@ -786,7 +807,7 @@
       "region": "low_mappability within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -813,7 +834,7 @@
       "region": "low_mappability within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -840,7 +861,7 @@
       "region": "repeat_windowmasker within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -862,8 +883,8 @@
         "caller_site_agreement_rate": 0.523995,
         "caller_genotype_concordance": 0.977672,
         "caller_shared_units": 18049,
-        "reference_sample_illumina_non_reference_records_per_mb": 2501.676,
-        "reference_sample_illumina_heterozygous_fraction": 0.998583,
+        "reference_sample_illumina_non_reference_records_per_mb": 2284.62,
+        "reference_sample_illumina_heterozygous_fraction": 0.999031,
         "gs_panel_bases": 9029947,
         "gs_panel_variant_records": 235415,
         "gs_panel_variant_records_per_mb": 26070.474,
@@ -877,11 +898,12 @@
       "region": "repeat_windowmasker within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -896,7 +918,9 @@
         "genotype_concordance.f025_s66": 0.915904,
         "caller_site_agreement_rate": 0.453974,
         "caller_genotype_concordance": 0.833969,
-        "caller_shared_units": 2096
+        "caller_shared_units": 2096,
+        "reference_sample_illumina_non_reference_records_per_mb": 217.056,
+        "reference_sample_illumina_heterozygous_fraction": 0.993878
       }
     },
     {
@@ -904,7 +928,7 @@
       "region": "repeat_windowmasker within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -931,7 +955,7 @@
       "region": "repeat_windowmasker within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -958,7 +982,7 @@
       "region": "homopolymer_ge10 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -980,8 +1004,8 @@
         "caller_site_agreement_rate": 0.4375,
         "caller_genotype_concordance": 0.904762,
         "caller_shared_units": 42,
-        "reference_sample_illumina_non_reference_records_per_mb": 1572.232,
-        "reference_sample_illumina_heterozygous_fraction": 0.980769,
+        "reference_sample_illumina_non_reference_records_per_mb": 1058.233,
+        "reference_sample_illumina_heterozygous_fraction": 0.971429,
         "gs_panel_bases": 33074,
         "gs_panel_variant_records": 948,
         "gs_panel_variant_records_per_mb": 28662.998,
@@ -995,11 +1019,12 @@
       "region": "homopolymer_ge10 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -1014,7 +1039,9 @@
         "genotype_concordance.f025_s66": 1.0,
         "caller_site_agreement_rate": 0.307692,
         "caller_genotype_concordance": 0.916667,
-        "caller_shared_units": 12
+        "caller_shared_units": 12,
+        "reference_sample_illumina_non_reference_records_per_mb": 513.999,
+        "reference_sample_illumina_heterozygous_fraction": 1.0
       }
     },
     {
@@ -1022,7 +1049,7 @@
       "region": "homopolymer_ge10 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1049,7 +1076,7 @@
       "region": "homopolymer_ge10 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1076,7 +1103,7 @@
       "region": "median_depth_00_03 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1098,8 +1125,8 @@
         "caller_site_agreement_rate": 0.423358,
         "caller_genotype_concordance": 0.974138,
         "caller_shared_units": 232,
-        "reference_sample_illumina_non_reference_records_per_mb": 36.325,
-        "reference_sample_illumina_heterozygous_fraction": 0.84375,
+        "reference_sample_illumina_non_reference_records_per_mb": 29.514,
+        "reference_sample_illumina_heterozygous_fraction": 0.884615,
         "gs_panel_bases": 880930,
         "gs_panel_variant_records": 2278,
         "gs_panel_variant_records_per_mb": 2585.904,
@@ -1113,11 +1140,12 @@
       "region": "median_depth_00_03 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -1132,7 +1160,9 @@
         "genotype_concordance.f025_s66": 0.913043,
         "caller_site_agreement_rate": 0.429134,
         "caller_genotype_concordance": 0.642202,
-        "caller_shared_units": 109
+        "caller_shared_units": 109,
+        "reference_sample_illumina_non_reference_records_per_mb": 6.811,
+        "reference_sample_illumina_heterozygous_fraction": 0.666667
       }
     },
     {
@@ -1140,7 +1170,7 @@
       "region": "median_depth_00_03 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1167,7 +1197,7 @@
       "region": "median_depth_00_03 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1194,7 +1224,7 @@
       "region": "median_depth_03_06 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1216,8 +1246,8 @@
         "caller_site_agreement_rate": 0.582105,
         "caller_genotype_concordance": 0.9566,
         "caller_shared_units": 553,
-        "reference_sample_illumina_non_reference_records_per_mb": 196.871,
-        "reference_sample_illumina_heterozygous_fraction": 0.878049,
+        "reference_sample_illumina_non_reference_records_per_mb": 176.064,
+        "reference_sample_illumina_heterozygous_fraction": 0.881818,
         "gs_panel_bases": 624774,
         "gs_panel_variant_records": 4656,
         "gs_panel_variant_records_per_mb": 7452.295,
@@ -1231,11 +1261,12 @@
       "region": "median_depth_03_06 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -1250,7 +1281,9 @@
         "genotype_concordance.f025_s66": 0.943396,
         "caller_site_agreement_rate": 0.521236,
         "caller_genotype_concordance": 0.822222,
-        "caller_shared_units": 135
+        "caller_shared_units": 135,
+        "reference_sample_illumina_non_reference_records_per_mb": 20.808,
+        "reference_sample_illumina_heterozygous_fraction": 0.846154
       }
     },
     {
@@ -1258,7 +1291,7 @@
       "region": "median_depth_03_06 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1285,7 +1318,7 @@
       "region": "median_depth_03_06 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1312,7 +1345,7 @@
       "region": "median_depth_06_10 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1334,8 +1367,8 @@
         "caller_site_agreement_rate": 0.704094,
         "caller_genotype_concordance": 0.962126,
         "caller_shared_units": 3010,
-        "reference_sample_illumina_non_reference_records_per_mb": 187.292,
-        "reference_sample_illumina_heterozygous_fraction": 0.982315,
+        "reference_sample_illumina_non_reference_records_per_mb": 160.794,
+        "reference_sample_illumina_heterozygous_fraction": 0.986891,
         "gs_panel_bases": 3321020,
         "gs_panel_variant_records": 65361,
         "gs_panel_variant_records_per_mb": 19681.002,
@@ -1349,11 +1382,12 @@
       "region": "median_depth_06_10 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -1368,7 +1402,9 @@
         "genotype_concordance.f025_s66": 0.904867,
         "caller_site_agreement_rate": 0.595361,
         "caller_genotype_concordance": 0.863636,
-        "caller_shared_units": 462
+        "caller_shared_units": 462,
+        "reference_sample_illumina_non_reference_records_per_mb": 26.498,
+        "reference_sample_illumina_heterozygous_fraction": 0.954545
       }
     },
     {
@@ -1376,7 +1412,7 @@
       "region": "median_depth_06_10 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1403,7 +1439,7 @@
       "region": "median_depth_06_10 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1430,7 +1466,7 @@
       "region": "median_depth_10_15 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1452,8 +1488,8 @@
         "caller_site_agreement_rate": 0.543914,
         "caller_genotype_concordance": 0.977037,
         "caller_shared_units": 16461,
-        "reference_sample_illumina_non_reference_records_per_mb": 1113.591,
-        "reference_sample_illumina_heterozygous_fraction": 0.999546,
+        "reference_sample_illumina_non_reference_records_per_mb": 1027.725,
+        "reference_sample_illumina_heterozygous_fraction": 0.999578,
         "gs_panel_bases": 13847094,
         "gs_panel_variant_records": 410141,
         "gs_panel_variant_records_per_mb": 29619.283,
@@ -1467,11 +1503,12 @@
       "region": "median_depth_10_15 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -1486,7 +1523,9 @@
         "genotype_concordance.f025_s66": 0.922568,
         "caller_site_agreement_rate": 0.309563,
         "caller_genotype_concordance": 0.846871,
-        "caller_shared_units": 751
+        "caller_shared_units": 751,
+        "reference_sample_illumina_non_reference_records_per_mb": 85.866,
+        "reference_sample_illumina_heterozygous_fraction": 0.999159
       }
     },
     {
@@ -1494,7 +1533,7 @@
       "region": "median_depth_10_15 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1521,7 +1560,7 @@
       "region": "median_depth_10_15 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1548,7 +1587,7 @@
       "region": "median_depth_15_25 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1570,8 +1609,8 @@
         "caller_site_agreement_rate": 0.604164,
         "caller_genotype_concordance": 0.994323,
         "caller_shared_units": 17264,
-        "reference_sample_illumina_non_reference_records_per_mb": 20668.257,
-        "reference_sample_illumina_heterozygous_fraction": 0.999866,
+        "reference_sample_illumina_non_reference_records_per_mb": 19693.523,
+        "reference_sample_illumina_heterozygous_fraction": 0.999859,
         "gs_panel_bases": 1081320,
         "gs_panel_variant_records": 76672,
         "gs_panel_variant_records_per_mb": 70905.93,
@@ -1585,11 +1624,12 @@
       "region": "median_depth_15_25 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -1604,7 +1644,9 @@
         "genotype_concordance.f025_s66": 0.949126,
         "caller_site_agreement_rate": 0.213974,
         "caller_genotype_concordance": 0.880952,
-        "caller_shared_units": 294
+        "caller_shared_units": 294,
+        "reference_sample_illumina_non_reference_records_per_mb": 974.735,
+        "reference_sample_illumina_heterozygous_fraction": 1.0
       }
     },
     {
@@ -1612,7 +1654,7 @@
       "region": "median_depth_15_25 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1639,7 +1681,7 @@
       "region": "median_depth_15_25 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1666,7 +1708,7 @@
       "region": "median_depth_25_plus within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1688,8 +1730,8 @@
         "caller_site_agreement_rate": 0.533297,
         "caller_genotype_concordance": 0.994436,
         "caller_shared_units": 4853,
-        "reference_sample_illumina_non_reference_records_per_mb": 29245.044,
-        "reference_sample_illumina_heterozygous_fraction": 0.99986,
+        "reference_sample_illumina_non_reference_records_per_mb": 27390.939,
+        "reference_sample_illumina_heterozygous_fraction": 0.999851,
         "gs_panel_bases": 244862,
         "gs_panel_variant_records": 21150,
         "gs_panel_variant_records_per_mb": 86375.183,
@@ -1703,11 +1745,12 @@
       "region": "median_depth_25_plus within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -1722,7 +1765,9 @@
         "genotype_concordance.f025_s66": 0.946032,
         "caller_site_agreement_rate": 0.23366,
         "caller_genotype_concordance": 0.909091,
-        "caller_shared_units": 143
+        "caller_shared_units": 143,
+        "reference_sample_illumina_non_reference_records_per_mb": 1854.106,
+        "reference_sample_illumina_heterozygous_fraction": 1.0
       }
     },
     {
@@ -1730,7 +1775,7 @@
       "region": "median_depth_25_plus within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1757,7 +1802,7 @@
       "region": "median_depth_25_plus within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1784,7 +1829,7 @@
       "region": "gc_00_25 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1806,8 +1851,8 @@
         "caller_site_agreement_rate": 0.620884,
         "caller_genotype_concordance": 0.95,
         "caller_shared_units": 660,
-        "reference_sample_illumina_non_reference_records_per_mb": 204.476,
-        "reference_sample_illumina_heterozygous_fraction": 0.99005,
+        "reference_sample_illumina_non_reference_records_per_mb": 174.975,
+        "reference_sample_illumina_heterozygous_fraction": 0.994186,
         "gs_panel_bases": 983000,
         "gs_panel_variant_records": 19798,
         "gs_panel_variant_records_per_mb": 20140.387,
@@ -1821,11 +1866,12 @@
       "region": "gc_00_25 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -1840,7 +1886,9 @@
         "genotype_concordance.f025_s66": 0.929889,
         "caller_site_agreement_rate": 0.704225,
         "caller_genotype_concordance": 0.85,
-        "caller_shared_units": 300
+        "caller_shared_units": 300,
+        "reference_sample_illumina_non_reference_records_per_mb": 29.502,
+        "reference_sample_illumina_heterozygous_fraction": 0.965517
       }
     },
     {
@@ -1848,7 +1896,7 @@
       "region": "gc_00_25 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1875,7 +1923,7 @@
       "region": "gc_00_25 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1902,7 +1950,7 @@
       "region": "gc_25_30 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1924,8 +1972,8 @@
         "caller_site_agreement_rate": 0.636189,
         "caller_genotype_concordance": 0.981846,
         "caller_shared_units": 1983,
-        "reference_sample_illumina_non_reference_records_per_mb": 617.46,
-        "reference_sample_illumina_heterozygous_fraction": 0.997429,
+        "reference_sample_illumina_non_reference_records_per_mb": 545.503,
+        "reference_sample_illumina_heterozygous_fraction": 0.99709,
         "gs_panel_bases": 1890000,
         "gs_panel_variant_records": 46027,
         "gs_panel_variant_records_per_mb": 24352.91,
@@ -1939,11 +1987,12 @@
       "region": "gc_25_30 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -1958,7 +2007,9 @@
         "genotype_concordance.f025_s66": 0.940341,
         "caller_site_agreement_rate": 0.50858,
         "caller_genotype_concordance": 0.877301,
-        "caller_shared_units": 326
+        "caller_shared_units": 326,
+        "reference_sample_illumina_non_reference_records_per_mb": 71.958,
+        "reference_sample_illumina_heterozygous_fraction": 1.0
       }
     },
     {
@@ -1966,7 +2017,7 @@
       "region": "gc_25_30 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -1993,7 +2044,7 @@
       "region": "gc_25_30 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2020,7 +2071,7 @@
       "region": "gc_30_35 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2042,8 +2093,8 @@
         "caller_site_agreement_rate": 0.598683,
         "caller_genotype_concordance": 0.986777,
         "caller_shared_units": 9907,
-        "reference_sample_illumina_non_reference_records_per_mb": 1907.051,
-        "reference_sample_illumina_heterozygous_fraction": 0.999649,
+        "reference_sample_illumina_non_reference_records_per_mb": 1737.732,
+        "reference_sample_illumina_heterozygous_fraction": 0.999904,
         "gs_panel_bases": 5971000,
         "gs_panel_variant_records": 163562,
         "gs_panel_variant_records_per_mb": 27392.732,
@@ -2057,11 +2108,12 @@
       "region": "gc_30_35 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -2076,7 +2128,9 @@
         "genotype_concordance.f025_s66": 0.93248,
         "caller_site_agreement_rate": 0.383909,
         "caller_genotype_concordance": 0.863572,
-        "caller_shared_units": 711
+        "caller_shared_units": 711,
+        "reference_sample_illumina_non_reference_records_per_mb": 169.318,
+        "reference_sample_illumina_heterozygous_fraction": 0.997033
       }
     },
     {
@@ -2084,7 +2138,7 @@
       "region": "gc_30_35 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2111,7 +2165,7 @@
       "region": "gc_30_35 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2138,7 +2192,7 @@
       "region": "gc_35_40 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2160,8 +2214,8 @@
         "caller_site_agreement_rate": 0.59175,
         "caller_genotype_concordance": 0.98809,
         "caller_shared_units": 18304,
-        "reference_sample_illumina_non_reference_records_per_mb": 3136.211,
-        "reference_sample_illumina_heterozygous_fraction": 0.99933,
+        "reference_sample_illumina_non_reference_records_per_mb": 2927.13,
+        "reference_sample_illumina_heterozygous_fraction": 0.999617,
         "gs_panel_bases": 7136000,
         "gs_panel_variant_records": 213916,
         "gs_panel_variant_records_per_mb": 29977.018,
@@ -2175,11 +2229,12 @@
       "region": "gc_35_40 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -2194,7 +2249,9 @@
         "genotype_concordance.f025_s66": 0.95,
         "caller_site_agreement_rate": 0.30733,
         "caller_genotype_concordance": 0.894003,
-        "caller_shared_units": 717
+        "caller_shared_units": 717,
+        "reference_sample_illumina_non_reference_records_per_mb": 209.081,
+        "reference_sample_illumina_heterozygous_fraction": 0.995308
       }
     },
     {
@@ -2202,7 +2259,7 @@
       "region": "gc_35_40 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2229,7 +2286,7 @@
       "region": "gc_35_40 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2256,7 +2313,7 @@
       "region": "gc_40_45 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2278,8 +2335,8 @@
         "caller_site_agreement_rate": 0.58322,
         "caller_genotype_concordance": 0.987693,
         "caller_shared_units": 7313,
-        "reference_sample_illumina_non_reference_records_per_mb": 3008.989,
-        "reference_sample_illumina_heterozygous_fraction": 0.99888,
+        "reference_sample_illumina_non_reference_records_per_mb": 2798.127,
+        "reference_sample_illumina_heterozygous_fraction": 0.998929,
         "gs_panel_bases": 2670000,
         "gs_panel_variant_records": 83502,
         "gs_panel_variant_records_per_mb": 31274.157,
@@ -2293,11 +2350,12 @@
       "region": "gc_40_45 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -2312,7 +2370,9 @@
         "genotype_concordance.f025_s66": 0.9625,
         "caller_site_agreement_rate": 0.268528,
         "caller_genotype_concordance": 0.896,
-        "caller_shared_units": 250
+        "caller_shared_units": 250,
+        "reference_sample_illumina_non_reference_records_per_mb": 210.861,
+        "reference_sample_illumina_heterozygous_fraction": 0.998224
       }
     },
     {
@@ -2320,7 +2380,7 @@
       "region": "gc_40_45 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2347,7 +2407,7 @@
       "region": "gc_40_45 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2374,7 +2434,7 @@
       "region": "gc_45_100 within NC_068975.1:1-20000000",
       "split": "snp",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, descriptive_stratification, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2396,8 +2456,8 @@
         "caller_site_agreement_rate": 0.442132,
         "caller_genotype_concordance": 0.966952,
         "caller_shared_units": 4206,
-        "reference_sample_illumina_non_reference_records_per_mb": 2434.074,
-        "reference_sample_illumina_heterozygous_fraction": 0.99574,
+        "reference_sample_illumina_non_reference_records_per_mb": 2196.296,
+        "reference_sample_illumina_heterozygous_fraction": 0.995953,
         "gs_panel_bases": 1350000,
         "gs_panel_variant_records": 53453,
         "gs_panel_variant_records_per_mb": 39594.815,
@@ -2411,11 +2471,12 @@
       "region": "gc_45_100 within NC_068975.1:1-20000000",
       "split": "indel",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
-      "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability, reference_sample_self_consistency; no accuracy claim; each class's own claim is on its cell",
+      "overall_rationale": "evaluated by caller_concordance, downsampling_stability, reference_sample_self_consistency; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
-        "downsampling_stability"
+        "downsampling_stability",
+        "reference_sample_self_consistency"
       ],
       "fails_benchmark_callable_rule": false,
       "caveats": [],
@@ -2430,7 +2491,9 @@
         "genotype_concordance.f025_s66": 0.869963,
         "caller_site_agreement_rate": 0.376537,
         "caller_genotype_concordance": 0.733668,
-        "caller_shared_units": 398
+        "caller_shared_units": 398,
+        "reference_sample_illumina_non_reference_records_per_mb": 237.778,
+        "reference_sample_illumina_heterozygous_fraction": 0.993769
       }
     },
     {
@@ -2438,7 +2501,7 @@
       "region": "gc_45_100 within NC_068975.1:1-20000000",
       "split": "het",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2465,7 +2528,7 @@
       "region": "gc_45_100 within NC_068975.1:1-20000000",
       "split": "hom_alt",
       "overall_status": "supported_with_caveat",
-      "claim_allowed": "agreement between callers on the same reads; not accuracy",
+      "claim_allowed": "combined caveated evidence from caller_concordance, downsampling_stability; no accuracy claim; each class's own claim is on its cell",
       "overall_rationale": "evaluated by caller_concordance, downsampling_stability; no independent truth, so no accuracy claim",
       "evidence_classes_evaluated": [
         "caller_concordance",
@@ -2602,10 +2665,12 @@
     {
       "scope": "window:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "window:indel",
@@ -2660,7 +2725,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "window:het",
@@ -2668,7 +2733,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "window:hom_alt",
@@ -2715,7 +2780,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "window:hom_alt",
@@ -2723,7 +2788,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "core:snp",
@@ -2826,10 +2891,12 @@
     {
       "scope": "core:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "core:indel",
@@ -2884,7 +2951,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "core:het",
@@ -2892,7 +2959,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "core:hom_alt",
@@ -2939,7 +3006,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "core:hom_alt",
@@ -2947,7 +3014,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "difficult:snp",
@@ -3050,10 +3117,12 @@
     {
       "scope": "difficult:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "difficult:indel",
@@ -3108,7 +3177,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "difficult:het",
@@ -3116,7 +3185,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "difficult:hom_alt",
@@ -3163,7 +3232,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "difficult:hom_alt",
@@ -3171,7 +3240,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "cohort_callable:snp",
@@ -3274,10 +3343,12 @@
     {
       "scope": "cohort_callable:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "cohort_callable:indel",
@@ -3332,7 +3403,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "cohort_callable:het",
@@ -3340,7 +3411,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "cohort_callable:hom_alt",
@@ -3387,7 +3458,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "cohort_callable:hom_alt",
@@ -3395,7 +3466,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "cohort_non_callable:snp",
@@ -3498,10 +3569,12 @@
     {
       "scope": "cohort_non_callable:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "cohort_non_callable:indel",
@@ -3556,7 +3629,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "cohort_non_callable:het",
@@ -3564,7 +3637,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "cohort_non_callable:hom_alt",
@@ -3611,7 +3684,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "cohort_non_callable:hom_alt",
@@ -3619,7 +3692,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "high_mappability:snp",
@@ -3722,10 +3795,12 @@
     {
       "scope": "high_mappability:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "high_mappability:indel",
@@ -3780,7 +3855,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "high_mappability:het",
@@ -3788,7 +3863,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "high_mappability:hom_alt",
@@ -3835,7 +3910,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "high_mappability:hom_alt",
@@ -3843,7 +3918,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "low_mappability:snp",
@@ -3946,10 +4021,12 @@
     {
       "scope": "low_mappability:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "low_mappability:indel",
@@ -4004,7 +4081,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "low_mappability:het",
@@ -4012,7 +4089,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "low_mappability:hom_alt",
@@ -4059,7 +4136,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "low_mappability:hom_alt",
@@ -4067,7 +4144,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "repeat_windowmasker:snp",
@@ -4170,10 +4247,12 @@
     {
       "scope": "repeat_windowmasker:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "repeat_windowmasker:indel",
@@ -4228,7 +4307,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "repeat_windowmasker:het",
@@ -4236,7 +4315,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "repeat_windowmasker:hom_alt",
@@ -4283,7 +4362,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "repeat_windowmasker:hom_alt",
@@ -4291,7 +4370,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "homopolymer_ge10:snp",
@@ -4394,10 +4473,12 @@
     {
       "scope": "homopolymer_ge10:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "homopolymer_ge10:indel",
@@ -4452,7 +4533,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "homopolymer_ge10:het",
@@ -4460,7 +4541,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "homopolymer_ge10:hom_alt",
@@ -4507,7 +4588,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "homopolymer_ge10:hom_alt",
@@ -4515,7 +4596,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_00_03:snp",
@@ -4618,10 +4699,12 @@
     {
       "scope": "median_depth_00_03:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "median_depth_00_03:indel",
@@ -4676,7 +4759,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_00_03:het",
@@ -4684,7 +4767,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_00_03:hom_alt",
@@ -4731,7 +4814,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_00_03:hom_alt",
@@ -4739,7 +4822,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_03_06:snp",
@@ -4842,10 +4925,12 @@
     {
       "scope": "median_depth_03_06:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "median_depth_03_06:indel",
@@ -4900,7 +4985,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_03_06:het",
@@ -4908,7 +4993,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_03_06:hom_alt",
@@ -4955,7 +5040,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_03_06:hom_alt",
@@ -4963,7 +5048,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_06_10:snp",
@@ -5066,10 +5151,12 @@
     {
       "scope": "median_depth_06_10:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "median_depth_06_10:indel",
@@ -5124,7 +5211,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_06_10:het",
@@ -5132,7 +5219,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_06_10:hom_alt",
@@ -5179,7 +5266,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_06_10:hom_alt",
@@ -5187,7 +5274,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_10_15:snp",
@@ -5290,10 +5377,12 @@
     {
       "scope": "median_depth_10_15:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "median_depth_10_15:indel",
@@ -5348,7 +5437,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_10_15:het",
@@ -5356,7 +5445,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_10_15:hom_alt",
@@ -5403,7 +5492,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_10_15:hom_alt",
@@ -5411,7 +5500,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_15_25:snp",
@@ -5514,10 +5603,12 @@
     {
       "scope": "median_depth_15_25:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "median_depth_15_25:indel",
@@ -5572,7 +5663,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_15_25:het",
@@ -5580,7 +5671,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_15_25:hom_alt",
@@ -5627,7 +5718,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_15_25:hom_alt",
@@ -5635,7 +5726,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_25_plus:snp",
@@ -5738,10 +5829,12 @@
     {
       "scope": "median_depth_25_plus:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "median_depth_25_plus:indel",
@@ -5796,7 +5889,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_25_plus:het",
@@ -5804,7 +5897,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "median_depth_25_plus:hom_alt",
@@ -5851,7 +5944,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "median_depth_25_plus:hom_alt",
@@ -5859,7 +5952,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_00_25:snp",
@@ -5962,10 +6055,12 @@
     {
       "scope": "gc_00_25:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "gc_00_25:indel",
@@ -6020,7 +6115,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_00_25:het",
@@ -6028,7 +6123,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_00_25:hom_alt",
@@ -6075,7 +6170,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_00_25:hom_alt",
@@ -6083,7 +6178,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_25_30:snp",
@@ -6186,10 +6281,12 @@
     {
       "scope": "gc_25_30:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "gc_25_30:indel",
@@ -6244,7 +6341,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_25_30:het",
@@ -6252,7 +6349,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_25_30:hom_alt",
@@ -6299,7 +6396,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_25_30:hom_alt",
@@ -6307,7 +6404,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_30_35:snp",
@@ -6410,10 +6507,12 @@
     {
       "scope": "gc_30_35:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "gc_30_35:indel",
@@ -6468,7 +6567,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_30_35:het",
@@ -6476,7 +6575,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_30_35:hom_alt",
@@ -6523,7 +6622,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_30_35:hom_alt",
@@ -6531,7 +6630,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_35_40:snp",
@@ -6634,10 +6733,12 @@
     {
       "scope": "gc_35_40:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "gc_35_40:indel",
@@ -6692,7 +6793,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_35_40:het",
@@ -6700,7 +6801,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_35_40:hom_alt",
@@ -6747,7 +6848,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_35_40:hom_alt",
@@ -6755,7 +6856,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_40_45:snp",
@@ -6858,10 +6959,12 @@
     {
       "scope": "gc_40_45:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "gc_40_45:indel",
@@ -6916,7 +7019,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_40_45:het",
@@ -6924,7 +7027,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_40_45:hom_alt",
@@ -6971,7 +7074,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_40_45:hom_alt",
@@ -6979,7 +7082,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_45_100:snp",
@@ -7082,10 +7185,12 @@
     {
       "scope": "gc_45_100:indel",
       "evidence_class": "reference_sample_self_consistency",
-      "status": "not_evaluated",
-      "claim_allowed": "no claim; not evaluated",
-      "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "status": "supported_with_caveat",
+      "claim_allowed": "where short reads of the reference's own BioSample disagree with the reference consensus; not truth, and not callset-to-callset cross-platform concordance",
+      "evidence": [
+        "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000"
+      ],
+      "rationale": "Illumina calls of the reference BioSample against its own PacBio-derived assembly"
     },
     {
       "scope": "gc_45_100:indel",
@@ -7140,7 +7245,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_45_100:het",
@@ -7148,7 +7253,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     },
     {
       "scope": "gc_45_100:hom_alt",
@@ -7195,7 +7300,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
+      "rationale": "the reference-sample records are stratified by region and variant type, not by genotype dosage"
     },
     {
       "scope": "gc_45_100:hom_alt",
@@ -7203,7 +7308,7 @@
       "status": "not_evaluated",
       "claim_allowed": "no claim; not evaluated",
       "evidence": [],
-      "rationale": "GS panel counts are per record, reported on the snp row"
+      "rationale": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists"
     }
   ]
 }
