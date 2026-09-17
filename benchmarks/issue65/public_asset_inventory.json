@@ -1,0 +1,383 @@
+{
+  "inventory_schema_version": 1,
+  "audited_at": "2026-09-15",
+  "reference": "GCF_016808095.1 (ASM1680809v1)",
+  "identity_rule": "An asset is tied to a biological sample only by INSDC BioSample accession. Cultivar or accession names are recorded as reported and are never used to infer that two assets come from the same plant.",
+  "searched_sources": [
+    {
+      "source": "NCBI genomes FTP, GCF_016808095.1_ASM1680809v1 directory",
+      "query": "all files; md5checksums.txt"
+    },
+    {
+      "source": "ENA Portal API read_run",
+      "query": "tax_tree(3914) (Vigna angularis): 1,047 runs, 19 studies, 937 samples"
+    },
+    {
+      "source": "ENA Portal API read_run",
+      "query": "PRJNA1138464: 684 runs"
+    },
+    {
+      "source": "ENA Portal API analysis",
+      "query": "tax_tree(3914): 64 analyses, all REFERENCE_ALIGNMENT (RNA-seq iRAP), no SEQUENCE_VARIATION"
+    },
+    {
+      "source": "EVA metadata API species/list",
+      "query": "313 assemblies listed; no Vigna angularis entry (Vigna unguiculata only)"
+    }
+  ],
+  "search_limitations": [
+    "journal supplementary data, institutional repositories and non-INSDC plant databases were not searched",
+    "an absent SEQUENCE_VARIATION analysis in ENA and an absent EVA species entry mean no truth set was found in those sources, not that none exists anywhere"
+  ],
+  "assets": [
+    {
+      "asset_id": "refseq_assembly",
+      "source": "NCBI RefSeq",
+      "accession": "GCF_016808095.1",
+      "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/016/808/095/GCF_016808095.1_ASM1680809v1/",
+      "organism": "Vigna angularis",
+      "sample_identity": {
+        "biosample": "SAMN14776547",
+        "bioproject": "PRJNA629451",
+        "reported_cultivar": "LongXiaoDou No.4"
+      },
+      "platform": "PacBio Sequel (assembly report: Canu v1.8, 193.34x)",
+      "assembly": "ASM1680809v1",
+      "coordinate_system": "defines the coordinate system; 36 sequences, 448,362,642 bp",
+      "version": "GCF_016808095.1",
+      "checksum": {
+        "available": true,
+        "kind": "md5 (md5checksums.txt)",
+        "local_sha256_fasta": "e9838db1b048b54b21534285aaf95eae64cb3019d85af270b44e20b3d545f383",
+        "local_sha256_fai": "c5db64484f1c2e8a14368ca68b51e3d4ce8a5afefd277b3780085bd9128ddde5"
+      },
+      "license": "INSDC/NCBI public data; NCBI states no restrictions of its own; no submitter licence stated",
+      "evidence_class": null,
+      "role": "reference",
+      "status": "usable",
+      "reason": "the pipeline's reference; every region asset below is derived from or checked against this exact FASTA"
+    },
+    {
+      "asset_id": "refseq_genomic_gaps",
+      "source": "NCBI RefSeq",
+      "accession": "GCF_016808095.1_ASM1680809v1_genomic_gaps.txt.gz",
+      "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/016/808/095/GCF_016808095.1_ASM1680809v1/GCF_016808095.1_ASM1680809v1_genomic_gaps.txt.gz",
+      "organism": "Vigna angularis",
+      "sample_identity": {
+        "biosample": "SAMN14776547"
+      },
+      "platform": null,
+      "assembly": "ASM1680809v1",
+      "coordinate_system": "1-based inclusive start/stop on the RefSeq sequence accessions; converted to BED by the region builder",
+      "version": "GCF_016808095.1",
+      "checksum": {
+        "available": true,
+        "kind": "md5",
+        "md5": "1c89eacc19274ed78a2d91739da41eb7",
+        "local_sha256": "7e507c4d74fd5f84b18c7421af9b5af441171ec06cf34ca6ef153fdaf979c1b1"
+      },
+      "license": "INSDC/NCBI public data",
+      "evidence_class": "descriptive_stratification",
+      "role": "region asset (assembly gaps)",
+      "status": "usable",
+      "reason": "32 gaps; every one lies inside an N run of the FASTA (checked by build_region_assets.py), so the annotation and the sequence share coordinates"
+    },
+    {
+      "asset_id": "refseq_windowmasker_softmask",
+      "source": "NCBI RefSeq",
+      "accession": "GCF_016808095.1_ASM1680809v1_genomic.fna (lower-case bases)",
+      "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/README.txt",
+      "organism": "Vigna angularis",
+      "sample_identity": {
+        "biosample": "SAMN14776547"
+      },
+      "platform": null,
+      "assembly": "ASM1680809v1",
+      "coordinate_system": "positions in the reference FASTA itself",
+      "version": "GCF_016808095.1",
+      "checksum": {
+        "available": true,
+        "kind": "carried by the FASTA checksum"
+      },
+      "license": "INSDC/NCBI public data",
+      "evidence_class": "descriptive_stratification",
+      "role": "region asset (repeat tag)",
+      "status": "usable",
+      "reason": "the NCBI genomes README states that repeats identified by WindowMasker are lower-cased in eukaryotic genomic FASTA; 162,429,013 bp (36.2%)"
+    },
+    {
+      "asset_id": "refseq_repeatmasker_output",
+      "source": "NCBI RefSeq",
+      "accession": "GCF_016808095.1_ASM1680809v1_rm.out.gz",
+      "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/016/808/095/GCF_016808095.1_ASM1680809v1/",
+      "organism": "Vigna angularis",
+      "sample_identity": null,
+      "platform": null,
+      "assembly": "ASM1680809v1",
+      "coordinate_system": null,
+      "version": null,
+      "checksum": {
+        "available": false
+      },
+      "license": null,
+      "evidence_class": "descriptive_stratification",
+      "role": "region asset (repeat family annotation)",
+      "status": "unusable",
+      "reason": "not published in the assembly directory (absent from md5checksums.txt); repeat-family strata are therefore not evaluated and no substitute from another organism is used"
+    },
+    {
+      "asset_id": "derived_sequence_assets",
+      "source": "this repository: benchmarks/issue65/build_region_assets.py and mappability.py",
+      "accession": null,
+      "url": null,
+      "organism": "Vigna angularis",
+      "sample_identity": {
+        "biosample": "SAMN14776547"
+      },
+      "platform": "reference sequence; self-alignment with the pipeline's pinned BWA-MEM2 image",
+      "assembly": "ASM1680809v1",
+      "coordinate_system": "BED 0-based half-open on the reference FASTA",
+      "version": "parameters fixed in docs/issue65_callable_region_quality_benchmark.md",
+      "checksum": {
+        "available": true,
+        "kind": "sha256 per BED in region_assets.json and mappability.json"
+      },
+      "license": "derived from public data",
+      "evidence_class": "descriptive_stratification",
+      "role": "region assets: N runs, homopolymer >= 10, 1 kb GC partition, 150 bp self-alignment mappability partition",
+      "status": "usable",
+      "reason": "computed from the exact reference; no human or other-organism mask"
+    },
+    {
+      "asset_id": "SRR11787767",
+      "source": "ENA / SRA",
+      "accession": "SRR11787767",
+      "url": "ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/067/SRR11787767/",
+      "organism": "Vigna angularis",
+      "sample_identity": {
+        "biosample": "SAMN14776547",
+        "bioproject": "PRJNA629451",
+        "reported_cultivar": "LongXiaoDou No.4",
+        "library_name": "1-ye-1"
+      },
+      "platform": "Illumina NovaSeq 6000, WGS, paired",
+      "assembly": null,
+      "coordinate_system": "reads (aligned by this benchmark to GCF_016808095.1)",
+      "version": "first public 2020-05-15",
+      "checksum": {
+        "available": true,
+        "kind": "md5 (whole files)",
+        "md5": [
+          "d561d1da40022df92b8b4fc269c0dff6",
+          "d3f05ef5338b86b35a15014b8ba6cfff"
+        ],
+        "note": "only a leading byte range was downloaded, so the published md5 cannot be checked; the downloaded bytes' sha256 is recorded instead"
+      },
+      "license": "INSDC public data; no submitter licence stated",
+      "evidence_class": "reference_sample_self_consistency",
+      "role": "short reads of the same BioSample as the reference, on another platform",
+      "status": "usable",
+      "reason": "the same BioSample accession as the assembly, so identity rests on the accession and not on a cultivar name. Aligning these reads to that assembly measures self-consistency between two platforms' data from one BioSample: it is neither truth nor callset-to-callset cross-platform concordance, because the comparator is the reference consensus sequence, which carries its own errors, and the plant's heterozygosity is unknown"
+    },
+    {
+      "asset_id": "SRR11787766",
+      "source": "ENA / SRA",
+      "accession": "SRR11787766",
+      "url": "ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/066/SRR11787766/",
+      "organism": "Vigna angularis",
+      "sample_identity": {
+        "biosample": "SAMN14776547",
+        "reported_cultivar": "LongXiaoDou No.4",
+        "library_name": "1-ye-2"
+      },
+      "platform": "PacBio Sequel II subreads, 65.7 Gb",
+      "assembly": null,
+      "coordinate_system": "reads",
+      "version": "first public 2020-05-15",
+      "checksum": {
+        "available": true,
+        "kind": "md5",
+        "md5": "55715d66281a8ce17bd5cada084aa462"
+      },
+      "license": "INSDC public data",
+      "evidence_class": "reference_sample_self_consistency",
+      "role": "long reads of the reference BioSample",
+      "status": "not_evaluated",
+      "reason": "not independent of the reference (the assembly is built from this BioSample's PacBio data, whether or not from this exact run), so it cannot be truth; calling it would also need a long-read caller that the pipeline does not pin. 19.8 GB of CLR subreads were not downloaded"
+    },
+    {
+      "asset_id": "SRR11787765",
+      "source": "ENA / SRA",
+      "accession": "SRR11787765",
+      "url": "ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/065/SRR11787765/",
+      "organism": "Vigna angularis",
+      "sample_identity": {
+        "biosample": "SAMN14776547",
+        "library_name": "HXD-1"
+      },
+      "platform": "Illumina NovaSeq 6000, Hi-C",
+      "assembly": null,
+      "coordinate_system": "reads",
+      "version": "first public 2020-05-15",
+      "checksum": {
+        "available": true,
+        "kind": "md5",
+        "md5": [
+          "06da3009f33e8cbd690c876044c5b092",
+          "342396cb080c0d873a35a945d8c520bc"
+        ]
+      },
+      "license": "INSDC public data",
+      "evidence_class": null,
+      "role": "scaffolding library",
+      "status": "unusable",
+      "reason": "proximity-ligation library; its chimeric read pairs and restriction-site bias are not a small-variant calling input"
+    },
+    {
+      "asset_id": "PRJNA1138464",
+      "source": "ENA / SRA",
+      "accession": "PRJNA1138464",
+      "url": "https://www.ebi.ac.uk/ena/browser/view/PRJNA1138464",
+      "organism": "Vigna angularis",
+      "sample_identity": {
+        "biosamples": 684,
+        "runs_per_biosample_max": 1,
+        "biosamples_with_both_wgs_and_rad": 0
+      },
+      "platform": "327 WGS Illumina HiSeq X paired; 357 RAD-Seq Illumina HiSeq 2500 single",
+      "assembly": null,
+      "coordinate_system": "reads",
+      "version": "as listed 2026-09-15",
+      "checksum": {
+        "available": true,
+        "kind": "md5 per FASTQ; the 51 analysed WGS FASTQs were md5-verified and sha256-recorded by Issue #45"
+      },
+      "license": "INSDC public data",
+      "evidence_class": "technical_replicate_concordance",
+      "role": "the pipeline's real cohort (51-sample subset)",
+      "status": "unusable",
+      "reason": "every BioSample has exactly one run and no BioSample has both WGS and RAD-Seq, so the project contains neither technical replicates nor an identity-confirmed cross-method pair; matching RAD and WGS samples by name was not attempted"
+    },
+    {
+      "asset_id": "SAMN03488483",
+      "source": "ENA / SRA",
+      "accession": "SAMN03488483",
+      "url": "https://www.ebi.ac.uk/ena/browser/view/SAMN03488483",
+      "organism": "Vigna angularis",
+      "sample_identity": {
+        "biosample": "SAMN03488483",
+        "reported_cultivar": null,
+        "wgs_runs": 68,
+        "wgs_libraries": 58,
+        "rna_seq_runs": 12,
+        "experiment_title": "Illumina Genome Analyzer II paired end sequencing: Vigna angularis Resequencing"
+      },
+      "platform": "Illumina Genome Analyzer II; WGS libraries of 170 bp to 40 kb nominal insert",
+      "assembly": null,
+      "coordinate_system": "reads",
+      "version": "first public 2015",
+      "checksum": {
+        "available": true,
+        "kind": "md5 per FASTQ"
+      },
+      "license": "INSDC public data",
+      "evidence_class": "technical_replicate_concordance",
+      "role": "only multi-library WGS BioSample found for the species",
+      "status": "unusable",
+      "reason": "one BioSample holds a 'Resequencing' series of about 50 distinct 500 bp libraries, so it cannot be confirmed to be one plant; the only same-library run pairs are 2-40 kb mate-pair libraries (unsuitable for small-variant calling) or 500 bp libraries whose second run is 3.9-5.0x against 17.9-21.7x, which would measure depth rather than replicate agreement"
+    },
+    {
+      "asset_id": "PRJNA1092869_long_read",
+      "source": "ENA / SRA",
+      "accession": "SAMN40643084, SAMN40643085, SAMN40643086 (SRR30780346, SRR30780345, SRR30780344)",
+      "url": "https://www.ebi.ac.uk/ena/browser/view/PRJNA1092869",
+      "organism": "Vigna angularis",
+      "sample_identity": {
+        "reported_cultivars": [
+          "Erimo",
+          "Baoqing",
+          "AC Gemco"
+        ]
+      },
+      "platform": "PacBio Sequel IIe WGS",
+      "assembly": null,
+      "coordinate_system": "reads",
+      "version": "as listed 2026-09-15",
+      "checksum": {
+        "available": true,
+        "kind": "md5 per FASTQ"
+      },
+      "license": "INSDC public data",
+      "evidence_class": "cross_platform_concordance",
+      "role": "long reads of other plants",
+      "status": "unusable",
+      "reason": "no BioSample in common with the reference or with any analysed cohort sample, so there is no same-sample short-read callset to compare against"
+    },
+    {
+      "asset_id": "PRJNA1117856_long_read",
+      "source": "ENA / SRA",
+      "accession": "SAMN41581379, SAMN41581380 (SRR35135461, SRR35135460)",
+      "url": "https://www.ebi.ac.uk/ena/browser/view/PRJNA1117856",
+      "organism": "Vigna angularis (one sample alias reports var. nipponensis)",
+      "sample_identity": {
+        "sample_aliases": [
+          "Shumari",
+          "Nipponensis_Miyagi"
+        ]
+      },
+      "platform": "Oxford Nanopore MinION WGS",
+      "assembly": null,
+      "coordinate_system": "reads",
+      "version": "as listed 2026-09-15",
+      "checksum": {
+        "available": true,
+        "kind": "md5 per FASTQ"
+      },
+      "license": "INSDC public data",
+      "evidence_class": "cross_platform_concordance",
+      "role": "long reads of other plants",
+      "status": "unusable",
+      "reason": "no BioSample in common with the reference or any analysed cohort sample"
+    },
+    {
+      "asset_id": "vigna_angularis_truth_set",
+      "source": "ENA analyses and EVA",
+      "accession": null,
+      "url": null,
+      "organism": "Vigna angularis",
+      "sample_identity": null,
+      "platform": null,
+      "assembly": null,
+      "coordinate_system": null,
+      "version": null,
+      "checksum": {
+        "available": false
+      },
+      "license": null,
+      "evidence_class": "independent_truth",
+      "role": "independent small-variant truth",
+      "status": "not_evaluated",
+      "reason": "none found: ENA lists no SEQUENCE_VARIATION analysis for taxon 3914 and EVA lists no Vigna angularis assembly"
+    },
+    {
+      "asset_id": "human_benchmark_resources",
+      "source": "GIAB / GA4GH stratifications, human-trained callers",
+      "accession": null,
+      "url": null,
+      "organism": "Homo sapiens",
+      "sample_identity": null,
+      "platform": null,
+      "assembly": "GRCh37/GRCh38/CHM13",
+      "coordinate_system": "human assemblies",
+      "version": null,
+      "checksum": {
+        "available": true
+      },
+      "license": null,
+      "evidence_class": "independent_truth",
+      "role": "excluded by design",
+      "status": "unusable",
+      "reason": "another organism and assembly; human truth, masks and model performance are not transferred to Vigna angularis"
+    }
+  ]
+}

@@ -313,6 +313,21 @@ production設定は変更していません。
 
 Issue #46のreal-cohort calibrationは、事前定義した探索scenarioと再現可能な集計手順を[`docs/hard_filter_threshold_calibration.md`](docs/hard_filter_threshold_calibration.md)に固定しています。20検体artifactの実測結果とdecision recordは未記録であり、default thresholdは変更していません。
 
+### 変異品質の根拠と納品可能範囲 (Issue #65)
+
+*Vigna angularis*にはindependent truth setが見つからず、実データについてprecision/recall等の精度は主張しません。
+次の3つを、GCF_016808095.1上の領域別に機械可読で記録しています。
+
+- evidence class別の評価契約
+- 公開資産audit
+- 領域資産（N/gap、WindowMasker repeat、homopolymer、GC、mappability）
+
+既存artifactを使ったcallable/depth、caller一致、downsampling安定性、同一BioSampleのcross-platform自己一致、GS panelのsite filter／genotype mask比較も同様です。
+これらを、evidence class別の上限を超えない**delivery-support matrix**にまとめています。
+thresholdやproduction defaultは変更していません。
+
+- [`docs/issue65_callable_region_quality_benchmark.md`](docs/issue65_callable_region_quality_benchmark.md)
+
 ### GS panel
 
 MAF / call-rate filtering、LD pruning、imputation、GS model trainingはこのrepositoryのscope外です。現在のGS panelはvariant-calling outputから下流解析へ渡すための監査可能なdata packageです。

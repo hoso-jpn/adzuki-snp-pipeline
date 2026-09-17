@@ -1,0 +1,27 @@
+##fileformat=VCFv4.2
+##contig=<ID=chrT,length=300>
+##contig=<ID=chrU,length=100>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	TRUTH
+chrT	10	.	C	G	50	PASS	.	GT	0/1
+chrT	20	.	C	G	50	PASS	.	GT	1/1
+chrT	40	.	T	A	50	PASS	.	GT	0/1
+chrT	50	.	G	T	50	PASS	.	GT	0/1
+chrT	60	.	G	T	50	PASS	.	GT	./.
+chrT	70	.	G	T	50	PASS	.	GT	0/0
+chrT	80	.	G	T	50	PASS	.	GT	0/1
+chrT	90	.	C	G	50	PASS	.	GT	0/1
+chrT	99	.	CA	C	50	PASS	.	GT	0/1
+chrT	121	.	G	GTT	50	PASS	.	GT	1/1
+chrT	140	.	A	C,T	50	PASS	.	GT	1/2
+chrT	160	.	C	A	50	PASS	.	GT	1/1
+chrT	190	.	G	<DEL>	50	PASS	.	GT	0/1
+chrT	200	.	A	C	50	PASS	.	GT	0/1
+chrT	205	.	A	C	50	PASS	.	GT	0/1
+chrT	210	.	G	T,*	50	PASS	.	GT	1/2
+chrT	215	.	G	T,*	50	PASS	.	GT	1/2
+chrT	220	.	C	G	50	PASS	.	GT	0/1
+chrT	238	.	AGAC	A	50	PASS	.	GT	0/1
+chrT	250	.	A	C	50	PASS	.	GT	0/1
+chrU	10	.	T	A	50	PASS	.	GT	0/1
+chrZ	5	.	A	C	50	PASS	.	GT	0/1

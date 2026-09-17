@@ -1,0 +1,160 @@
+{
+  "evaluation_id": "crossplatform.SAMN14776547.SRR11787767_illumina_vs_pacbio_reference.NC_068975.1_1-20000000",
+  "universe": {
+    "name": "NC_068975.1:1-20000000",
+    "bed": "window.bed"
+  },
+  "query_dataset": {
+    "name": "SRR11787767.vcf.gz",
+    "description": "Illumina NovaSeq WGS of BioSample SAMN14776547 (leading byte range of each mate), production fastp/BWA-MEM2/MarkDuplicates/HaplotypeCaller arguments, single-sample GenotypeGVCFs on the window",
+    "comparator": "the GCF_016808095.1 reference sequence, assembled from PacBio data of the same BioSample"
+  },
+  "strata": [
+    {
+      "name": "cohort_callable",
+      "kind": "partition",
+      "group": "cohort_callable",
+      "bed": "../callable/cohort_callable.bed"
+    },
+    {
+      "name": "cohort_non_callable",
+      "kind": "partition",
+      "group": "cohort_callable",
+      "bed": "../callable/cohort_non_callable.bed"
+    },
+    {
+      "name": "median_depth_00_03",
+      "kind": "partition",
+      "group": "cohort_median_depth",
+      "bed": "../callable/median_depth_00_03.bed"
+    },
+    {
+      "name": "median_depth_03_06",
+      "kind": "partition",
+      "group": "cohort_median_depth",
+      "bed": "../callable/median_depth_03_06.bed"
+    },
+    {
+      "name": "median_depth_06_10",
+      "kind": "partition",
+      "group": "cohort_median_depth",
+      "bed": "../callable/median_depth_06_10.bed"
+    },
+    {
+      "name": "median_depth_10_15",
+      "kind": "partition",
+      "group": "cohort_median_depth",
+      "bed": "../callable/median_depth_10_15.bed"
+    },
+    {
+      "name": "median_depth_15_25",
+      "kind": "partition",
+      "group": "cohort_median_depth",
+      "bed": "../callable/median_depth_15_25.bed"
+    },
+    {
+      "name": "median_depth_25_plus",
+      "kind": "partition",
+      "group": "cohort_median_depth",
+      "bed": "../callable/median_depth_25_plus.bed"
+    },
+    {
+      "name": "repeat_windowmasker",
+      "kind": "tag",
+      "group": "repeat",
+      "bed": "../regions/repeat_windowmasker.bed"
+    },
+    {
+      "name": "homopolymer_ge10",
+      "kind": "tag",
+      "group": "low_complexity",
+      "bed": "../regions/homopolymer_ge10.bed"
+    },
+    {
+      "name": "n_regions",
+      "kind": "tag",
+      "group": "assembly_gap",
+      "bed": "../regions/n_regions.bed"
+    },
+    {
+      "name": "high_mappability",
+      "kind": "partition",
+      "group": "mappability",
+      "bed": "../mappability/high_mappability.bed"
+    },
+    {
+      "name": "low_mappability",
+      "kind": "partition",
+      "group": "mappability",
+      "bed": "../mappability/low_mappability.bed"
+    },
+    {
+      "name": "mappability_undefined",
+      "kind": "partition",
+      "group": "mappability",
+      "bed": "../mappability/mappability_undefined.bed"
+    },
+    {
+      "name": "gc_00_25",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_00_25.bed"
+    },
+    {
+      "name": "gc_25_30",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_25_30.bed"
+    },
+    {
+      "name": "gc_30_35",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_30_35.bed"
+    },
+    {
+      "name": "gc_35_40",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_35_40.bed"
+    },
+    {
+      "name": "gc_40_45",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_40_45.bed"
+    },
+    {
+      "name": "gc_45_100",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_45_100.bed"
+    },
+    {
+      "name": "gc_undefined",
+      "kind": "partition",
+      "group": "gc_1kb",
+      "bed": "../regions/gc_undefined.bed"
+    },
+    {
+      "name": "core",
+      "kind": "partition",
+      "group": "core_vs_difficult",
+      "bed": "../derived/core.bed"
+    },
+    {
+      "name": "difficult",
+      "kind": "partition",
+      "group": "core_vs_difficult",
+      "bed": "../derived/difficult.bed"
+    }
+  ],
+  "limitations": [
+    "not truth on either side: a non-reference call marks disagreement between these Illumina reads and the PacBio-derived consensus of the same BioSample, which can come from a consensus error, residual heterozygosity in the sequenced plant, or mis-mapping of the short reads. This is self-consistency against a consensus sequence, not concordance with another callset",
+    "reads are the leading records of each FASTQ, not a random sample of the run",
+    "raw single-sample calls without the cohort hard filter; SNP and indel records are both counted in variant_records, split in snp_records/indel_records",
+    "one window of one chromosome",
+    "records straddling a stratum edge are not counted in that stratum"
+  ],
+  "evidence_class": "reference_sample_self_consistency"
+}
