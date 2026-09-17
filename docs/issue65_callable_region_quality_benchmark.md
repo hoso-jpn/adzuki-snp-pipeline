@@ -223,7 +223,7 @@ and cannot be separated here.
 
 FILTER is counted in three buckets, because a VCF distinguishes them: `PASS`,
 a named filter code, and `.` for "no filter applied". All 9,746,661 GS panel
-records are `PASS`; the raw cross-platform callset of §10 is entirely `.`.
+records are `PASS`; the raw reference-sample callset of §10 is entirely `.`.
 
 Genome-wide (9,746,661 records, 497,079,711 genotype cells):
 
@@ -337,7 +337,7 @@ this is agreement, not accuracy.
 
 bcftools took 42.9 s at 92 MiB.
 
-## 10. Cross-platform self-consistency
+## 10. Reference-sample self-consistency
 
 **Input.** Illumina NovaSeq WGS reads SRR11787767 from BioSample SAMN14776547,
 the same BioSample as the PacBio-derived reference. Identity rests on the
@@ -367,8 +367,8 @@ and never as failed.
   heterozygosity, collapsed paralogs or mis-mapping.
 
 Every stratum is also split by variant type, and the matrix of §11 quotes the
-split that matches its row, never a figure that mixes the two. SNP records
-below; the whole-callset figure is in brackets where it differs.
+split that matches its row, never a figure that mixes the two. The table below
+is SNP records, with each stratum's indel density in the last column.
 
 | stratum | bases | SNP records/Mb | SNP het | SNP hom-alt | indel records/Mb |
 |---|---|---|---|---|---|
@@ -392,7 +392,8 @@ reference's excess-depth regions therefore appears in data from the reference's
 own BioSample, sequenced on a different platform and in a different run from
 the cohort's. Why it appears is not established here.
 
-Het calls dominate in core as well: 1,877/Mb, with no hom-alt call at all.
+Het calls dominate in core as well: 1,755 SNP calls per Mb (1,877/Mb counting
+indels), with no hom-alt call of either type.
 Together with their depth sensitivity (§8) and the callers' disagreement over
 them (§9), that makes a heterozygous call weak evidence even in core.
 
@@ -513,7 +514,7 @@ configs into `<workdir>/configs`.
 3. `assemble_evidence.py derive-strata`.
 4. `run_stratify.sh`, `run_downsampling.sh`, and
    `download_SRR11787767_partial.sh` followed by `run_crossplatform.sh`.
-5. `run_assemble.sh <git sha>`, which stratifies the cross-platform calls and
+5. `run_assemble.sh <git sha>`, which stratifies the reference-sample calls and
    runs `assemble_evidence.py assemble`.
 
 Machine-readable run records (manifests, input/output SHA256, MarkDuplicates
@@ -551,7 +552,7 @@ are identified by SHA256. Issue #45 and #64 evidence was read, never modified.
 - The callable and depth assets are limited to that window.
 - Mappability models error-free 150 bp single-end reads. Real reads differ in
   errors, length and pairing.
-- The cross-platform reads are the leading records of the run, not a random
+- The reference-sample reads are the leading records of the run, not a random
   sample.
 - Nothing here establishes why heterozygous calls concentrate in high-depth and
   low-mappability strata. Paralog collapse and mis-mapping are candidate
