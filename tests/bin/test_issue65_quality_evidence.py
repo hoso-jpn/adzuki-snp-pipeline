@@ -492,6 +492,23 @@ class EvidenceContractTests(unittest.TestCase):
                 evidence_refs=["e"],
                 rationale="r",
             )
+        combined = model.delivery_row(
+            scope="s",
+            evidence_class=["caller_concordance", "downsampling_stability"],
+            status="supported_with_caveat",
+            evidence_refs=["e1", "e2"],
+            rationale="r",
+        )
+        self.assertIn("combined caveated evidence", combined["claim_allowed"])
+        self.assertIn("no accuracy claim", combined["claim_allowed"])
+        with self.assertRaisesRegex(model.InvalidEvaluationError, "at most supported_with_caveat"):
+            model.delivery_row(
+                scope="s",
+                evidence_class=["independent_truth", "caller_concordance"],
+                status="supported",
+                evidence_refs=["e"],
+                rationale="r",
+            )
         with self.assertRaisesRegex(model.InvalidEvaluationError, "cites no evidence"):
             model.delivery_row(
                 scope="s",

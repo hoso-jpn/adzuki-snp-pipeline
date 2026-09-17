@@ -19,6 +19,12 @@ FILTER is reported in three buckets, because a VCF distinguishes them: `PASS`
 (filters applied and passed), a named code (failed), and `.` (no filter
 applied, as in a raw single-sample callset).
 
+Every stratum is also split by variant type, as `<stratum>:snp` and
+`<stratum>:indel`, with the same base count: a callset's SNP density and its
+indel density are different statements about one region, and a matrix row for
+SNPs must not quote a figure that also counts indels. Records are not split by
+genotype dosage, because a cohort record has one dosage per sample.
+
 A record is placed in a stratum by its REF span. A record that straddles a
 stratum's edge is counted for neither side of it and reported as a boundary
 count for that stratum. A record outside the universe is excluded with a reason.
@@ -149,6 +155,8 @@ def stratify(
 
     totals = _empty()
     by_stratum = {s.name: _empty() for s in strata}
+    by_stratum.update({"snp": _empty(), "indel": _empty()})
+    by_stratum.update({f"{s.name}:{t}": _empty() for s in strata for t in ("snp", "indel")})
     boundary = {s.name: 0 for s in strata}
     exclusions: dict[str, int] = {}
     samples = None
@@ -178,11 +186,13 @@ def stratify(
         eligible += 1
         alts = alt.split(",")
         is_snp = len(ref) == 1 and all(len(a) == 1 for a in alts)
-        targets = [totals]
+        variant_type = "snp" if is_snp else "indel"
+        targets = [totals, by_stratum[variant_type]]
         for stratum in strata:
             where = stratum.region.contains_span(contig, pos, len(ref))
             if where == "inside":
                 targets.append(by_stratum[stratum.name])
+                targets.append(by_stratum[f"{stratum.name}:{variant_type}"])
             elif where == "boundary":
                 boundary[stratum.name] += 1
         for counts in targets:
@@ -201,9 +211,12 @@ def stratify(
     masked = masked_calls is not None
     metrics = _finish(totals, universe.bases(), universe.bases(), masked)
     metrics["samples"] = samples or 0
+    bases_of = {s.name: s.region.bases() for s in strata}
+    bases_of.update({"snp": universe.bases(), "indel": universe.bases()})
+    bases_of.update({f"{s.name}:{t}": bases_of[s.name] for s in strata for t in ("snp", "indel")})
     metrics["by_stratum"] = {
-        s.name: _finish(by_stratum[s.name], s.region.bases(), universe.bases(), masked)
-        for s in strata
+        name: _finish(by_stratum[name], bases_of[name], universe.bases(), masked)
+        for name in sorted(by_stratum)
     }
     record = {
         "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
@@ -230,6 +243,10 @@ def stratify(
                 "records_straddling_edge_not_counted": boundary[s.name],
             }
             for s in strata
+        ]
+        + [
+            {"name": "snp", "kind": "partition", "group": "variant_type"},
+            {"name": "indel", "kind": "partition", "group": "variant_type"},
         ],
         "strata_note": (
             "tag strata overlap and are not additive; members of one partition group are disjoint, "
@@ -241,6 +258,10 @@ def stratify(
             "filter_buckets": (
                 "pass_records: FILTER=PASS; failed_filter_records: a named filter code; "
                 "unfiltered_records: FILTER='.', meaning no filter was applied"
+            ),
+            "variant_type_split": (
+                "'<stratum>:snp' and '<stratum>:indel' count the same region's records by type; "
+                "their bases are the stratum's bases, so each density is per type"
             ),
             "non_reference_calls": "a fully called GT with at least one non-reference allele",
             "heterozygous_calls": "a fully called GT with two different alleles",

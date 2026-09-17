@@ -335,7 +335,7 @@ def not_evaluated_records(reference_desc: dict[str, object]) -> list[dict[str, o
         ),
         (
             "long_read_calls.SAMN14776547",
-            "cross_platform_concordance",
+            "reference_sample_self_consistency",
             "all",
             "no long-read caller is pinned by the pipeline, and the reference BioSample's long reads are what the assembly was built from",
             ["see public_asset_inventory.json: SRR11787766"],
@@ -509,11 +509,10 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
                         )
                     )
             cross_metrics = None
-            if cross and variant_type == "snp":
+            if cross and variant_type in ("snp", "indel"):
                 by = cross[0]["metrics"]["by_stratum"]
-                cross_metrics = (
-                    cross[0]["metrics"] if desc_stratum is None else by.get(desc_stratum)
-                )
+                key = variant_type if desc_stratum is None else f"{desc_stratum}:{variant_type}"
+                cross_metrics = by.get(key)
             if cross_metrics and cross_metrics.get("variant_records"):
                 row_cells.append(
                     model.delivery_row(
@@ -532,8 +531,8 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
                 ]
             else:
                 reason = (
-                    "cross-platform calls were stratified by region, not by variant type or dosage; they are reported on the snp row"
-                    if cross and variant_type != "snp"
+                    "the reference-sample records are stratified by region and variant type, not by genotype dosage"
+                    if cross and variant_type in ("het", "hom_alt")
                     else ("no calls in scope" if cross else "evaluation not run")
                 )
                 row_cells.append(
@@ -546,12 +545,9 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
                     )
                 )
             desc_metrics = None
-            if descriptive and variant_type == "snp":
-                desc_metrics = (
-                    descriptive["metrics"]
-                    if desc_stratum is None
-                    else descriptive["metrics"]["by_stratum"].get(desc_stratum)
-                )
+            if descriptive and variant_type in ("snp", "indel"):
+                key = variant_type if desc_stratum is None else f"{desc_stratum}:{variant_type}"
+                desc_metrics = descriptive["metrics"]["by_stratum"].get(key)
             if desc_metrics and desc_metrics.get("variant_records"):
                 row_cells.append(
                     model.delivery_row(
@@ -574,8 +570,8 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
             else:
                 reason = {
                     "indel": "descriptive.gs_panel.indel",
-                    "het": "GS panel counts are per record, reported on the snp row (heterozygous_fraction_of_non_reference_calls)",
-                    "hom_alt": "GS panel counts are per record, reported on the snp row",
+                    "het": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists",
+                    "hom_alt": "GS panel counts are per record; a cohort record has one dosage per sample, so no dosage split exists",
                 }.get(variant_type, "no GS panel records in scope")
                 row_cells.append(
                     model.delivery_row(
@@ -592,7 +588,7 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
                 classes = sorted({c["evidence_class"] for c in evaluated})
                 overall = model.delivery_row(
                     scope=scope_id,
-                    evidence_class=classes[0],
+                    evidence_class=classes,
                     status="supported_with_caveat",
                     evidence_refs=sorted({r for c in evaluated for r in c["evidence"]}),
                     rationale="evaluated by "

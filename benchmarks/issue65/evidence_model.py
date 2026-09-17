@@ -253,38 +253,52 @@ def canonical_hash(document: object) -> str:
 def delivery_row(
     *,
     scope: str,
-    evidence_class: str | None,
+    evidence_class: str | list[str] | None,
     status: str,
     evidence_refs: list[str],
     rationale: str,
 ) -> dict[str, object]:
-    """One delivery-support row, refusing a status stronger than its evidence allows."""
+    """One delivery-support row, refusing a status stronger than its evidence allows.
+
+    `evidence_class` may be a list, for a row several classes together support.
+    Such a row gets a neutral combined claim rather than one class's claim,
+    because no single class's wording describes what the others showed: the
+    per-class cells carry those claims.
+    """
     if status not in STATUSES:
         raise InvalidEvaluationError(f"unknown status {status!r}")
+    classes = list(evidence_class) if isinstance(evidence_class, list) else [evidence_class]
     if status == "not_evaluated":
         if evidence_refs:
             raise InvalidEvaluationError(f"{scope}: a not-evaluated scope cites no evidence")
         claim = "no claim; not evaluated"
     else:
-        if evidence_class not in EVIDENCE_CLASSES:
-            raise InvalidEvaluationError(f"{scope}: status {status} needs a known evidence class")
-        max_status = EVIDENCE_CLASSES[evidence_class]["max_status"]
-        if status == "validated_test_harness" or max_status == "validated_test_harness":
-            if status != max_status:
+        for name in classes:
+            if name not in EVIDENCE_CLASSES:
                 raise InvalidEvaluationError(
-                    f"{scope}: synthetic fixtures only validate the harness, and only they do"
+                    f"{scope}: status {status} needs a known evidence class"
                 )
-        elif _STATUS_RANK[status] > _STATUS_RANK[max_status]:
-            raise InvalidEvaluationError(
-                f"{scope}: {evidence_class} cannot support status {status} (at most {max_status})"
-            )
+            max_status = EVIDENCE_CLASSES[name]["max_status"]
+            if status == "validated_test_harness" or max_status == "validated_test_harness":
+                if status != max_status:
+                    raise InvalidEvaluationError(
+                        f"{scope}: synthetic fixtures only validate the harness, and only they do"
+                    )
+            elif _STATUS_RANK[status] > _STATUS_RANK[max_status]:
+                raise InvalidEvaluationError(
+                    f"{scope}: {name} cannot support status {status} (at most {max_status})"
+                )
         if not evidence_refs:
             raise InvalidEvaluationError(f"{scope}: status {status} must cite evidence")
-        claim = (
-            EVIDENCE_CLASSES[evidence_class]["claim"]
-            if status != "unsupported"
-            else ("no delivery claim; evidence shows this scope is not supported")
-        )
+        if status == "unsupported":
+            claim = "no delivery claim; evidence shows this scope is not supported"
+        elif len(classes) == 1:
+            claim = EVIDENCE_CLASSES[classes[0]]["claim"]
+        else:
+            claim = (
+                "combined caveated evidence from " + ", ".join(sorted(classes)) + "; no accuracy "
+                "claim; each class's own claim is on its cell"
+            )
     return {
         "scope": scope,
         "evidence_class": evidence_class,

@@ -241,9 +241,11 @@ class StratifyTests(unittest.TestCase):
         self.assertEqual(by["gc_low"]["variant_records"] + by["gc_high"]["variant_records"], 3)
         self.assertEqual(by["repeat"]["variant_records"], 1)
         self.assertEqual(
-            {s["name"]: s["records_straddling_edge_not_counted"] for s in record["strata"]}[
-                "repeat"
-            ],
+            {
+                s["name"]: s["records_straddling_edge_not_counted"]
+                for s in record["strata"]
+                if "records_straddling_edge_not_counted" in s
+            }["repeat"],
             1,
         )
         self.assertEqual(by["gc_high"]["bases"], 40)
@@ -271,6 +273,25 @@ class StratifyTests(unittest.TestCase):
             m["variant_records"],
         )
         self.assertNotIn("filtered_records", m)
+
+    def test_each_stratum_is_split_by_variant_type(self) -> None:
+        by = self._run(self.CALLS, self.MASKED)["metrics"]["by_stratum"]
+        self.assertEqual((by["snp"]["variant_records"], by["indel"]["variant_records"]), (2, 1))
+        # gc_low holds the SNP at 10 and the indel at 29; gc_high the SNP at 60.
+        self.assertEqual(by["gc_low:snp"]["variant_records"], 1)
+        self.assertEqual(by["gc_low:indel"]["variant_records"], 1)
+        self.assertEqual(by["gc_high:indel"]["variant_records"], 0)
+        for name in ("gc_low", "gc_high", "repeat"):
+            self.assertEqual(
+                by[f"{name}:snp"]["variant_records"] + by[f"{name}:indel"]["variant_records"],
+                by[name]["variant_records"],
+                name,
+            )
+            self.assertEqual(by[f"{name}:snp"]["bases"], by[name]["bases"])
+        # A density quoted for SNPs counts SNP records only.
+        self.assertEqual(
+            by["gc_low:snp"]["variant_records_per_mb"], round(1 / by["gc_low"]["bases"] * 1e6, 3)
+        )
 
     def test_unmasked_only_has_no_mask_metrics(self) -> None:
         self.assertNotIn("masked_genotype_cells", self._run(self.CALLS, None)["metrics"])
@@ -423,6 +444,21 @@ class DeliveryMatrixTests(unittest.TestCase):
             self.rows["genome_outside_window:snp+indel"]["overall_status"], "not_evaluated"
         )
 
+    def test_a_multi_class_row_gets_a_neutral_combined_claim(self) -> None:
+        row = self.rows["window:snp"]
+        self.assertGreater(len(row["evidence_classes_evaluated"]), 1)
+        claim = row["claim_allowed"]
+        self.assertIn("combined caveated evidence", claim)
+        self.assertIn("no accuracy claim", claim)
+        for evidence_class in row["evidence_classes_evaluated"]:
+            self.assertIn(evidence_class, claim)
+        # The per-class cells still carry each class's own claim.
+        cells = [c for c in self.document["cells"] if c["status"] == "supported_with_caveat"]
+        self.assertTrue(cells)
+        for cell in cells:
+            self.assertNotIn("combined caveated evidence", cell["claim_allowed"])
+            self.assertIn("not accuracy", cell["claim_allowed"])
+
     def test_matrix_is_deterministic_and_tabulates(self) -> None:
         again = self.assemble.matrix(self.evaluations)
         self.assertEqual(
@@ -441,6 +477,7 @@ class DeliveryMatrixTests(unittest.TestCase):
                 "independent_truth",
                 "technical_replicate_concordance",
                 "cross_platform_concordance",
+                "reference_sample_self_consistency",
                 "descriptive_stratification",
                 "downsampling_stability",
             },
