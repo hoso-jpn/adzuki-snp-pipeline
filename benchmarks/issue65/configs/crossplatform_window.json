@@ -150,11 +150,11 @@
     }
   ],
   "limitations": [
-    "not truth on either side: a non-reference call marks disagreement between these Illumina reads and the PacBio-derived consensus, which can come from a consensus error, residual heterozygosity in the sequenced plant, or mis-mapping of the short reads",
+    "not truth on either side: a non-reference call marks disagreement between these Illumina reads and the PacBio-derived consensus of the same BioSample, which can come from a consensus error, residual heterozygosity in the sequenced plant, or mis-mapping of the short reads. This is self-consistency against a consensus sequence, not concordance with another callset",
     "reads are the leading records of each FASTQ, not a random sample of the run",
     "raw single-sample calls without the cohort hard filter; SNP and indel records are both counted in variant_records, split in snp_records/indel_records",
     "one window of one chromosome",
     "records straddling a stratum edge are not counted in that stratum"
   ],
-  "evidence_class": "cross_platform_concordance"
+  "evidence_class": "reference_sample_self_consistency"
 }

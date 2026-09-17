@@ -99,7 +99,26 @@ def write(directory: Path) -> None:
     row(query, "chrT", 160, "C", "A,G", "1/1")
     row(query, "chrT", 180, "T", "C", "0/1")  # REF mismatch (reference is G): excluded
     row(truth, "chrT", 190, base(seq, "chrT", 190), "<DEL>", "0/1")  # symbolic: excluded
-    row(query, "chrZ", 5, "A", "C", "0/1")  # contig not in reference: excluded
+    # Multi-allelic records that mix a sequence ALT with a symbolic one: only the
+    # symbolic allele is excluded, and an excluded unit both sides carry counts once.
+    ref200, alt200 = snp("chrT", 200)
+    row(truth, "chrT", 200, ref200, alt200, "0/1")  # query calls the sequence ALT: TP
+    row(query, "chrT", 200, ref200, alt200 + ",*", "0/1")
+    ref205, alt205 = snp("chrT", 205)
+    row(truth, "chrT", 205, ref205, alt205, "0/1")  # query calls only the symbolic ALT:
+    row(query, "chrT", 205, ref205, alt205 + ",*", "0/2")  # FN, plus one symbolic exclusion
+    ref210, alt210 = snp("chrT", 210)
+    row(truth, "chrT", 210, ref210, alt210 + ",*", "1/2")  # truth GT 1/2 over both alleles:
+    row(query, "chrT", 210, ref210, alt210, "0/1")  # TP on the sequence ALT
+    ref215, alt215 = snp("chrT", 215)
+    row(truth, "chrT", 215, ref215, alt215 + ",*", "1/2")  # both sides carry the same `*`:
+    row(query, "chrT", 215, ref215, alt215 + ",*", "1/2")  # TP, and one symbolic exclusion
+    wrong = {"A": "C", "C": "G", "G": "T", "T": "A"}[base(seq, "chrT", 220)]
+    other = {"A": "C", "C": "G", "G": "T", "T": "A"}[wrong]
+    row(truth, "chrT", 220, wrong, other, "0/1")  # REF mismatch on both sides: one exclusion
+    row(query, "chrT", 220, wrong, other, "0/1")
+    row(truth, "chrZ", 5, "A", "C", "0/1")  # contig not in reference, both sides: one exclusion
+    row(query, "chrZ", 5, "A", "C", "0/1")
     deleted = base(seq, "chrT", 238, 4)
     row(truth, "chrT", 238, deleted, deleted[0], "0/1")  # spans region end: excluded
     row(query, "chrT", 238, deleted, deleted[0], "0/1")

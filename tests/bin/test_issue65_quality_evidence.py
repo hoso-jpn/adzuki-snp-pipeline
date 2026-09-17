@@ -79,37 +79,48 @@ class SyntheticTruthAccountingTests(unittest.TestCase):
         cls.metrics = cls.record["metrics"]
 
     def test_totals(self) -> None:
+        # TP: 10, 20, 99, 121, 140 C, 140 T, 160, chrU:10, 200, 210, 215.
         m = self.metrics
-        self.assertEqual(m["true_positive"], 8)
-        self.assertEqual(m["false_positive"], 2)
-        self.assertEqual(m["false_negative"], 2)
-        self.assertEqual(m["query_nocall_at_truth_variant"], 2)
-        self.assertEqual(m["truth_nocall_at_query_variant"], 1)
-        self.assertEqual(m["genotype_concordant"], 7)
-        self.assertEqual(m["genotype_discordant"], 1)
-        self.assertEqual(m["matched_after_normalization"], 1)
+        self.assertEqual(m["true_positive"], 11)
+        self.assertEqual(m["false_positive"], 2)  # 30, 70
+        self.assertEqual(m["false_negative"], 3)  # 40, 80, 205 (query calls only `*` there)
+        self.assertEqual(m["query_nocall_at_truth_variant"], 2)  # 50, 90
+        self.assertEqual(m["truth_nocall_at_query_variant"], 1)  # 60
+        self.assertEqual(m["genotype_concordant"], 10)
+        self.assertEqual(m["genotype_discordant"], 1)  # 20
+        self.assertEqual(m["matched_after_normalization"], 1)  # 99 vs 103
 
     def test_rates_use_the_stated_denominators(self) -> None:
         m = self.metrics
-        self.assertEqual(m["precision"], round(8 / 10, 6))  # TP / (TP + FP); truth no-call excluded
-        self.assertEqual(m["recall"], round(8 / 12, 6))  # TP / (TP + FN + query no-call)
-        self.assertEqual(m["f1"], round(2 * 0.8 * (8 / 12) / (0.8 + 8 / 12), 6))
-        self.assertEqual(m["genotype_concordance"], round(7 / 8, 6))
+        precision, recall = 11 / 13, 11 / 16
+        self.assertEqual(m["precision"], round(precision, 6))  # TP / (TP + FP)
+        self.assertEqual(m["recall"], round(recall, 6))  # TP / (TP + FN + query no-call)
+        self.assertEqual(
+            m["f1"],
+            round(
+                2
+                * round(precision, 6)
+                * round(recall, 6)
+                / (round(precision, 6) + round(recall, 6)),
+                6,
+            ),
+        )
+        self.assertEqual(m["genotype_concordance"], round(10 / 11, 6))
 
     def test_denominators_and_exclusions_add_up(self) -> None:
         r = self.record
-        self.assertEqual(r["eligible_denominator"], 15)
+        self.assertEqual(r["eligible_denominator"], 19)
         self.assertEqual(
             r["exclusion_reasons"],
             {
-                "comparator_symbolic_allele": 1,
-                "outside_region": 1,
-                "query_coordinate_mismatch": 1,
-                "query_ref_mismatch": 1,
-                "region_boundary": 1,
+                "coordinate_mismatch": 1,  # chrZ:5, written by both sides
+                "outside_region": 1,  # 250
+                "ref_mismatch": 2,  # 180 (query only) and 220 (both sides)
+                "region_boundary": 1,  # 238
+                "symbolic_allele": 4,  # 190 <DEL>, 205 `*`, 210 `*`, 215 `*`
             },
         )
-        self.assertEqual(r["excluded_denominator"], 5)
+        self.assertEqual(r["excluded_denominator"], 9)
         m = self.metrics
         self.assertEqual(
             r["eligible_denominator"],
@@ -144,7 +155,7 @@ class SyntheticTruthAccountingTests(unittest.TestCase):
         self.assertEqual(by["indel"]["true_positive"], 2)
         # Dosage comes from the truth call, or the query call where truth is not positive:
         # TP 1/1 at 20 (truth dosage 2), 121 and 160; FP at 30 and 70 are query 0/1.
-        self.assertEqual((by["hom_alt"]["true_positive"], by["het"]["true_positive"]), (3, 5))
+        self.assertEqual((by["hom_alt"]["true_positive"], by["het"]["true_positive"]), (3, 8))
         self.assertEqual((by["hom_alt"]["false_positive"], by["het"]["false_positive"]), (0, 2))
         self.assertEqual(by["indel:hom_alt"]["true_positive"], 1)
         self.assertEqual(by["repeat:indel"]["true_positive"], 1)
@@ -174,22 +185,142 @@ class ConcordanceVocabularyTests(unittest.TestCase):
     def test_same_accounting_without_accuracy_words(self) -> None:
         record = _evaluate("caller_concordance")
         m = record["metrics"]
-        self.assertEqual(m["shared_variants"], 8)
+        self.assertEqual(m["shared_variants"], 11)
         self.assertEqual(m["only_in_query"], 2)
-        self.assertEqual(m["only_in_comparator"], 2)
+        self.assertEqual(m["only_in_comparator"], 3)
         for word in ("precision", "recall", "f1", "true_positive", "false_positive"):
             self.assertNotIn(word, json.dumps(m))
-        self.assertEqual(m["site_agreement_rate"], round(8 / 15, 6))
+        self.assertEqual(m["site_agreement_rate"], round(11 / 19, 6))
 
     def test_downsampling_names_retention_not_recall(self) -> None:
         m = _evaluate("downsampling_stability")["metrics"]
-        self.assertEqual(m["only_in_full_depth"], 2)
-        self.assertEqual(m["call_retention"], round(8 / 12, 6))
+        self.assertEqual(m["only_in_full_depth"], 3)
+        self.assertEqual(m["call_retention"], round(11 / 16, 6))
         self.assertNotIn("recall", m)
 
     def test_descriptive_class_cannot_compare(self) -> None:
         with self.assertRaises(ValueError):
             _evaluate("descriptive_stratification")
+
+
+class MultiAllelicSymbolicTests(unittest.TestCase):
+    """A symbolic ALT excludes itself only; an excluded unit is counted once."""
+
+    HEADER = (
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t{sample}\n"
+    )
+
+    def _vcf(self, sample: str, rows: list[tuple]) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / f"{sample}.vcf"
+        body = "".join(
+            "\t".join([contig, str(pos), ".", ref, alt, "50", "PASS", ".", "GT", gt]) + "\n"
+            for contig, pos, ref, alt, gt in rows
+        )
+        path.write_text(self.HEADER.format(sample=sample) + body)
+        return path
+
+    def _run(self, query_rows: list[tuple], comparator_rows: list[tuple]):
+        return _evaluate(
+            query={
+                "path": self._vcf("QUERY", query_rows),
+                "sample": "QUERY",
+                "dataset": {"n": "q"},
+            },
+            comparator={
+                "path": self._vcf("TRUTH", comparator_rows),
+                "sample": "TRUTH",
+                "dataset": {"n": "c"},
+            },
+        )
+
+    # chrT:10 is C in the fixture reference and chrT:20 is C as well.
+    def test_sequence_allele_survives_a_symbolic_partner(self) -> None:
+        for name, query, comparator in (
+            ("query only", [("chrT", 10, "C", "G,*", "0/1")], [("chrT", 10, "C", "G", "0/1")]),
+            ("comparator only", [("chrT", 10, "C", "G", "0/1")], [("chrT", 10, "C", "G,*", "0/1")]),
+            ("both", [("chrT", 10, "C", "G,*", "0/1")], [("chrT", 10, "C", "G,*", "0/1")]),
+        ):
+            with self.subTest(name):
+                record = self._run(query, comparator)
+                self.assertEqual(record["metrics"]["true_positive"], 1)
+                self.assertEqual(record["eligible_denominator"], 1)
+                # `*` is not called by GT 0/1, so it is not a comparison unit at all.
+                self.assertEqual(record["exclusion_reasons"], {})
+
+    def test_a_called_symbolic_allele_is_the_only_excluded_unit(self) -> None:
+        record = self._run(
+            [("chrT", 10, "C", "G,*", "0/2")],  # query calls only the symbolic allele
+            [("chrT", 10, "C", "G", "0/1")],
+        )
+        m = record["metrics"]
+        self.assertEqual((m["true_positive"], m["false_negative"]), (0, 1))
+        self.assertEqual(record["exclusion_reasons"], {"symbolic_allele": 1})
+        self.assertEqual(
+            record["definitions"]["excluded_units_by_side"]["symbolic_allele"],
+            {"query_only": 1, "comparator_only": 0, "both": 0},
+        )
+
+    def test_gt_one_two_counts_the_sequence_allele_and_excludes_the_symbolic_one(self) -> None:
+        record = self._run(
+            [("chrT", 10, "C", "G,*", "1/2")],
+            [("chrT", 10, "C", "G,*", "1/2")],
+        )
+        m = record["metrics"]
+        self.assertEqual((m["true_positive"], m["genotype_concordant"]), (1, 1))
+        # Both sides call the same `*`: one excluded unit, not two.
+        self.assertEqual(record["exclusion_reasons"], {"symbolic_allele": 1})
+        self.assertEqual(
+            record["definitions"]["excluded_units_by_side"]["symbolic_allele"]["both"], 1
+        )
+
+    def test_the_same_invalid_unit_on_both_sides_is_counted_once(self) -> None:
+        rows = [
+            ("chrZ", 5, "A", "C", "0/1"),
+            ("chrT", 20, "A", "G", "0/1"),
+        ]  # chrT:20 REF is C, so "A" is a mismatch
+        record = self._run(rows, rows)
+        self.assertEqual(record["exclusion_reasons"], {"coordinate_mismatch": 1, "ref_mismatch": 1})
+        self.assertEqual(record["excluded_denominator"], 2)
+        for reason in ("coordinate_mismatch", "ref_mismatch"):
+            self.assertEqual(
+                record["definitions"]["excluded_units_by_side"][reason]["both"], 1, reason
+            )
+
+    def test_reason_precedence_is_declared_and_applied(self) -> None:
+        self.assertEqual(
+            compare.EXCLUSION_PRECEDENCE,
+            (
+                "coordinate_mismatch",
+                "ref_mismatch",
+                "symbolic_allele",
+                "outside_region",
+                "region_boundary",
+            ),
+        )
+        # A symbolic ALT on a record whose site is already unusable takes the site's reason.
+        record = self._run(
+            [("chrZ", 5, "A", "C,*", "1/2"), ("chrT", 20, "A", "G,*", "1/2")],
+            [],
+        )
+        self.assertEqual(record["exclusion_reasons"], {"coordinate_mismatch": 2, "ref_mismatch": 2})
+        self.assertEqual(record["definitions"]["exclusion_precedence"][0], "coordinate_mismatch")
+
+    def test_exclusion_reasons_always_sum_to_the_denominator(self) -> None:
+        record = self._run(
+            [
+                ("chrT", 10, "C", "G,*", "1/2"),
+                ("chrT", 250, "A", "C", "0/1"),
+                ("chrZ", 5, "A", "C", "0/1"),
+            ],
+            [("chrT", 10, "C", "G", "0/1"), ("chrT", 250, "A", "C", "0/1")],
+        )
+        self.assertEqual(sum(record["exclusion_reasons"].values()), record["excluded_denominator"])
+        self.assertEqual(
+            record["exclusion_reasons"],
+            {"coordinate_mismatch": 1, "outside_region": 1, "symbolic_allele": 1},
+        )
 
 
 class NormalizationTests(unittest.TestCase):

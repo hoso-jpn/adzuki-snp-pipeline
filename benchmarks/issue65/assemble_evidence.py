@@ -26,10 +26,15 @@ Matrix rule (no numeric threshold is introduced):
   `not_evaluated` -- the audit found no usable asset for either;
 * a comparison or descriptive cell is `supported_with_caveat` when its
   evaluation has at least one unit in the scope, and `not_evaluated` otherwise;
-* a scope's overall status is `unsupported` when the scope is outside the
-  callable definition itself (cohort_non_callable), `supported_with_caveat`
-  when any cell is, and `not_evaluated` otherwise. No scope can be `supported`
-  without an independent truth cell.
+* a scope's overall status is `supported_with_caveat` when any cell is, and
+  `not_evaluated` otherwise. No scope can be `supported` without an independent
+  truth cell.
+
+No benchmark stratification parameter becomes a delivery gate here. The
+callable rule of `callable_regions.py` was chosen to stratify this benchmark and
+was never calibrated against an outcome, so a scope that fails it is *flagged* --
+the row carries `fails_benchmark_callable_rule` and a caveat naming the rule --
+and not marked `unsupported`, which would adopt that rule as a threshold.
 """
 
 from __future__ import annotations
@@ -396,8 +401,15 @@ SCOPES = [
     *[(name, name, name) for name in DEPTH],
     *[(name, name, name) for name in GC if name != "gc_undefined"],
 ]
-DEFINITIONALLY_UNSUPPORTED = {
-    "cohort_non_callable": "fails the benchmark callable rule in more than 20% of the 51 samples"
+# Flagged on the row, never turned into a status: these scopes fail the
+# benchmark's own callable rule (see callable_regions.py), which stratifies this
+# benchmark and was never calibrated as a delivery gate.
+CALLABLE_RULE_CAVEAT = {
+    "cohort_non_callable": (
+        "fails the benchmark callable rule (depth 5 to 2.5x the sample's median, in at least 80% "
+        "of the 51 samples); that rule stratifies this benchmark and is not calibrated as a "
+        "delivery threshold"
+    )
 }
 
 
@@ -431,7 +443,8 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
     cross = [
         e
         for e in evaluations
-        if e["evidence_class"] == "cross_platform_concordance" and e["not_evaluated_reason"] is None
+        if e["evidence_class"] == "reference_sample_self_consistency"
+        and e["not_evaluated_reason"] is None
     ]
     descriptive = by_id.get("gs_snp_pass_51.NC_068975.1_1-20000000.descriptive")
     rows, cells = [], []
@@ -505,7 +518,7 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
                 row_cells.append(
                     model.delivery_row(
                         scope=scope_id,
-                        evidence_class="cross_platform_concordance",
+                        evidence_class="reference_sample_self_consistency",
                         status="supported_with_caveat",
                         evidence_refs=[cross[0]["evaluation_id"]],
                         rationale="Illumina calls of the reference BioSample against its own PacBio-derived assembly",
@@ -526,7 +539,7 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
                 row_cells.append(
                     model.delivery_row(
                         scope=scope_id,
-                        evidence_class="cross_platform_concordance",
+                        evidence_class="reference_sample_self_consistency",
                         status="not_evaluated",
                         evidence_refs=[],
                         rationale=reason,
@@ -575,15 +588,7 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
                 )
 
             evaluated = [c for c in row_cells if c["status"] == "supported_with_caveat"]
-            if scope in DEFINITIONALLY_UNSUPPORTED:
-                overall = model.delivery_row(
-                    scope=scope_id,
-                    evidence_class="descriptive_stratification",
-                    status="unsupported",
-                    evidence_refs=["callable/callable_summary.json"],
-                    rationale=DEFINITIONALLY_UNSUPPORTED[scope],
-                )
-            elif evaluated:
+            if evaluated:
                 classes = sorted({c["evidence_class"] for c in evaluated})
                 overall = model.delivery_row(
                     scope=scope_id,
@@ -611,6 +616,10 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
                     "claim_allowed": overall["claim_allowed"],
                     "overall_rationale": overall["rationale"],
                     "evidence_classes_evaluated": sorted({c["evidence_class"] for c in evaluated}),
+                    "fails_benchmark_callable_rule": scope in CALLABLE_RULE_CAVEAT,
+                    "caveats": [CALLABLE_RULE_CAVEAT[scope]]
+                    if scope in CALLABLE_RULE_CAVEAT
+                    else [],
                     "key_metrics": key_metrics,
                 }
             )
@@ -624,6 +633,8 @@ def matrix(evaluations: list[dict[str, object]]) -> dict[str, object]:
             "claim_allowed": "no claim; not evaluated",
             "overall_rationale": "callable.outside_window; downsampling.other_samples_and_genome (genome-wide GS panel descriptive counts exist in gs_snp_pass_51.genome_wide.descriptive)",
             "evidence_classes_evaluated": [],
+            "fails_benchmark_callable_rule": False,
+            "caveats": [],
             "key_metrics": {},
         }
     )
@@ -636,6 +647,7 @@ def matrix_tsv(document: dict[str, object]) -> str:
         "split",
         "overall_status",
         "evidence_classes_evaluated",
+        "fails_benchmark_callable_rule",
         "call_retention.f050_s65",
         "call_retention.f050_s66",
         "call_retention.f025_s65",

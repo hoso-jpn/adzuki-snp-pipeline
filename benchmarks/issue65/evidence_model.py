@@ -78,8 +78,9 @@ DESCRIPTIVE_METRICS = frozenset(
         "missing_genotype_fraction",
         "masked_genotype_cells",
         "masked_genotype_fraction",
-        "filtered_records",
         "pass_records",
+        "failed_filter_records",
+        "unfiltered_records",
         "mean_depth",
         "median_depth",
         "non_reference_calls",
@@ -118,6 +119,14 @@ EVIDENCE_CLASSES: dict[str, dict[str, object]] = {
         "max_status": "supported_with_caveat",
         "claim": "how calls change as depth falls, relative to the full-depth calls; not accuracy",
     },
+    "reference_sample_self_consistency": {
+        "metrics": DESCRIPTIVE_METRICS,
+        "max_status": "supported_with_caveat",
+        "claim": (
+            "where short reads of the reference's own BioSample disagree with the reference "
+            "consensus; not truth, and not callset-to-callset cross-platform concordance"
+        ),
+    },
     "descriptive_stratification": {
         "metrics": DESCRIPTIVE_METRICS,
         "max_status": "supported_with_caveat",
@@ -129,6 +138,20 @@ EVIDENCE_CLASSES: dict[str, dict[str, object]] = {
         "claim": "the evaluation harness computes truth metrics correctly on constructed data",
     },
 }
+
+# Classes whose whole meaning is a comparison of two callsets. An evaluated
+# record of one of these must name both datasets: a "concordance" with nothing
+# to be concordant with is a description, and belongs to a descriptive class.
+COMPARISON_CLASSES = frozenset(
+    {
+        "independent_truth",
+        "technical_replicate_concordance",
+        "cross_platform_concordance",
+        "caller_concordance",
+        "downsampling_stability",
+        "synthetic_truth_fixture",
+    }
+)
 
 STATUSES = (
     "supported",
@@ -184,6 +207,12 @@ def validate_evaluation(record: dict[str, object]) -> None:
             raise InvalidEvaluationError("a not-evaluated record cannot carry metrics")
         return
 
+    if cls in COMPARISON_CLASSES:
+        for side in ("query_dataset", "comparator_dataset"):
+            if not isinstance(record[side], dict) or not record[side]:
+                raise InvalidEvaluationError(
+                    f"{cls} compares two callsets, so an evaluated record must name its {side}"
+                )
     for name in ("eligible_denominator", "excluded_denominator"):
         value = record[name]
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:

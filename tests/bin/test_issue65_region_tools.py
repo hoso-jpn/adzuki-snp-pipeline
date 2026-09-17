@@ -255,6 +255,23 @@ class StratifyTests(unittest.TestCase):
             json.dumps(self._run(self.CALLS, self.MASKED), sort_keys=True),
         )
 
+    def test_filter_column_is_split_into_pass_failed_and_unfiltered(self) -> None:
+        calls = (
+            "chrA\t10\tA\tG\tPASS\t0/1\t0/0\t0/0\n"
+            "chrA\t20\tA\tG\tQD2\t0/1\t0/0\t0/0\n"
+            "chrA\t30\tA\tG\t.\t0/1\t0/0\t0/0\n"  # raw callset: no filter applied
+            "chrA\t40\tA\tG\tQD2;FS60\t0/1\t0/0\t0/0\n"
+        )
+        m = self._run(calls, None)["metrics"]
+        self.assertEqual(m["pass_records"], 1)
+        self.assertEqual(m["failed_filter_records"], 2)
+        self.assertEqual(m["unfiltered_records"], 1)
+        self.assertEqual(
+            m["pass_records"] + m["failed_filter_records"] + m["unfiltered_records"],
+            m["variant_records"],
+        )
+        self.assertNotIn("filtered_records", m)
+
     def test_unmasked_only_has_no_mask_metrics(self) -> None:
         self.assertNotIn("masked_genotype_cells", self._run(self.CALLS, None)["metrics"])
 
@@ -282,6 +299,18 @@ class StratifyTests(unittest.TestCase):
                 query_dataset={},
                 limitations=["x"],
             )
+
+    def test_a_comparison_class_must_name_both_datasets(self) -> None:
+        record = self._run(self.CALLS, None)
+        for evidence_class in ("caller_concordance", "cross_platform_concordance"):
+            broken = dict(record, evidence_class=evidence_class, metrics={"shared_variants": 1})
+            with self.assertRaisesRegex(InvalidEvaluationError, "must name its comparator_dataset"):
+                validate_evaluation(broken)
+        # A self-consistency record describes one callset against the reference sequence.
+        self_consistency = self._run(self.CALLS, None)
+        self_consistency["evidence_class"] = "reference_sample_self_consistency"
+        validate_evaluation(self_consistency)
+        self.assertIsNone(self_consistency["comparator_dataset"])
 
     def test_truth_words_cannot_be_added_to_a_descriptive_record(self) -> None:
         record = self._run(self.CALLS, None)
@@ -354,6 +383,15 @@ class DeliveryMatrixTests(unittest.TestCase):
         cls.document = assemble_evidence.matrix(cls.evaluations)
         cls.rows = {row["scope"]: row for row in cls.document["rows"]}
 
+    def test_no_scope_is_marked_unsupported_by_a_benchmark_parameter(self) -> None:
+        statuses = {row["overall_status"] for row in self.document["rows"]}
+        self.assertNotIn("unsupported", statuses)
+        flagged = [row for row in self.document["rows"] if row["fails_benchmark_callable_rule"]]
+        self.assertTrue(flagged)
+        for row in flagged:
+            self.assertTrue(row["caveats"])
+            self.assertIn("not calibrated", row["caveats"][0])
+
     def test_no_scope_is_supported_without_truth(self) -> None:
         self.assertNotIn("supported", {row["overall_status"] for row in self.document["rows"]})
         truth = [c for c in self.document["cells"] if c["evidence_class"] == "independent_truth"]
@@ -367,9 +405,14 @@ class DeliveryMatrixTests(unittest.TestCase):
             ["caller_concordance", "downsampling_stability"],
         )
         self.assertEqual(
-            self.rows["window:snp"]["key_metrics"]["call_retention.f050_s65"], round(6 / 10, 6)
-        )  # SNP units only: 6 shared, 2 absent, 2 no-call
-        self.assertEqual(self.rows["cohort_non_callable:snp"]["overall_status"], "unsupported")
+            self.rows["window:snp"]["key_metrics"]["call_retention.f050_s65"], round(9 / 14, 6)
+        )  # SNP units only: 9 shared, 3 absent, 2 no-call
+        # The benchmark callable rule is a stratification parameter, not a delivery gate:
+        # a scope that fails it is flagged, not downgraded.
+        non_callable = self.rows["cohort_non_callable:snp"]
+        self.assertEqual(non_callable["overall_status"], "supported_with_caveat")
+        self.assertTrue(non_callable["fails_benchmark_callable_rule"])
+        self.assertFalse(self.rows["core:snp"]["fails_benchmark_callable_rule"])
         self.assertEqual(
             self.rows["low_mappability:snp"]["overall_status"], "not_evaluated"
         )  # no stratum by that name here

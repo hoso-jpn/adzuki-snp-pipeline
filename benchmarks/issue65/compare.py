@@ -26,10 +26,19 @@ Accounting, for units with at least one positive side inside the region
     swamp every rate with a denominator the evaluation never examined.
 
 Exclusions, each counted by reason and never folded into a metric
-    outside_region, region_boundary (span only partly inside), and, per side,
-    coordinate_mismatch, ref_mismatch, symbolic_allele. An excluded unit is
-    counted once, under the first reason that applies to it, so the reasons
-    sum to `excluded_denominator`.
+    coordinate_mismatch, ref_mismatch, symbolic_allele, outside_region and
+    region_boundary (span only partly inside).
+
+    An exclusion is counted per *comparison unit*, not per side. The same
+    unusable allele in both callsets -- an `ALT=*` both call, a REF both get
+    wrong -- is one excluded unit, counted once. A unit takes the first reason
+    in `EXCLUSION_PRECEDENCE` that applies to it on either side, so the reasons
+    always sum to `excluded_denominator`. Which side each excluded unit came
+    from is reported under `definitions`, where it cannot be mistaken for an
+    additive count.
+
+    Only a unit that some side is positive or no-call for can be excluded: an
+    allele every side calls homozygous reference is not a comparison unit.
 """
 
 from __future__ import annotations
@@ -38,10 +47,23 @@ from dataclasses import dataclass, field
 
 from evidence_model import EVALUATION_SCHEMA_VERSION, validate_evaluation
 from regions import RegionSet, Stratum
-from variants import Reference, classify_record, normalize_allele, read_vcf
+from variants import Reference, classify_record, is_symbolic_allele, normalize_allele, read_vcf
 
 POSITIVE, NOCALL, REFERENCE = "positive", "nocall", "reference"
 _PRECEDENCE = {POSITIVE: 2, NOCALL: 1, REFERENCE: 0}
+
+# A unit that more than one reason could exclude is counted under the first of
+# these: coordinates that are wrong leave nothing to check REF against, a wrong
+# REF leaves nothing to normalize, and an allele that cannot be normalized
+# cannot be placed in the region.
+EXCLUSION_PRECEDENCE = (
+    "coordinate_mismatch",
+    "ref_mismatch",
+    "symbolic_allele",
+    "outside_region",
+    "region_boundary",
+)
+_EXCLUSION_RANK = {reason: rank for rank, reason in enumerate(EXCLUSION_PRECEDENCE)}
 
 METRIC_NAMES = {
     "truth": {
@@ -81,7 +103,8 @@ class _Side:
     states: dict[tuple, tuple[str, int, bool]] = field(default_factory=dict)
     spans: dict[tuple, int] = field(default_factory=dict)
     types: dict[tuple, str] = field(default_factory=dict)
-    invalid: dict[str, int] = field(default_factory=dict)
+    # (contig, pos, ref, alt) exactly as the record wrote it -> exclusion reason
+    invalid: dict[tuple, str] = field(default_factory=dict)
     duplicate_keys: int = 0
     records: int = 0
 
@@ -93,18 +116,20 @@ def _load_side(path, sample: str, reference: Reference) -> _Side:
         gt = record.genotypes[sample]
         if not record.alts:
             continue
-        reason = classify_record(
-            reference, record.contig, record.pos, record.ref, list(record.alts)
-        )
+        site_reason = classify_record(reference, record.contig, record.pos, record.ref)
         for alt_index, alt in enumerate(record.alts, start=1):
             if None in gt:
                 state, dosage = NOCALL, 0
             else:
                 dosage = sum(1 for allele in gt if allele == alt_index)
                 state = POSITIVE if dosage else REFERENCE
+            reason = site_reason or ("symbolic_allele" if is_symbolic_allele(alt) else None)
             if reason is not None:
                 if state != REFERENCE:
-                    side.invalid[reason] = side.invalid.get(reason, 0) + 1
+                    unit = (record.contig, record.pos, record.ref, alt)
+                    seen = side.invalid.get(unit)
+                    if seen is None or _EXCLUSION_RANK[reason] < _EXCLUSION_RANK[seen]:
+                        side.invalid[unit] = reason
                 continue
             allele = normalize_allele(
                 reference, record.contig, record.pos, record.ref, alt, alt_index
@@ -191,9 +216,20 @@ def evaluate(
     c = _load_side(comparator["path"], str(comparator["sample"]), reference)
 
     exclusions: dict[str, int] = {}
+    invalid_units: dict[tuple, str] = {}
+    invalid_sides: dict[tuple, set[str]] = {}
     for side_name, side in (("query", q), ("comparator", c)):
-        for reason, count in side.invalid.items():
-            exclusions[f"{side_name}_{reason}"] = count
+        for unit, reason in side.invalid.items():
+            seen = invalid_units.get(unit)
+            if seen is None or _EXCLUSION_RANK[reason] < _EXCLUSION_RANK[seen]:
+                invalid_units[unit] = reason
+            invalid_sides.setdefault(unit, set()).add(side_name)
+    by_side: dict[str, dict[str, int]] = {}
+    for unit, reason in invalid_units.items():
+        exclusions[reason] = exclusions.get(reason, 0) + 1
+        sides = invalid_sides[unit]
+        where = "both" if len(sides) == 2 else f"{next(iter(sides))}_only"
+        by_side.setdefault(reason, {"query_only": 0, "comparator_only": 0, "both": 0})[where] += 1
 
     totals = _empty_counts()
     by_stratum = {s.name: _empty_counts() for s in strata}
@@ -310,6 +346,12 @@ def evaluate(
         "definitions": {
             "true_negatives": "not counted: a VCF does not enumerate confident reference positions",
             "precision_or_rate_denominator_zero": "reported as null, never as 0 or 1",
+            "excluded_units": (
+                "one unit per (contig, pos, ref, alt) as written; a unit both callsets carry is "
+                "counted once"
+            ),
+            "exclusion_precedence": list(EXCLUSION_PRECEDENCE),
+            "excluded_units_by_side": {reason: by_side[reason] for reason in sorted(by_side)},
             "duplicate_normalized_keys": {
                 "query": q.duplicate_keys,
                 "comparator": c.duplicate_keys,

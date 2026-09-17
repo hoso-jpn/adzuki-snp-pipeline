@@ -15,6 +15,10 @@ That comparison is "site filter only" versus "site filter + genotype mask" on
 the *same* records and samples. It does not mix in sample QC, and a difference
 between strata describes where the mask acts, not which stratum is accurate.
 
+FILTER is reported in three buckets, because a VCF distinguishes them: `PASS`
+(filters applied and passed), a named code (failed), and `.` (no filter
+applied, as in a raw single-sample callset).
+
 A record is placed in a stratum by its REF span. A record that straddles a
 stratum's edge is counted for neither side of it and reported as a boundary
 count for that stratum. A record outside the universe is excluded with a reason.
@@ -67,6 +71,15 @@ def _parse(line: str, number: int, samples: int | None):
     return contig, int(pos), ref, alt, flt, len(gts), missing, (het, hom_alt)
 
 
+def _filter_bucket(value: str) -> str:
+    """VCF FILTER: `PASS` passed the filters and `.` means none were applied."""
+    if value == "PASS":
+        return "pass_records"
+    if value in (".", ""):
+        return "unfiltered_records"
+    return "failed_filter_records"
+
+
 def _empty() -> dict[str, int]:
     return dict.fromkeys(
         (
@@ -74,7 +87,8 @@ def _empty() -> dict[str, int]:
             "snp_records",
             "indel_records",
             "pass_records",
-            "filtered_records",
+            "failed_filter_records",
+            "unfiltered_records",
             "genotype_cells",
             "missing_genotype_cells",
             "non_reference_calls",
@@ -124,7 +138,7 @@ def stratify(
     limitations: list[str],
     evidence_class: str = "descriptive_stratification",
 ) -> dict[str, object]:
-    if evidence_class not in ("descriptive_stratification", "cross_platform_concordance"):
+    if evidence_class not in ("descriptive_stratification", "reference_sample_self_consistency"):
         raise ValueError(f"{evidence_class} does not carry descriptive per-stratum counts")
     groups: dict[str, list[Stratum]] = {}
     for stratum in strata:
@@ -174,7 +188,7 @@ def stratify(
         for counts in targets:
             counts["variant_records"] += 1
             counts["snp_records" if is_snp else "indel_records"] += 1
-            counts["pass_records" if flt == "PASS" else "filtered_records"] += 1
+            counts[_filter_bucket(flt)] += 1
             counts["genotype_cells"] += n
             counts["missing_genotype_cells"] += missing
             counts["non_reference_calls"] += non_ref[0] + non_ref[1]
@@ -224,6 +238,10 @@ def stratify(
         "definitions": {
             "masked_genotype_cells": "missing in the masked stream but not in the unmasked stream, same record and sample",
             "missing_genotype_cells": "a GT with any missing allele in the unmasked stream",
+            "filter_buckets": (
+                "pass_records: FILTER=PASS; failed_filter_records: a named filter code; "
+                "unfiltered_records: FILTER='.', meaning no filter was applied"
+            ),
             "non_reference_calls": "a fully called GT with at least one non-reference allele",
             "heterozygous_calls": "a fully called GT with two different alleles",
             "homozygous_alt_calls": "a fully called GT whose alleles are one and the same non-reference allele",

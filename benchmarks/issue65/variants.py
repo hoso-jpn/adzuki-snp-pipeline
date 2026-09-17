@@ -7,13 +7,16 @@ what `bcftools norm -f ref -m -any` implements), and only then keyed by
 `(contig, pos, ref, alt)`. The unit tests pin this against records the pinned
 bcftools container normalized, so the Python rule cannot quietly diverge.
 
-Records that cannot be compared are classified, not dropped:
+Records that cannot be compared are classified, not dropped. Two of the
+reasons belong to the site and one to the single ALT allele, because the
+comparison unit is one ALT allele after multi-allelic splitting:
 
-* `coordinate_mismatch` -- the contig is not in the reference, or the REF span
-  runs past the contig end;
-* `ref_mismatch` -- REF does not equal the reference bases at POS;
-* `symbolic_allele` -- `<DEL>`, `*`, breakends and similar, which this
-  sequence-level comparison cannot place.
+* `coordinate_mismatch` (site) -- the contig is not in the reference, or the
+  REF span runs past the contig end;
+* `ref_mismatch` (site) -- REF does not equal the reference bases at POS;
+* `symbolic_allele` (allele) -- `<DEL>`, `*`, breakends and similar, which this
+  sequence-level comparison cannot place. A record such as `ALT=G,*` keeps its
+  sequence allele `G`: only the `*` allele is excluded.
 
 Malformed input (a data row with the wrong column count, a non-integer POS, a
 GT that is not a genotype) is a hard error: evaluating a broken file and
@@ -95,18 +98,24 @@ class NormalizedAllele:
         return "snp" if len(self.ref) == 1 and len(self.alt) == 1 else "indel"
 
 
-def classify_record(
-    reference: Reference, contig: str, pos: int, ref: str, alts: list[str]
-) -> str | None:
-    """None if the record can be normalized, else the exclusion reason."""
+def classify_record(reference: Reference, contig: str, pos: int, ref: str) -> str | None:
+    """Site-level exclusion reason for a record, or None if its site is usable.
+
+    This judges only what the whole record shares -- its coordinates and its REF
+    -- so a record with both a sequence and a symbolic ALT is not discarded
+    wholesale. Each ALT is judged separately by `is_symbolic_allele`.
+    """
     length = reference.length(contig)
     if length is None or pos < 1 or pos - 1 + len(ref) > length:
         return "coordinate_mismatch"
-    if not _BASES.match(ref) or any(not _BASES.match(alt) for alt in alts):
-        return "symbolic_allele"
     if reference.fetch(contig, pos - 1, pos - 1 + len(ref)) != ref.upper():
         return "ref_mismatch"
     return None
+
+
+def is_symbolic_allele(alt: str) -> bool:
+    """True for `<DEL>`, `*`, breakends and anything else that is not plain bases."""
+    return not _BASES.match(alt)
 
 
 def normalize_allele(
