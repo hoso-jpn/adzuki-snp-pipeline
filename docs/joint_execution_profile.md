@@ -119,6 +119,12 @@ output directory:
 python tests/scripts/check_issue69_resume.py --output-dir /tmp/issue69-new-run
 ```
 
+Each invocation keeps its own numbered trace and log. Nextflow can complete
+while refusing to replace an existing trace, so a later resume must never
+reuse an earlier trace path for its cache assertions. CI runs this regression
+in a parallel job and retains its synthetic traces, logs and completed evidence
+as the `issue69-synthetic-resume` artifact, including diagnostics after failure.
+
 This is wired into CI alongside a real GATK boundary-spanning indel fixture
 and a nonlexical sample-ID / split-interval E2E case. Availability of these
 tests is not evidence that they passed in an environment without Nextflow

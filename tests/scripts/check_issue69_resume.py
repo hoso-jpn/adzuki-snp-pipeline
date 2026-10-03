@@ -10,6 +10,7 @@ import csv
 import gzip
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -37,7 +38,17 @@ def run_pipeline(
 ) -> tuple[int, float, Path]:
     launch = base / name
     launch.mkdir(exist_ok=True)
-    trace = launch / ("resume.trace.txt" if resume else "trace.txt")
+    prefix = "resume" if resume else "run"
+    invocation = 1
+    # Nextflow refuses to replace an existing trace by default, but merely
+    # warns and can still exit successfully. Bind every assertion to the
+    # current invocation while preserving earlier trace/log evidence.
+    while any(
+        (launch / f"{prefix}-{invocation:03d}.{suffix}").exists() for suffix in ("trace.txt", "log")
+    ):
+        invocation += 1
+    trace = launch / f"{prefix}-{invocation:03d}.trace.txt"
+    log_path = launch / f"{prefix}-{invocation:03d}.log"
     command = [
         "nextflow",
         "run",
@@ -58,7 +69,7 @@ def run_pipeline(
     if resume:
         command += ["-resume"]
     start = time.monotonic()
-    with (launch / ("resume.log" if resume else "run.log")).open("w") as log:
+    with log_path.open("x") as log:
         result = subprocess.run(
             command,
             cwd=launch,
@@ -67,6 +78,9 @@ def run_pipeline(
             env={**os.environ, "NXF_VER": "26.04.6"},
             check=False,
         )
+    if result.returncode and failure_config is None:
+        print("Unexpected synthetic pipeline failure; final log lines:", file=sys.stderr)
+        print("\n".join(log_path.read_text().splitlines()[-80:]), file=sys.stderr)
     return result.returncode, time.monotonic() - start, trace
 
 
@@ -92,7 +106,7 @@ def main() -> int:
     )
     reference_code, reference_time, _ = run_pipeline(base, "baseline", samples)
     if reference_code:
-        parser.exit(1, "baseline failed; inspect baseline/run.log\n")
+        parser.exit(1, "baseline failed; inspect baseline/run-*.log\n")
     failed_code, failed_time, _ = run_pipeline(base, "interrupted", samples, failure_config=failure)
     launch = base / "interrupted"
     if failed_code == 0 or (launch / "results/provenance/cohort.run_manifest.json").exists():
@@ -155,10 +169,14 @@ def main() -> int:
         fastp_rows = [
             row
             for row in csv.DictReader(handle, delimiter="\t")
-            if ":FASTP " in row.get("name", "")
+            if re.search(r"(?:^|:)FASTP(?:\s|\(|$)", row.get("name", ""))
         ]
-    if not fastp_rows or any(row.get("status") != "COMPLETED" for row in fastp_rows):
-        parser.exit(1, "scientific processing reused metadata-only cache for changed FASTQ bytes\n")
+    with samples.open() as handle:
+        expected_fastp_count = sum(1 for _ in csv.DictReader(handle))
+    if len(fastp_rows) != expected_fastp_count:
+        parser.exit(1, "current invocation trace does not account for every FASTP read group\n")
+    if any(row.get("status") != "COMPLETED" for row in fastp_rows):
+        parser.exit(1, "current invocation reused scientific cache for changed FASTQ bytes\n")
     (base / "resume_evidence.json").write_text(
         json.dumps(
             {
