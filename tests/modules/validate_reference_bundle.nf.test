@@ -1,0 +1,43 @@
+nextflow_process {
+    name "Reference bundle real-tool build and prebuilt roundtrip"
+    script "modules/local/validate_reference_bundle.nf"
+    process "VALIDATE_REFERENCE_BUNDLE"
+    tag "issue68_reference_bundle"
+
+    setup {
+        run("BUILD_REFERENCE_FIXTURE") {
+            script "tests/modules/fixtures/build_reference_bundle.nf"
+            workflow {
+                """
+                input[0] = Channel.value(tuple([id: 'synthetic'],
+                    file("${projectDir}/tests/data/reference/synthetic.fa")))
+                """
+            }
+        }
+    }
+
+    test("a real same-task BWA build can be revalidated without rewriting its manifest") {
+        when {
+            process {
+                """
+                input[0] = BUILD_REFERENCE_FIXTURE.out.fasta
+                input[1] = BUILD_REFERENCE_FIXTURE.out.fai
+                input[2] = BUILD_REFERENCE_FIXTURE.out.dict
+                input[3] = BUILD_REFERENCE_FIXTURE.out.indexes
+                input[4] = BUILD_REFERENCE_FIXTURE.out.manifest.map { meta, manifest ->
+                    tuple([mode: 'prebuilt'], manifest,
+                        file("${projectDir}/assets/NO_REFERENCE_BUILD_VERSION"))
+                }
+                """
+            }
+        }
+        then {
+            assert process.success
+            def manifest = new groovy.json.JsonSlurper().parse(path(process.out.manifest[0][1]).toFile())
+            assert manifest.validation.result == 'passed'
+            assert manifest.bwa_index.size() == 5
+            assert manifest.contigs.every { it.md5.size() == 32 }
+            assert manifest.index_build.method == 'same_task_bwa_mem2_index'
+        }
+    }
+}

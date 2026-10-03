@@ -98,6 +98,8 @@ CSVで、以下の列を使用します。
 
 Longxiaodou 4の設定例は[`conf/references/longxiaodou4.config.example`](conf/references/longxiaodou4.config.example)です。実データ検証ではGCF_016808095.1 / ASM1680809v1を使用しました。参照assemblyの異なる結果を直接互換とみなしてはいけません。
 
+Issue #68以降、FASTA実配列とFAIのoffset/line幅、dictionary M5、BWA index生成元をmapping前に検証します。prebuilt BWA indexには同一bundleの`--reference_bundle_manifest`が必須です。生成元不明の場合はFASTAからindexを再生成してください。詳細は[`docs/reference_bundle_validation.md`](docs/reference_bundle_validation.md)を参照してください。
+
 ## 主要パラメータ
 
 | Parameter | Default | Contract |

@@ -308,6 +308,9 @@ workflow {
     }
 
     if (params.bwa_index_prefix) {
+        if (!params.reference_bundle_manifest) {
+            error('Prebuilt BWA indexes require --reference_bundle_manifest from a controlled build; regenerate the indexes when provenance is unavailable.')
+        }
         bwa_index_prefix = file(
             params.bwa_index_prefix,
             checkIfExists: false
@@ -335,6 +338,10 @@ workflow {
                 checkIfExists: true
             )
         }
+    }
+
+    if (params.reference_bundle_manifest && !params.bwa_index_prefix) {
+        error('--reference_bundle_manifest requires --bwa_index_prefix; remove both to regenerate indexes.')
     }
 
     reference_ch = channel.value(

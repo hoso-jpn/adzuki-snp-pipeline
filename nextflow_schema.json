@@ -181,6 +181,12 @@
           "description": "Default Python image reference for the GS lineage's Python-based processes"
         }
       }
+    },
+    "reference_bundle_manifest": {
+      "type": "string",
+      "format": "file-path",
+      "exists": true,
+      "description": "Previously generated reference_bundle_v1 manifest; mandatory for prebuilt BWA indexes"
     }
   },
   "required": [

@@ -51,9 +51,9 @@ class PublishDirOwnershipTest(unittest.TestCase):
         self.assertEqual([], offenders)
 
     def test_every_publish_assignment_is_centralized_in_nextflow_config(self) -> None:
-        # 29 before Issue #64, which added GS_INDEX_QUALITY_MASKED_VCF and
-        # VERIFY_GS_GENOTYPE_QUALITY_MASK, each publishing into gs_panel/.
-        self.assertEqual(31, len(re.findall(r"(?m)^\s*publishDir\s*=", self.config)))
+        # Issue #68 adds the validated reference bundle manifest to the
+        # 31 existing publish policies.
+        self.assertEqual(32, len(re.findall(r"(?m)^\s*publishDir\s*=", self.config)))
 
     def test_moved_single_destination_policies_are_unchanged(self) -> None:
         for process_name, (path, pattern) in MOVED_POLICIES.items():

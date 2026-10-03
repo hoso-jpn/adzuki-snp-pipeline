@@ -48,7 +48,7 @@ class PublishedOutputContract {
             'multiqc_report.html', 'multiqc_data', 'multiqc_config.yaml', 'multiqc_version.txt'
         ])
         assert new File(root, 'qc/multiqc/multiqc_data/multiqc_data.json').isFile()
-        def reference = []
+        def reference = ['synthetic.reference_bundle.json']
         if (generatedBwa) reference.addAll(['0123', 'amb', 'ann', 'bwt.2bit.64', 'pac'].collect {
             "synthetic.fa.${it}".toString()
         })
