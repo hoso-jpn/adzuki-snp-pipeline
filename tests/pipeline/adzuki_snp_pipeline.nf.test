@@ -1839,18 +1839,29 @@ nextflow_pipeline {
         tag "issue42_run_manifest"
         tag "issue68_reference_bundle"
         setup {
-            run("BUILD_REFERENCE_FIXTURE") {
-                script "tests/modules/fixtures/build_reference_bundle.nf"
-                params {
-                    outdir = "${outputDir}/prepared"
-                }
-                workflow {
-                    """
-                    input[0] = Channel.value(tuple([id: 'synthetic'],
-                        file("${projectDir}/tests/data/reference/synthetic.fa")))
-                    """
-                }
-            }
+            // nf-test 0.9.5's pipeline setup is a plain Groovy closure:
+            // run(...) dependencies are supported only by process/workflow
+            // tests. Build this bundle in an independent real pipeline run,
+            // using the same pinned tools and test,docker profile as CI.
+            def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+            absoluteSamplesheet.text = file("${projectDir}/tests/data/samplesheet.csv").text
+                .replace("tests/data/reads/", "${projectDir}/tests/data/reads/")
+            def preparationLog = new File("${outputDir}/reference-build.log")
+            def preparation = new ProcessBuilder([
+                'nextflow', '-log', "${outputDir}/reference-build.nextflow.log".toString(),
+                'run', "${projectDir}/main.nf".toString(),
+                '-profile', 'test,docker',
+                '-work-dir', "${outputDir}/reference-build-work".toString(),
+                '--input', absoluteSamplesheet.toString(),
+                '--outdir', "${outputDir}/prepared".toString(),
+                '--sample_ploidy', '2',
+            ])
+                .directory(new File(projectDir.toString()))
+                .redirectErrorStream(true)
+                .redirectOutput(preparationLog)
+                .start()
+            assert preparation.waitFor() == 0: preparationLog.text
+            assert new File("${outputDir}/prepared/reference/synthetic-adzuki-v1.reference_bundle.json").isFile()
         }
 
 
@@ -1873,7 +1884,7 @@ nextflow_pipeline {
                 bwa_index_prefix = "${outputDir}/prepared/reference/synthetic.fa"
                 reference_fai = "${outputDir}/prepared/reference/synthetic.fa.fai"
                 reference_dict = "${outputDir}/prepared/reference/synthetic.dict"
-                reference_bundle_manifest = "${outputDir}/prepared/reference/synthetic.reference_bundle.json"
+                reference_bundle_manifest = "${outputDir}/prepared/reference/synthetic-adzuki-v1.reference_bundle.json"
             }
         }
 
@@ -1987,6 +1998,10 @@ nextflow_pipeline {
         tag "issue68_reference_bundle"
         when {
             params {
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = file("${projectDir}/tests/data/samplesheet.csv").text
+                    .replace("tests/data/reads/", "${projectDir}/tests/data/reads/")
+                input = absoluteSamplesheet.toString()
                 bwa_index_prefix = "${projectDir}/tests/data/reference/prebuilt_bwa_index/synthetic.fa"
                 outdir = "$outputDir"
             }
@@ -2002,6 +2017,10 @@ nextflow_pipeline {
         tag "issue68_reference_bundle"
         when {
             params {
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = file("${projectDir}/tests/data/samplesheet.csv").text
+                    .replace("tests/data/reads/", "${projectDir}/tests/data/reads/")
+                input = absoluteSamplesheet.toString()
                 def folder = new File("${outputDir}/bad-reference")
                 folder.mkdirs()
                 def badDict = new File(folder, 'synthetic.dict')
@@ -2014,6 +2033,11 @@ nextflow_pipeline {
         }
         then {
             assert !workflow.success
+            def output = (workflow.stdout + workflow.stderr).join("\n")
+            assert output.contains('reference bundle rejected: FASTA/dictionary mismatch (name, length, order or M5)')
+            def validationTasks = workflow.trace.tasks().findAll { it.name.contains('VALIDATE_REFERENCE_BUNDLE') }
+            assert validationTasks.size() == 1
+            assert !validationTasks[0].success
             def tasks = workflow.trace.tasks().collect { it.name }
             assert tasks.every { !it.contains('BWA_MEM2_MEM_SORT') && !it.contains('GATK_HAPLOTYPECALLER') }
             assert !new File("$outputDir/provenance/cohort.run_manifest.json").exists()
