@@ -1,6 +1,13 @@
+def inputProvenanceQuote(value) {
+    return "'" + value.toString().replace("'", "'\\''") + "'"
+}
+
 process HASH_INPUT_FASTQS {
     tag "${meta.read_group_id}"
     label 'process_low'
+    // A same-size FASTQ mutation with restored mtime must invalidate both
+    // the input-bound plan review and downstream scientific task caches.
+    cache 'deep'
 
     // See modules/local/summarize_variant_qc.nf for why the full
     // (non-"-slim") Python image is required. Sourced from
@@ -37,13 +44,13 @@ process HASH_INPUT_FASTQS {
     """
     hash_input_fastqs.py \
         --rank ${meta.rank} \
-        --sample-id '${meta.sample_id}' \
-        --read-group-id '${meta.read_group_id}' \
-        --library-id '${meta.library_id}' \
-        --platform '${meta.platform}' \
-        --platform-unit '${meta.platform_unit}' \
-        --fastq-1 ${read1} \
-        --fastq-2 ${read2} \
-        --output ${meta.read_group_id}.input_provenance.tsv
+        --sample-id ${inputProvenanceQuote(meta.sample_id)} \
+        --read-group-id ${inputProvenanceQuote(meta.read_group_id)} \
+        --library-id ${inputProvenanceQuote(meta.library_id)} \
+        --platform ${inputProvenanceQuote(meta.platform)} \
+        --platform-unit ${inputProvenanceQuote(meta.platform_unit)} \
+        --fastq-1 ${inputProvenanceQuote(read1)} \
+        --fastq-2 ${inputProvenanceQuote(read2)} \
+        --output ${inputProvenanceQuote("${meta.read_group_id}.input_provenance.tsv")}
     """
 }

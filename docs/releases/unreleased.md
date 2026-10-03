@@ -15,3 +15,11 @@
   policyは変更していません。実行契約・検証内容・既知の制約は
   [`../docker_host_user_execution.md`](../docker_host_user_execution.md)を参照してください。
   既に存在するroot所有artifactの回収はこの変更の対象外です。(Issue #51)
+# Commercialization follow-up (#68 / #69)
+
+- Reference FASTA/FAI/M5 and controlled BWA index bundle validation gates mapping.
+- Header-validated sample-name-map and reference-ordered window strategy enter the DAG.
+- Research execution plan, explicit resource scope, stopped-cache integrity tooling,
+  and synthetic failure/resume regressions are added.
+- New-profile 51-sample real replay and commercial SLA remain unestablished;
+  327-sample NO-GO is unchanged. Earlier #45 measurements are not relabeled.

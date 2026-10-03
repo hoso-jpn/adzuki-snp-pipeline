@@ -5,6 +5,9 @@ def referenceShellQuote(value) {
 process VALIDATE_REFERENCE_BUNDLE {
     tag "${meta.id}"
     label 'process_low'
+    // Recheck content even when a stopped input was changed without changing
+    // size or mtime. A stale validation result must not authorize -resume.
+    cache 'deep'
     container params.containers.python
 
     input:
@@ -28,7 +31,7 @@ process VALIDATE_REFERENCE_BUNDLE {
         ? "--receipt ${referenceShellQuote(proof)} --tool-version ${referenceShellQuote(tool_version)} --container ${referenceShellQuote(origin.container)}"
         : "--prebuilt-manifest ${referenceShellQuote(proof)}"
     """
-    python3 ${projectDir}/bin/validate_reference_bundle.py \
+    python3 ${referenceShellQuote("${projectDir}/bin/validate_reference_bundle.py")} \
         --fasta ${referenceShellQuote(fasta)} \
         --fai ${referenceShellQuote(fai)} \
         --dictionary ${referenceShellQuote(dictionary)} \

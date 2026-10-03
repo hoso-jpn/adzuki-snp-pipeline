@@ -187,6 +187,33 @@
       "format": "file-path",
       "exists": true,
       "description": "Previously generated reference_bundle_v1 manifest; mandatory for prebuilt BWA indexes"
+    },
+    "joint_interval_size_bp": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20000000,
+      "description": "Maximum interval span; smaller windows may be needed at higher cohort complexity"
+    },
+    "joint_genotype_memory_gib": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Per-task memory budget, with 20 percent native reserve"
+    },
+    "joint_max_concurrency": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum concurrent GenotypeGVCFs tasks"
+    },
+    "joint_launch_memory_gib": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Local executor memory scheduling budget"
+    },
+    "joint_review_file": {
+      "type": "string",
+      "format": "file-path",
+      "exists": true,
+      "description": "Input-bound public validation review for 21-51 samples; not a commercial approval"
     }
   },
   "required": [

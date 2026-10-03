@@ -9,9 +9,13 @@
 // explicit in its own command line, rather than relying on GATK's
 // undocumented-to-this-pipeline inference behavior, which could change
 // in a future GATK version without warning.
+def genotypeIntervalQuote(value) {
+    return "'" + value.toString().replace("'", "'\\''") + "'"
+}
+
 process GATK_GENOTYPEGVCFS {
     tag "${interval_meta.id}"
-    label 'process_high'
+    label 'process_genotypegvcfs'
 
     container 'broadinstitute/gatk:4.6.2.0@sha256:71b17ee42d149e8ec112603f5305c873ab60d93949ef8bb62a4fff85427f56fb'
 
@@ -44,16 +48,17 @@ process GATK_GENOTYPEGVCFS {
     val(task.container), emit: container_id
 
     script:
-    memory_gb = Math.max(
-        1,
-        task.memory.toGiga().intValue() - 1
-    )
+    xmx_mib = Math.floor(task.memory.toMega() * 0.8).intValue()
+    if (xmx_mib < 1) {
+        error('GenotypeGVCFs requires memory above its native reserve')
+    }
 
     """
-    gatk --java-options "-Xmx${memory_gb}g" GenotypeGVCFs \
+    gatk --java-options "-Xmx${xmx_mib}m" GenotypeGVCFs \
         --reference ${fasta} \
         --variant gendb://${genomicsdb} \
-        --intervals '${interval}' \
+        --intervals ${genotypeIntervalQuote(interval)} \
+        --only-output-calls-starting-in-intervals true \
         --sample-ploidy ${params.sample_ploidy} \
         --output ${interval_meta.id}.raw.vcf.gz \
         --create-output-variant-index true

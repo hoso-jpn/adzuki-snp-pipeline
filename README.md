@@ -313,7 +313,7 @@ production設定は変更していません。
 
 `FILTER=PASS`は「設定されたhard-filter規則を通過した」ことだけを意味します。truth setがないため、variant callの正しさや最適なthresholdを意味しません。annotation欠損はthreshold通過と区別してQCします。
 
-Issue #46のreal-cohort calibrationは、事前定義した探索scenarioと再現可能な集計手順を[`docs/hard_filter_threshold_calibration.md`](docs/hard_filter_threshold_calibration.md)に固定しています。20検体artifactの実測結果とdecision recordは未記録であり、default thresholdは変更していません。
+Issue #46のreal-cohort calibrationは、事前定義した探索scenarioと再現可能な集計手順を[`docs/hard_filter_threshold_calibration.md`](docs/hard_filter_threshold_calibration.md)に固定しています。20検体artifactの実測結果とdecision recordは#46 / PR #60で記録済みです。判断はKEEPで、default thresholdは変更していません。
 
 ### 変異品質の根拠と納品可能範囲 (Issue #65)
 
@@ -336,14 +336,9 @@ MAF / call-rate filtering、LD pruning、imputation、GS model trainingはこの
 
 ## 次の開発課題
 
-現在までのIssueはすべて完了しました。リポジトリ全体の再監査後、次のfollow-upを起票しています。
+#44（GS matrix streaming）、#43（FILTER QC streaming）、#45（51検体Joint Genotyping benchmark）、#46（annotation感度）は完了済みです。過去の実測は各documentに保持しています。
 
-- [#44](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/44) — **P0**: `BUILD_GS_PANEL`をbounded-memory化する
-- [#43](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/43) — **P1**: `SUMMARIZE_FILTER_QC`をstreaming化する
-- [#45](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/45) — **P1**: 50検体超のJoint Genotyping scale strategyをtargeted検証する
-- [#46](https://github.com/hoso-jpn/adzuki-snp-pipeline/issues/46) — **P1**: real cohortでhard-filter annotation分布とthreshold sensitivityを評価する
-
-327検体full E2E、Parabricks/GPU化、全module網羅のnf-test、下流`genomic-prediction-resnet-hybrid`のアズキingestionは、上記より後または別repositoryで扱います。
+事業化follow-upは#68（FASTA/prebuilt bundle検証）と#69（実行DAGへの採用戦略・資源plan・再開検証）です。#69のrun planは20検体E2Eと51検体targeted benchmarkを区別し、327検体NO-GOを維持します。新profileの実データ51検体replay・受託SLAは未確立です。詳しくは[`docs/joint_execution_profile.md`](docs/joint_execution_profile.md)を参照してください。
 
 ## データ取扱い
 

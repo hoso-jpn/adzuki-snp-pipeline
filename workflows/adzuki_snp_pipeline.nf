@@ -1,3 +1,6 @@
+include { PLAN_JOINT_GENOTYPING } from '../modules/local/plan_joint_genotyping'
+include { BUILD_SAMPLE_NAME_MAP } from '../modules/local/build_sample_name_map'
+
 include { VALIDATE_REFERENCE_BUNDLE } from '../modules/local/validate_reference_bundle'
 
 include {
@@ -275,32 +278,6 @@ workflow ADZUKI_SNP_PIPELINE {
     // ran would be a claim about software that never touched the data.
     optional_container_provenance_ch = channel.empty()
 
-    raw_reads_ch = samples_ch.map {
-        meta,
-        read1,
-        read2 ->
-        tuple(meta, [read1, read2])
-    }
-
-    FASTQC_RAW(
-        raw_reads_ch,
-        'raw'
-    )
-
-    FASTP(samples_ch)
-
-    trimmed_reads_for_qc_ch = FASTP.out.reads.map {
-        meta,
-        read1,
-        read2 ->
-        tuple(meta, [read1, read2])
-    }
-
-    FASTQC_TRIMMED(
-        trimmed_reads_for_qc_ch,
-        'trimmed'
-    )
-
     if (params.reference_fai) {
         reference_fai_ch = reference_ch.map {
             meta,
@@ -409,6 +386,63 @@ workflow ADZUKI_SNP_PIPELINE {
     reference_fai_ch = VALIDATE_REFERENCE_BUNDLE.out.fai
     reference_dict_ch = VALIDATE_REFERENCE_BUNDLE.out.dict
     bwa_indexes_ch = VALIDATE_REFERENCE_BUNDLE.out.indexes
+
+    // Existing provenance hashes are measured before approving the plan. The
+    // hash process uses deep input caching, including on -resume.
+    HASH_INPUT_FASTQS(input_provenance_rows_ch)
+    input_size_summary_ch = samples_ch.map { meta, read1, read2 ->
+        groovy.json.JsonOutput.toJson([
+            sample_id: meta.id, read_group_id: meta.read_group_id,
+            bytes: read1.size() + read2.size(),
+        ])
+    }.collectFile(name: 'cohort.input_sizes.jsonl', newLine: true, sort: true)
+    plan_review_ch = channel.value(tuple(
+        params.joint_review_file != null,
+        file(params.joint_review_file ?: "${projectDir}/assets/NO_REFERENCE_BUILD_VERSION", checkIfExists: true),
+    ))
+    def output_storage = new File(params.outdir.toString()).absoluteFile
+    while (!output_storage.exists() && output_storage.parentFile != null) {
+        output_storage = output_storage.parentFile
+    }
+    PLAN_JOINT_GENOTYPING(reference_fai_ch, input_size_summary_ch,
+        HASH_INPUT_FASTQS.out.provenance.map { _meta, tsv -> tsv }.collect(),
+        VALIDATE_REFERENCE_BUNDLE.out.manifest, run_git_commit, plan_review_ch,
+        output_storage.usableSpace)
+    plan_gate_ch = PLAN_JOINT_GENOTYPING.out.plan.map { plan ->
+        def validated_plan = new groovy.json.JsonSlurper().parseText(plan.text)
+        "${validated_plan.input_summary_sha256}:${validated_plan.reference_bundle_fingerprint}"
+    }.first()
+    planned_samples_ch = samples_ch.combine(plan_gate_ch).map { meta, r1, r2, fingerprint ->
+        // Carry the content binding into task identity, not just an approval
+        // boolean: default Nextflow file caching uses size/mtime, not bytes.
+        tuple(meta + [joint_execution_binding: fingerprint], r1, r2)
+    }
+
+    raw_reads_ch = planned_samples_ch.map {
+        meta,
+        read1,
+        read2 ->
+        tuple(meta, [read1, read2])
+    }
+
+    FASTQC_RAW(
+        raw_reads_ch,
+        'raw'
+    )
+
+    FASTP(planned_samples_ch)
+
+    trimmed_reads_for_qc_ch = FASTP.out.reads.map {
+        meta,
+        read1,
+        read2 ->
+        tuple(meta, [read1, read2])
+    }
+
+    FASTQC_TRIMMED(
+        trimmed_reads_for_qc_ch,
+        'trimmed'
+    )
 
     // `.first()` turns the validator's single successful emission into a
     // reusable value channel. Every FASTP tuple is combined with that value,
@@ -521,53 +555,26 @@ workflow ADZUKI_SNP_PIPELINE {
         reference_dict_ch,
     )
 
-    intervals_ch = reference_fai_ch.flatMap {
-        _reference_meta,
-        fai ->
-        fai.readLines()
-            .findAll { line -> !line.isBlank() }
-            .withIndex()
-            .collect { line, index ->
-                def fields = line.split('\\t')
-
-                if (fields.size() < 2) {
-                    error("Invalid FASTA index entry: ${line}")
-                }
-
-                def contig = fields[0]
-                def safe_contig = contig.replaceAll(
-                    '[^A-Za-z0-9._-]',
-                    '_',
-                )
-
-                tuple(
-                    [
-                        id: String.format(
-                            'interval_%06d_%s',
-                            index + 1,
-                            safe_contig,
-                        ),
-                        rank: index,
-                        contig: contig,
-                    ],
-                    contig,
-                )
-            }
+    intervals_ch = PLAN_JOINT_GENOTYPING.out.intervals.flatMap { plan ->
+        plan.readLines().collect { line ->
+            def fields = line.split('\\t')
+            tuple([id: fields[0], rank: fields[1].toInteger(), contig: fields[2]],
+                "${fields[2]}:${fields[3]}-${fields[4]}")
+        }
     }
-
-    gvcfs_ch = GATK_HAPLOTYPECALLER.out.gvcf
-        .map { _meta, gvcf, _gvcf_index -> gvcf }
-        .collect()
-
-    gvcf_indexes_ch = GATK_HAPLOTYPECALLER.out.gvcf
-        .map { _meta, _gvcf, gvcf_index -> gvcf_index }
-        .collect()
-
-    GATK_GENOMICSDBIMPORT(
-        intervals_ch,
-        gvcfs_ch,
-        gvcf_indexes_ch,
+    // Collect tuples together: independent completion-order collections can pair
+    // a gVCF with the wrong index. The header is checked before any import task.
+    gvcf_bundles_ch = GATK_HAPLOTYPECALLER.out.gvcf.collect(flat: false)
+        .map { entries -> entries.sort { entry -> entry[0].id } }
+    BUILD_SAMPLE_NAME_MAP(
+        gvcf_bundles_ch.map { entries -> entries.collect { meta, gvcf, index ->
+            [sample_id: meta.id, gvcf: gvcf.name, index: index.name]
+        } },
+        gvcf_bundles_ch.map { entries -> entries.collect { entry -> entry[1] } },
+        gvcf_bundles_ch.map { entries -> entries.collect { entry -> entry[2] } },
     )
+    GATK_GENOMICSDBIMPORT(intervals_ch, BUILD_SAMPLE_NAME_MAP.out.gvcfs.first(),
+        BUILD_SAMPLE_NAME_MAP.out.indexes.first(), BUILD_SAMPLE_NAME_MAP.out.sample_map.first())
 
     GATK_GENOTYPEGVCFS(
         GATK_GENOMICSDBIMPORT.out.genomicsdb,
@@ -579,9 +586,7 @@ workflow ADZUKI_SNP_PIPELINE {
     cohort_vcfs_ch = GATK_GENOTYPEGVCFS.out.vcf
         .collect(flat: false)
         .map { entries ->
-            def sorted_entries = entries.sort {
-                entry -> entry[1].getFileName().toString()
-            }
+            def sorted_entries = entries.sort { entry -> entry[0].rank }
 
             tuple(
                 [id: 'cohort'],
@@ -900,7 +905,6 @@ workflow ADZUKI_SNP_PIPELINE {
     // manifest process: at this pipeline's 327-sample target that design
     // would re-stage the entire input dataset into a single task purely
     // to write a JSON file.
-    HASH_INPUT_FASTQS(input_provenance_rows_ch)
 
     // The reference bundle as it was actually used for mapping -- FASTA,
     // FAI, dictionary and the five BWA-MEM2 index files, whether this run
@@ -934,6 +938,9 @@ workflow ADZUKI_SNP_PIPELINE {
             tuple([id: "${meta.id}.reference_bundle"], [manifest])
         }
     )
+    run_artifact_groups_ch = run_artifact_groups_ch
+        .mix(PLAN_JOINT_GENOTYPING.out.plan.map { plan -> tuple([id: 'cohort.joint_plan'], [plan]) })
+        .mix(BUILD_SAMPLE_NAME_MAP.out.summary.map { summary -> tuple([id: 'cohort.joint_inputs'], [summary]) })
     HASH_RUN_ARTIFACTS(run_artifact_groups_ch)
 
     // One `process_key<TAB>effective_container` row per executed task.
@@ -953,6 +960,8 @@ workflow ADZUKI_SNP_PIPELINE {
         .mix(containerProvenance(FASTQC_RAW.out.container_id, 'fastqc_raw'))
         .mix(containerProvenance(FASTQC_TRIMMED.out.container_id, 'fastqc_trimmed'))
         .mix(containerProvenance(FASTP.out.container_id, 'fastp'))
+        .mix(containerProvenance(PLAN_JOINT_GENOTYPING.out.container_id, 'plan_joint_genotyping'))
+        .mix(containerProvenance(BUILD_SAMPLE_NAME_MAP.out.container_id, 'build_sample_name_map'))
         .mix(containerProvenance(VALIDATE_REFERENCE_CONTIGS.out.container_id, 'validate_reference_contigs'))
         .mix(containerProvenance(VALIDATE_REFERENCE_BUNDLE.out.container_id, 'validate_reference_bundle'))
         .mix(containerProvenance(BWA_MEM2_MEM_SORT.out.container_id, 'bwa_mem2_mem_sort'))
@@ -1028,6 +1037,7 @@ workflow ADZUKI_SNP_PIPELINE {
     )
 
     emit:
+    joint_execution_plan = PLAN_JOINT_GENOTYPING.out.plan
     reference_bundle_manifest = VALIDATE_REFERENCE_BUNDLE.out.manifest
     raw_fastqc_html = FASTQC_RAW.out.html
     raw_fastqc_zip = FASTQC_RAW.out.zip
