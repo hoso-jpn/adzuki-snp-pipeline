@@ -939,7 +939,7 @@ nextflow_pipeline {
             // Output checksums: the artifact set the historical schema v1
             // manifests recorded, hashed from what this run produced.
             assert runManifest.checksums.keySet() == [
-                "synthetic.reference_bundle.json",
+                "synthetic-adzuki-v1.reference_bundle.json",
                 "sample_a.g.vcf.gz",
                 "sample_b.g.vcf.gz",
                 "cohort.raw.vcf.gz",
