@@ -24,7 +24,7 @@ process PLAN_JOINT_GENOTYPING {
     script:
     def review_arg = review_enabled ? "--review ${planQuote(review_file)}" : ''
     def provenance_paths = input_provenance instanceof List ? input_provenance : [input_provenance]
-    def provenance_args = provenance_paths.collect { planQuote(it) }.join(' ')
+    def provenance_args = provenance_paths.collect { path -> planQuote(path) }.join(' ')
     """
     python3 ${planQuote("${projectDir}/bin/plan_joint_genotyping.py")} \
         --fai ${planQuote(fai)} --samples ${planQuote(samples)} \

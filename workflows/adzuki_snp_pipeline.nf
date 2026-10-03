@@ -253,6 +253,18 @@ def containerProvenance(container_id_ch, String process_key) {
     return container_id_ch.map { container -> "${process_key}\t${container}" }
 }
 
+// Inspect the nearest existing ancestor without creating the output directory.
+// Nextflow's strict syntax does not support imperative while loops.
+def outputFreeSpace(location) {
+    if (location.exists()) {
+        return location.usableSpace
+    }
+    if (location.parentFile == null) {
+        error('could not locate the output filesystem for the execution plan')
+    }
+    return outputFreeSpace(location.parentFile)
+}
+
 workflow ADZUKI_SNP_PIPELINE {
     take:
     samples_ch
@@ -401,13 +413,10 @@ workflow ADZUKI_SNP_PIPELINE {
         file(params.joint_review_file ?: "${projectDir}/assets/NO_REFERENCE_BUILD_VERSION", checkIfExists: true),
     ))
     def output_storage = new File(params.outdir.toString()).absoluteFile
-    while (!output_storage.exists() && output_storage.parentFile != null) {
-        output_storage = output_storage.parentFile
-    }
     PLAN_JOINT_GENOTYPING(reference_fai_ch, input_size_summary_ch,
         HASH_INPUT_FASTQS.out.provenance.map { _meta, tsv -> tsv }.collect(),
         VALIDATE_REFERENCE_BUNDLE.out.manifest, run_git_commit, plan_review_ch,
-        output_storage.usableSpace)
+        outputFreeSpace(output_storage))
     plan_gate_ch = PLAN_JOINT_GENOTYPING.out.plan.map { plan ->
         def validated_plan = new groovy.json.JsonSlurper().parseText(plan.text)
         "${validated_plan.input_summary_sha256}:${validated_plan.reference_bundle_fingerprint}"
