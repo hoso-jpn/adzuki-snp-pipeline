@@ -17,7 +17,12 @@ import sys
 from pathlib import Path
 
 from hash_reference_bundle import BWA_INDEX_SUFFIXES
-from manifest_utils import sha256_file
+from manifest_utils import (
+    HostMetadataLeakError,
+    assert_no_host_metadata,
+    sha256_file,
+    validate_container_identity,
+)
 
 CONTRACT = "reference_bundle_v1"
 
@@ -67,7 +72,11 @@ def inspect_fasta(path: Path) -> tuple[list[dict], list[list]]:
                     "FASTA has a short/nonstandard line before the final sequence line"
                 )
             if current["line_bases"] is None:
-                current["line_bases"], current["line_width"] = len(bases), len(raw)
+                # htslib counts an implicit LF at EOF even when the first
+                # (and only) sequence line has no terminator. Keep actual
+                # CRLF widths and the first-line width of multiline contigs.
+                width = len(raw) + (not raw.endswith(b"\n"))
+                current["line_bases"], current["line_width"] = len(bases), width
             elif len(bases) > current["line_bases"] or len(raw) > current["line_width"]:
                 raise BundleError("FASTA line widths are not indexable")
             current["last_short"] = (
@@ -207,6 +216,10 @@ def validate_bundle(
             or not all(isinstance(v, str) and v for v in index_build.values())
         ):
             raise BundleError("prebuilt index is not bound to this FASTA and controlled builder")
+    try:
+        validate_container_identity("BWA_MEM2_INDEX", index_build["container"])
+    except ValueError as error:
+        raise BundleError(str(error)) from error
     result = {
         "schema_version": 1,
         "contract": CONTRACT,
@@ -223,6 +236,10 @@ def validate_bundle(
             "assurance": "controlled_builder_provenance_not_binary_equivalence",
         },
     }
+    try:
+        assert_no_host_metadata(result)
+    except HostMetadataLeakError as error:
+        raise BundleError(str(error)) from error
     result["fingerprint"] = fingerprint(result)
     if prebuilt_manifest is not None and result != previous:
         raise BundleError("prebuilt manifest fingerprint/content differs from supplied bundle")

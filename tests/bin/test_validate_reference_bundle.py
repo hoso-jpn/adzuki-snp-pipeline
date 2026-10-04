@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import sys
 import tempfile
@@ -13,7 +15,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "bin"))
 from validate_reference_bundle import (  # noqa: E402
     BWA_INDEX_SUFFIXES,
     BundleError,
+    fingerprint,
     inspect_fasta,
+    main,
     validate_bundle,
 )
 
@@ -130,6 +134,137 @@ class ReferenceBundleTests(unittest.TestCase):
         contigs, rows = inspect_fasta(self.fasta)
         self.assertEqual(rows, [["chr1", 6, 7, 4, 6]])
         self.assertEqual(contigs[0]["md5"], hashlib.md5(b"ACGTNN").hexdigest())
+
+    def test_samtools_fai_line_width_regressions(self):
+        # Independently generated with samtools 1.24 (pysam 0.24.1), not
+        # inspect_fasta: an unterminated single line still has width bases+1.
+        cases = [
+            (b">chr1\nACGT", [["chr1", 4, 6, 4, 5]]),
+            (b">chr1\r\nACGT", [["chr1", 4, 7, 4, 5]]),
+            (b">chr1\nACGT\n", [["chr1", 4, 6, 4, 5]]),
+            (b">chr1\r\nACGT\r\n", [["chr1", 4, 7, 4, 6]]),
+            (
+                b">chr1\nACGT\n>chr2\nTGCA",
+                [["chr1", 4, 6, 4, 5], ["chr2", 4, 17, 4, 5]],
+            ),
+            (
+                b">chr1\r\nACGT\r\n>chr2\r\nTGCA",
+                [["chr1", 4, 7, 4, 6], ["chr2", 4, 20, 4, 5]],
+            ),
+            (b">chr1\nACGT\nACGT", [["chr1", 8, 6, 4, 5]]),
+            (b">chr1\nACGT\nNN", [["chr1", 6, 6, 4, 5]]),
+            (b">chr1\r\nACGT\r\nACGT", [["chr1", 8, 7, 4, 6]]),
+            (b">chr1\r\nACGT\r\nNN", [["chr1", 6, 7, 4, 6]]),
+        ]
+        for data, expected in cases:
+            with self.subTest(data=data):
+                self.fasta.write_bytes(data)
+                self.assertEqual(inspect_fasta(self.fasta)[1], expected)
+                self.reset_sidecars()
+                self.fai.write_text("".join("\t".join(map(str, row)) + "\n" for row in expected))
+                self.receipt.write_text(
+                    "".join(
+                        hashlib.sha256(path.read_bytes()).hexdigest() + "  " + path.name + "\n"
+                        for path in [self.fasta, *self.indexes]
+                    )
+                )
+                self.test_controlled_build_roundtrips_as_prebuilt()
+
+    def cli_arguments(self):
+        args = [
+            "--fasta",
+            str(self.fasta),
+            "--fai",
+            str(self.fai),
+            "--dictionary",
+            str(self.dictionary),
+            "--output",
+            str(self.root / "output.json"),
+        ]
+        for index in self.indexes:
+            args += ["--bwa-index", str(index)]
+        return args
+
+    def assert_cli_rejects_without_disclosure(self, args, value):
+        stderr = io.StringIO()
+        stdout = io.StringIO()
+        with contextlib.redirect_stderr(stderr), contextlib.redirect_stdout(stdout):
+            self.assertEqual(main(self.cli_arguments() + args), 1)
+        self.assertIn("value redacted", stderr.getvalue())
+        self.assertNotIn(value, stderr.getvalue() + stdout.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+        self.assertFalse((self.root / "output.json").exists())
+
+    def test_generated_and_prebuilt_reject_unpublishable_provenance(self):
+        valid = self.build()
+        unsafe_values = [
+            "/opt/private-images/bwa.sif",
+            "./private-images/bwa.sif",
+            "~/private-images/bwa.sif",
+            "file:///opt/private-images/bwa.sif",
+            "https://dummy-user:dummy-password@registry.example/bwa:1",
+            "http://127.0.0.1:5000/bwa:1",
+        ]
+        for field in ("container", "tool_version"):
+            for value in unsafe_values:
+                with self.subTest(field=field, value=value):
+                    container = value if field == "container" else "synthetic-test-container"
+                    self.version.write_text(value if field == "tool_version" else "2.2.1")
+                    self.assert_cli_rejects_without_disclosure(
+                        [
+                            "--receipt",
+                            str(self.receipt),
+                            "--tool-version",
+                            str(self.version),
+                            "--container",
+                            container,
+                        ],
+                        value,
+                    )
+                    previous = json.loads(json.dumps(valid))
+                    previous["index_build"][field] = value
+                    previous["fingerprint"] = fingerprint(previous)
+                    manifest = self.root / "prebuilt.json"
+                    manifest.write_text(json.dumps(previous))
+                    self.assert_cli_rejects_without_disclosure(
+                        ["--prebuilt-manifest", str(manifest)], value
+                    )
+
+    def test_container_whitespace_is_rejected_in_both_modes(self):
+        value = "registry.example/bwa:1 invalid"
+        self.assert_cli_rejects_without_disclosure(
+            [
+                "--receipt",
+                str(self.receipt),
+                "--tool-version",
+                str(self.version),
+                "--container",
+                value,
+            ],
+            value,
+        )
+        previous = self.build()
+        previous["index_build"]["container"] = value
+        previous["fingerprint"] = fingerprint(previous)
+        manifest = self.root / "prebuilt.json"
+        manifest.write_text(json.dumps(previous))
+        self.assert_cli_rejects_without_disclosure(["--prebuilt-manifest", str(manifest)], value)
+
+    def test_publishable_registry_container_roundtrips(self):
+        for container in (
+            "quay.io/biocontainers/bwa-mem2:2.2.1",
+            "docker://registry.example/bwa@sha256:" + "a" * 64,
+        ):
+            with self.subTest(container=container):
+                manifest = validate_bundle(
+                    **self.kwargs,
+                    receipt=self.receipt,
+                    tool_version=self.version,
+                    container=container,
+                )
+                path = self.root / "bundle.json"
+                path.write_text(json.dumps(manifest))
+                self.assertEqual(validate_bundle(**self.kwargs, prebuilt_manifest=path), manifest)
 
     def test_short_interior_sequence_line_rejected(self):
         self.fasta.write_bytes(b">chr1\nACGT\nNN\nACGT\n")
