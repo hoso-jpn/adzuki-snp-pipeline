@@ -35,6 +35,10 @@
 // actual footprint; its cpus/memory/time are carried over from
 // 'process_high' unchanged -- see nextflow.config -- since no real
 // multi-sample measurement yet justifies different values.
+def importIntervalQuote(value) {
+    return "'" + value.toString().replace("'", "'\\''") + "'"
+}
+
 process GATK_GENOMICSDBIMPORT {
     tag "${interval_meta.id}"
     label 'process_genomicsdb'
@@ -45,6 +49,7 @@ process GATK_GENOMICSDBIMPORT {
     tuple val(interval_meta), val(interval)
     path(gvcfs)
     path(gvcf_indexes)
+    path(sample_name_map)
 
     output:
     tuple(
@@ -76,10 +81,6 @@ process GATK_GENOMICSDBIMPORT {
         )
     }
 
-    variant_arguments = gvcf_list
-        .collect { gvcf -> "--variant ${gvcf}" }
-        .join(" \\\n        ")
-
     // See BWA_MEM2_MEM_SORT (Issue #8) for the same toMega()-based,
     // fail-fast-rather-than-clamp precedent. task.memory is re-read
     // fresh on every OOM-retry attempt (errorStrategy scales it as
@@ -101,9 +102,9 @@ process GATK_GENOMICSDBIMPORT {
 
     """
     gatk --java-options "-Xmx${xmx_mib}m" GenomicsDBImport \
-        ${variant_arguments} \
+        --sample-name-map ${sample_name_map} \
         --genomicsdb-workspace-path ${interval_meta.id}.genomicsdb \
-        --intervals '${interval}' \
+        --intervals ${importIntervalQuote(interval)} \
         --reader-threads ${task.cpus} \
         --batch-size ${params.genomicsdb_batch_size} \
         --tmp-dir .

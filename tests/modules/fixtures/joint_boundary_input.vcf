@@ -1,0 +1,12 @@
+##fileformat=VCFv4.2
+##contig=<ID=chrSynthetic1,length=5000>
+##contig=<ID=chrSynthetic2,length=5000>
+##ALT=<ID=NON_REF,Description="Represents any possible alternative allele">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="Phred likelihoods">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	boundary
+chrSynthetic1	1999	.	TTG	T,<NON_REF>	100	.	DP=30	GT:AD:DP:GQ:PL	1/1:0,30,0:30:90:900,90,0,900,90,900

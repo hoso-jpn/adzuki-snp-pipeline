@@ -58,6 +58,7 @@ jobs:
           tests/modules/validate_reference_contigs.nf.test
           tests/modules/validate_reference_bundle.nf.test
           tests/modules/gatk_genomicsdbimport.nf.test
+          tests/modules/joint_window_boundary.nf.test
           tests/modules/gatk_gathervcfs.nf.test
           tests/modules/fastqc.nf.test
           tests/modules/multiqc.nf.test
@@ -69,3 +70,33 @@ jobs:
           tests/modules/docker_host_user_ownership.nf.test
           tests/functions/resolve_pipeline_commit.nf.test
           --ci
+
+  resume-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v2
+        with:
+          version: "26.04.6"
+          java-version: "21"
+
+      - name: Verify bounded synthetic interruption, resume, and cache integrity
+        run: python3 tests/scripts/check_issue69_resume.py --output-dir "$RUNNER_TEMP/issue69-resume"
+
+      - name: Retain synthetic resume diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue69-synthetic-resume
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/issue69-resume/resume_evidence.json
+            ${{ runner.temp }}/issue69-resume/*/*.trace.txt
+            ${{ runner.temp }}/issue69-resume/*/*.log

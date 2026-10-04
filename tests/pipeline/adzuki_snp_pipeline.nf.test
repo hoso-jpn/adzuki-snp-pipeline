@@ -110,6 +110,8 @@ nextflow_pipeline {
         fastqc_raw                   : '.raw.R1.fastq.gz',
         fastqc_trimmed               : '.trimmed.R1.fastq.gz',
         fastp                        : '--detect_adapter_for_pe',
+        plan_joint_genotyping         : 'plan_joint_genotyping.py',
+        build_sample_name_map          : 'build_sample_name_map.py',
         validate_reference_contigs   : 'validate_reference_contigs.py',
         validate_reference_bundle    : 'validate_reference_bundle.py',
         bwa_mem2_mem_sort            : 'bwa-mem2 mem',
@@ -939,6 +941,7 @@ nextflow_pipeline {
             // Output checksums: the artifact set the historical schema v1
             // manifests recorded, hashed from what this run produced.
             assert runManifest.checksums.keySet() == [
+                "cohort.joint_plan.json", "cohort.joint_inputs.json",
                 "synthetic-adzuki-v1.reference_bundle.json",
                 "sample_a.g.vcf.gz",
                 "sample_b.g.vcf.gz",
@@ -2371,4 +2374,52 @@ nextflow_pipeline {
             assert sources.FastQC.all_sections.size() == 4
         }
     }
+    test("nonlexical sample IDs and split intervals preserve genotype column identities") {
+        tag "issue69_joint_plan"
+        when {
+            params {
+                def rows = file("${projectDir}/tests/data/samplesheet.csv").readLines()
+                def rewritten = rows.collect { line ->
+                    def fields = line.split(',')
+                    if (fields[0] == 'sample_a') fields[0] = 'zeta'
+                    if (fields[0] == 'sample_b') fields[0] = 'alpha'
+                    fields.join(',').replace('tests/data/reads/', "${projectDir}/tests/data/reads/")
+                }
+                def sampleFile = new File("${outputDir}/nonlexical.csv")
+                sampleFile.text = rewritten.join("\n") + "\n"
+                input = sampleFile.toString()
+                outdir = "$outputDir"
+                joint_interval_size_bp = 2500
+                // CLI numeric values may reach config as strings. Keep the
+                // planner and the effective task scheduler on the same budget.
+                joint_genotype_memory_gib = '4'
+                joint_max_concurrency = '1'
+                joint_launch_memory_gib = '6'
+            }
+        }
+        then {
+            assert workflow.success
+            def vcf = new java.util.zip.GZIPInputStream(new FileInputStream("$outputDir/variants/raw/cohort.raw.vcf.gz")).text.readLines()
+            assert vcf.find { it.startsWith('#CHROM') }.split('\t').drop(9) == ['alpha', 'zeta']
+            def records = vcf.findAll { !it.startsWith('#') }.collect { it.split('\t') }
+            assert records.size() == 2
+            def expected = file("${projectDir}/tests/data/variants/expected_variants.tsv").readLines().drop(1)
+            expected.each { line ->
+                def fields = line.split('\t')
+                def record = records.find { it[0] == fields[0] && it[1] == fields[1] }
+                assert record != null
+                def gtIndex = record[8].split(':').findIndexOf { it == 'GT' }
+                def genotypes = [(fields[4]): fields[5], (fields[7]): fields[8]]
+                assert record[9].split(':')[gtIndex] == genotypes['sample_b']
+                assert record[10].split(':')[gtIndex] == genotypes['sample_a']
+            }
+            def plan = new groovy.json.JsonSlurper().parse(new File("$outputDir/provenance/cohort.joint_plan.json"))
+            assert plan.intervals.size() == 4
+            assert plan.commercial_validation == 'not_established'
+            assert plan.review_template.input_binding == 'measured_FASTQ_SHA256_and_read_group_metadata'
+            assert plan.review_template.input_summary_sha256 == plan.input_summary_sha256
+            assert plan.review_template.reference_bundle_fingerprint == plan.reference_bundle_fingerprint
+        }
+    }
+
 }

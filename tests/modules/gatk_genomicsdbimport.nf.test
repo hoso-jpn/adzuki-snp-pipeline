@@ -102,6 +102,16 @@ nextflow_process {
                 """
             }
         }
+        run("BUILD_SAMPLE_NAME_MAP") {
+            script "modules/local/build_sample_name_map.nf"
+            process {
+                """
+                input[0] = [[sample_id: 'sample_b', gvcf: 'sample_b.g.vcf.gz', index: 'sample_b.g.vcf.gz.tbi']]
+                input[1] = GATK_HAPLOTYPECALLER.out.gvcf.map { meta, gvcf, index -> gvcf }
+                input[2] = GATK_HAPLOTYPECALLER.out.gvcf.map { meta, gvcf, index -> index }
+                """
+            }
+        }
     }
 
     test("a single gVCF/index from GATK_HAPLOTYPECALLER's own output channel is normalized as one input, not read as a byte count by File.size()") {
@@ -115,6 +125,7 @@ nextflow_process {
                 ]
                 input[1] = GATK_HAPLOTYPECALLER.out.gvcf.map { meta, gvcf, index -> gvcf }
                 input[2] = GATK_HAPLOTYPECALLER.out.gvcf.map { meta, gvcf, index -> index }
+                input[3] = BUILD_SAMPLE_NAME_MAP.out.sample_map
                 """
             }
         }
@@ -142,14 +153,10 @@ nextflow_process {
             // avoids ever recursing into it.
             def commandScript = new File(workspaceDir.getParentFile(), ".command.sh").text
 
-            // Exactly one --variant, not merely "contains --variant":
-            // a List-vs-scalar confusion could otherwise still produce a
-            // single --variant flag by accident (e.g. if a bug silently
-            // dropped every gVCF but one), which a substring-only check
-            // would not catch.
-            def variantOccurrences = (commandScript =~ /--variant /).count
-            assert variantOccurrences == 1: "expected exactly one --variant flag, found ${variantOccurrences} in:\n${commandScript}"
-            assert commandScript.contains("--variant sample_b.g.vcf.gz")
+            assert commandScript.contains("--sample-name-map cohort.sample_name_map.tsv")
+            assert !commandScript.contains("--variant ")
+            assert new File(workspaceDir.parentFile, 'cohort.sample_name_map.tsv').text ==
+                "sample_b\tsample_b.g.vcf.gz\tsample_b.g.vcf.gz.tbi\n"
 
             assert commandScript.contains("--batch-size 50")
             assert commandScript.contains("--reader-threads 2")

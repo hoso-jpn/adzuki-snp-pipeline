@@ -1,0 +1,32 @@
+nextflow_workflow {
+    name "An indel spanning a joint interval boundary has one owner"
+    script "tests/modules/fixtures/joint_window_boundary.nf"
+    workflow "JOINT_WINDOW_BOUNDARY"
+    tag "issue69_joint_plan"
+    test("the indel at 1999 through 2001 is output only by the 1-2000 interval") {
+        when {
+            workflow {
+                """
+                input[0] = Channel.value(tuple([id: 'synthetic'],
+                    file("${projectDir}/tests/data/reference/synthetic.fa")))
+                input[1] = Channel.value(tuple([id: 'synthetic'],
+                    file("${projectDir}/tests/data/reference/synthetic.fa.fai")))
+                input[2] = file("${projectDir}/tests/modules/fixtures/joint_boundary_input.vcf")
+                """
+            }
+        }
+        then {
+            assert workflow.success
+            assert workflow.out.vcf.size() == 2
+            def owned = workflow.out.vcf.collectMany { meta, vcf, index ->
+                def text = new java.util.zip.GZIPInputStream(new FileInputStream(path(vcf).toFile())).text
+                text.readLines().findAll { !it.startsWith('#') }.collect { [rank: meta.rank, row: it.split('\t')] }
+            }
+            assert owned.size() == 1
+            assert owned[0].rank == 0
+            assert owned[0].row[1] == '1999'
+            assert owned[0].row[3].size() == 3
+            assert owned[0].row[4].size() == 1
+        }
+    }
+}

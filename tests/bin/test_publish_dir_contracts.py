@@ -53,7 +53,7 @@ class PublishDirOwnershipTest(unittest.TestCase):
     def test_every_publish_assignment_is_centralized_in_nextflow_config(self) -> None:
         # Issue #68 adds the validated reference bundle manifest to the
         # 31 existing publish policies.
-        self.assertEqual(32, len(re.findall(r"(?m)^\s*publishDir\s*=", self.config)))
+        self.assertEqual(34, len(re.findall(r"(?m)^\s*publishDir\s*=", self.config)))
 
     def test_moved_single_destination_policies_are_unchanged(self) -> None:
         for process_name, (path, pattern) in MOVED_POLICIES.items():
