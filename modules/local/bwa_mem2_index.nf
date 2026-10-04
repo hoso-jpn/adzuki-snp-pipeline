@@ -9,6 +9,7 @@ process BWA_MEM2_INDEX {
 
     output:
     tuple val(meta), path("${fasta.name}.*"), emit: indexes
+    tuple val(meta), path('reference.index_build.sha256'), path('reference.bwa_version.txt'), val(task.container), emit: build_receipt
 
     // Issue #42: this process's *effective* container -- Nextflow's own
     // task.container, resolved after any withName/alias/fully-qualified-
@@ -23,5 +24,8 @@ process BWA_MEM2_INDEX {
     script:
     """
     bwa-mem2 index ${fasta}
+    bwa-mem2 version > reference.bwa_version.txt 2>&1
+    sha256sum ${fasta} ${fasta.name}.0123 ${fasta.name}.amb ${fasta.name}.ann \
+        ${fasta.name}.bwt.2bit.64 ${fasta.name}.pac > reference.index_build.sha256
     """
 }

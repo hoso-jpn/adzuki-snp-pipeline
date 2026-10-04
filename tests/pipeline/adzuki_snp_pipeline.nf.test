@@ -111,6 +111,7 @@ nextflow_pipeline {
         fastqc_trimmed               : '.trimmed.R1.fastq.gz',
         fastp                        : '--detect_adapter_for_pe',
         validate_reference_contigs   : 'validate_reference_contigs.py',
+        validate_reference_bundle    : 'validate_reference_bundle.py',
         bwa_mem2_mem_sort            : 'bwa-mem2 mem',
         samtools_merge               : 'samtools merge',
         gatk_markduplicates          : 'MarkDuplicates',
@@ -938,6 +939,7 @@ nextflow_pipeline {
             // Output checksums: the artifact set the historical schema v1
             // manifests recorded, hashed from what this run produced.
             assert runManifest.checksums.keySet() == [
+                "synthetic-adzuki-v1.reference_bundle.json",
                 "sample_a.g.vcf.gz",
                 "sample_b.g.vcf.gz",
                 "cohort.raw.vcf.gz",
@@ -1835,6 +1837,32 @@ nextflow_pipeline {
     test("a fully prebuilt (non-generated) BWA-MEM2 index completes the whole pipeline and skips BWA_MEM2_INDEX") {
 
         tag "issue42_run_manifest"
+        tag "issue68_reference_bundle"
+        setup {
+            // nf-test 0.9.5's pipeline setup is a plain Groovy closure:
+            // run(...) dependencies are supported only by process/workflow
+            // tests. Build this bundle in an independent real pipeline run,
+            // using the same pinned tools and test,docker profile as CI.
+            def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+            absoluteSamplesheet.text = file("${projectDir}/tests/data/samplesheet.csv").text
+                .replace("tests/data/reads/", "${projectDir}/tests/data/reads/")
+            def preparationLog = new File("${outputDir}/reference-build.log")
+            def preparation = new ProcessBuilder([
+                'nextflow', '-log', "${outputDir}/reference-build.nextflow.log".toString(),
+                'run', "${projectDir}/main.nf".toString(),
+                '-profile', 'test,docker',
+                '-work-dir', "${outputDir}/reference-build-work".toString(),
+                '--input', absoluteSamplesheet.toString(),
+                '--outdir', "${outputDir}/prepared".toString(),
+                '--sample_ploidy', '2',
+            ])
+                .directory(new File(projectDir.toString()))
+                .redirectErrorStream(true)
+                .redirectOutput(preparationLog)
+                .start()
+            assert preparation.waitFor() == 0: preparationLog.text
+            assert new File("${outputDir}/prepared/reference/synthetic-adzuki-v1.reference_bundle.json").isFile()
+        }
 
 
         when {
@@ -1852,20 +1880,17 @@ nextflow_pipeline {
                 outdir = "$outputDir"
                 input = absoluteSamplesheet.toString()
                 sample_ploidy = "2"
-                // tests/data/reference/prebuilt_bwa_index/ (see
-                // tests/modules/bwa_mem2_mem_sort.nf.test for how this
-                // fixture was built and its recorded tool
-                // version/checksums); bwa_index_prefix's basename must
-                // match reference_fasta's basename (main.nf enforces
-                // this), so the fixture directory's files are named
-                // synthetic.fa.* to match tests/data/reference/synthetic.fa.
-                bwa_index_prefix = "${projectDir}/tests/data/reference/prebuilt_bwa_index/synthetic.fa"
+                // Built in setup by the real pinned tools, including same-task receipt.
+                bwa_index_prefix = "${outputDir}/prepared/reference/synthetic.fa"
+                reference_fai = "${outputDir}/prepared/reference/synthetic.fa.fai"
+                reference_dict = "${outputDir}/prepared/reference/synthetic.dict"
+                reference_bundle_manifest = "${outputDir}/prepared/reference/synthetic-adzuki-v1.reference_bundle.json"
             }
         }
 
         then {
             assert workflow.success
-            PublishedOutputContract.verify(outputDir.toString(), true, false)
+            PublishedOutputContract.verify(outputDir.toString(), true, false, false)
 
             // BWA_MEM2_INDEX must not run at all when a prebuilt index
             // is supplied -- only the 3 BWA_MEM2_MEM_SORT mapping tasks
@@ -1942,14 +1967,13 @@ nextflow_pipeline {
             // so the run manifest must not carry a `bwa_mem2_index`
             // entry -- `containers` lists the processes this run
             // executed, not the processes it could have executed under a
-            // different configuration. The reference-preparation
-            // processes that *did* run (this run supplies neither a
-            // prebuilt FAI nor a prebuilt dictionary) are still recorded.
+            // different configuration. This run receives all sidecars
+            // from setup, so neither FAI nor dictionary generation runs here.
             def runManifest = readRunManifest(outputDir.toString())
 
             assert !runManifest.containers.containsKey("bwa_mem2_index")
-            assert runManifest.containers.containsKey("samtools_faidx")
-            assert runManifest.containers.containsKey("gatk_create_sequence_dictionary")
+            assert !runManifest.containers.containsKey("samtools_faidx")
+            assert !runManifest.containers.containsKey("gatk_create_sequence_dictionary")
             assert runManifest.containers.containsKey("bwa_mem2_mem_sort")
 
             // The prebuilt index files this run actually mapped against
@@ -1964,9 +1988,59 @@ nextflow_pipeline {
             ]
             runManifest.reference.bwa_index.each { entry ->
                 assert entry.checksum == sha256Of(
-                    "${projectDir}/tests/data/reference/prebuilt_bwa_index/${entry.filename}"
+                    "${outputDir}/prepared/reference/${entry.filename}"
                 ): "prebuilt index ${entry.filename} is not the file the manifest recorded"
             }
+        }
+    }
+
+    test("unattested prebuilt indexes are refused before analysis") {
+        tag "issue68_reference_bundle"
+        when {
+            params {
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = file("${projectDir}/tests/data/samplesheet.csv").text
+                    .replace("tests/data/reads/", "${projectDir}/tests/data/reads/")
+                input = absoluteSamplesheet.toString()
+                bwa_index_prefix = "${projectDir}/tests/data/reference/prebuilt_bwa_index/synthetic.fa"
+                outdir = "$outputDir"
+            }
+        }
+        then {
+            assert !workflow.success
+            assert (workflow.stdout + workflow.stderr).join("\n").contains("reference_bundle_manifest")
+            assert workflow.trace.tasks().isEmpty()
+        }
+    }
+
+    test("same contig names and lengths with wrong dictionary M5 cannot reach mapping") {
+        tag "issue68_reference_bundle"
+        when {
+            params {
+                def absoluteSamplesheet = new File("${outputDir}/samplesheet.absolute.csv")
+                absoluteSamplesheet.text = file("${projectDir}/tests/data/samplesheet.csv").text
+                    .replace("tests/data/reads/", "${projectDir}/tests/data/reads/")
+                input = absoluteSamplesheet.toString()
+                def folder = new File("${outputDir}/bad-reference")
+                folder.mkdirs()
+                def badDict = new File(folder, 'synthetic.dict')
+                badDict.text = file("${projectDir}/tests/data/reference/prebuilt_dict/synthetic.dict").text
+                    .replace('aea2c941990fea8b3e71f3b28a305f5b', '00000000000000000000000000000000')
+                reference_fai = "${projectDir}/tests/data/reference/synthetic.fa.fai"
+                reference_dict = badDict.toString()
+                outdir = "$outputDir"
+            }
+        }
+        then {
+            assert !workflow.success
+            def output = (workflow.stdout + workflow.stderr).join("\n")
+            assert output.contains('reference bundle rejected: FASTA/dictionary mismatch (name, length, order or M5)')
+            def validationTasks = workflow.trace.tasks().findAll { it.name.contains('VALIDATE_REFERENCE_BUNDLE') }
+            assert validationTasks.size() == 1
+            assert !validationTasks[0].success
+            def tasks = workflow.trace.tasks().collect { it.name }
+            assert tasks.every { !it.contains('BWA_MEM2_MEM_SORT') && !it.contains('GATK_HAPLOTYPECALLER') }
+            assert !new File("$outputDir/provenance/cohort.run_manifest.json").exists()
         }
     }
 

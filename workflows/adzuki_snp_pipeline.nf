@@ -1,3 +1,5 @@
+include { VALIDATE_REFERENCE_BUNDLE } from '../modules/local/validate_reference_bundle'
+
 include {
     FASTQC as FASTQC_RAW
 } from '../modules/local/fastqc'
@@ -357,27 +359,6 @@ workflow ADZUKI_SNP_PIPELINE {
     reference_fai_ch = VALIDATE_REFERENCE_CONTIGS.out.fai
     reference_dict_ch = VALIDATE_REFERENCE_CONTIGS.out.dict
 
-    // `.first()` turns the validator's single successful emission into a
-    // reusable value channel. Every FASTP tuple is combined with that value,
-    // preserving read-group cardinality while making validation success an
-    // explicit dataflow prerequisite for every BWA_MEM2_MEM_SORT task. A
-    // validation failure emits no value, so mapping cannot be scheduled.
-    reference_validation_gate_ch = reference_fai_ch
-        .map { meta, _fai -> meta.id }
-        .first()
-    validated_mapping_reads_ch = FASTP.out.reads
-        .combine(reference_validation_gate_ch)
-        .map {
-            meta,
-            read1,
-            read2,
-            validated_reference_id ->
-            if (meta == null || validated_reference_id == null) {
-                error('reference validation gate received an invalid metadata value')
-            }
-            tuple(meta, read1, read2)
-        }
-
     if (params.bwa_index_prefix) {
         bwa_indexes_ch = reference_ch.map {
             meta,
@@ -407,13 +388,48 @@ workflow ADZUKI_SNP_PIPELINE {
 
             tuple(meta, indexes)
         }
+        index_origin_ch = channel.value(tuple(
+            [mode: 'prebuilt'],
+            file(params.reference_bundle_manifest, checkIfExists: true),
+            file("${projectDir}/assets/NO_REFERENCE_BUILD_VERSION", checkIfExists: true),
+        ))
     } else {
         BWA_MEM2_INDEX(reference_ch)
         bwa_indexes_ch = BWA_MEM2_INDEX.out.indexes
+        index_origin_ch = BWA_MEM2_INDEX.out.build_receipt.map { _meta, receipt, version, container ->
+            tuple([mode: 'generated', container: container], receipt, version)
+        }
         optional_container_provenance_ch = optional_container_provenance_ch.mix(
             containerProvenance(BWA_MEM2_INDEX.out.container_id, 'bwa_mem2_index')
         )
     }
+
+    // Sequence-level and index-build binding is a hard mapping/calling gate.
+    VALIDATE_REFERENCE_BUNDLE(reference_ch, reference_fai_ch, reference_dict_ch, bwa_indexes_ch, index_origin_ch)
+    reference_fai_ch = VALIDATE_REFERENCE_BUNDLE.out.fai
+    reference_dict_ch = VALIDATE_REFERENCE_BUNDLE.out.dict
+    bwa_indexes_ch = VALIDATE_REFERENCE_BUNDLE.out.indexes
+
+    // `.first()` turns the validator's single successful emission into a
+    // reusable value channel. Every FASTP tuple is combined with that value,
+    // preserving read-group cardinality while making validation success an
+    // explicit dataflow prerequisite for every BWA_MEM2_MEM_SORT task. A
+    // validation failure emits no value, so mapping cannot be scheduled.
+    reference_validation_gate_ch = reference_fai_ch
+        .map { meta, _fai -> meta.id }
+        .first()
+    validated_mapping_reads_ch = FASTP.out.reads
+        .combine(reference_validation_gate_ch)
+        .map {
+            meta,
+            read1,
+            read2,
+            validated_reference_id ->
+            if (meta == null || validated_reference_id == null) {
+                error('reference validation gate received an invalid metadata value')
+            }
+            tuple(meta, read1, read2)
+        }
 
     BWA_MEM2_MEM_SORT(
         validated_mapping_reads_ch,
@@ -913,6 +929,11 @@ workflow ADZUKI_SNP_PIPELINE {
             }
         )
 
+    run_artifact_groups_ch = run_artifact_groups_ch.mix(
+        VALIDATE_REFERENCE_BUNDLE.out.manifest.map { meta, manifest ->
+            tuple([id: "${meta.id}.reference_bundle"], [manifest])
+        }
+    )
     HASH_RUN_ARTIFACTS(run_artifact_groups_ch)
 
     // One `process_key<TAB>effective_container` row per executed task.
@@ -933,6 +954,7 @@ workflow ADZUKI_SNP_PIPELINE {
         .mix(containerProvenance(FASTQC_TRIMMED.out.container_id, 'fastqc_trimmed'))
         .mix(containerProvenance(FASTP.out.container_id, 'fastp'))
         .mix(containerProvenance(VALIDATE_REFERENCE_CONTIGS.out.container_id, 'validate_reference_contigs'))
+        .mix(containerProvenance(VALIDATE_REFERENCE_BUNDLE.out.container_id, 'validate_reference_bundle'))
         .mix(containerProvenance(BWA_MEM2_MEM_SORT.out.container_id, 'bwa_mem2_mem_sort'))
         .mix(containerProvenance(SAMTOOLS_MERGE.out.container_id, 'samtools_merge'))
         .mix(containerProvenance(GATK_MARKDUPLICATES.out.container_id, 'gatk_markduplicates'))
@@ -1006,6 +1028,7 @@ workflow ADZUKI_SNP_PIPELINE {
     )
 
     emit:
+    reference_bundle_manifest = VALIDATE_REFERENCE_BUNDLE.out.manifest
     raw_fastqc_html = FASTQC_RAW.out.html
     raw_fastqc_zip = FASTQC_RAW.out.zip
     trimmed_reads = FASTP.out.reads

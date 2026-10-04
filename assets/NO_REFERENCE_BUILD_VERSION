@@ -1,0 +1,2 @@
+Prebuilt reference manifests already contain controlled-build tool provenance.
+This placeholder is never parsed as a tool version.
